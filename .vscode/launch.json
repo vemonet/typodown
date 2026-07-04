@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run Typodown Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/apps/typodown-vsx"],
+      "outFiles": ["${workspaceFolder}/apps/typodown-vsx/dist/**/*.js"],
+      "preLaunchTask": "watch"
+    }
+  ]
+}

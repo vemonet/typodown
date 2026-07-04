@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>webview harness</title>
+  </head>
+  <body class="vscode-light">
+    <div id="app"></div>
+    <script>
+      // Mock the VS Code webview API so we can exercise the message protocol.
+      window.__posted = [];
+      window.acquireVsCodeApi = () => ({
+        postMessage: (m) => {
+          window.__posted.push(m);
+        },
+        getState: () => undefined,
+        setState: () => undefined,
+      });
+      window.__send = (m) => window.dispatchEvent(new MessageEvent("message", { data: m }));
+    </script>
+    <script type="module" src="./dist/webview.js"></script>
+  </body>
+</html>

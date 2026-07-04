@@ -1,0 +1,10 @@
+.vscode/**
+src/**
+build.mjs
+harness.html
+tsconfig.json
+vite.config.ts
+**/*.map
+**/*.ts
+!dist/**
+node_modules/**

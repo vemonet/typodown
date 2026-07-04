@@ -1,0 +1,106 @@
+/* Styling for the dev demo page only (not part of the published package). */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+/* min-height (not height) so the column fills the viewport when content is
+ * short but grows with it when long -- a fixed height would clip the editor's
+ * bottom margin off the scrollable area. */
+body {
+  min-height: 100vh;
+}
+
+/* Page colours follow the theme picker via `data-theme` on <html>: light and
+ * dark are explicit, "auto" defers to the OS. The editor is themed separately
+ * (data-td-theme) but from the same picker, so the two stay in sync. */
+:root,
+:root[data-theme="light"] {
+  --page-bg: #f6f8fa;
+  --page-fg: #1f2328;
+  --page-border: #d1d9e0;
+}
+
+:root[data-theme="dark"] {
+  --page-bg: #010409;
+  --page-fg: #e6edf3;
+  --page-border: #3d444d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"] {
+    --page-bg: #010409;
+    --page-fg: #e6edf3;
+    --page-border: #3d444d;
+  }
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--page-bg);
+  color: var(--page-fg);
+  display: flex;
+  flex-direction: column;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--page-border);
+  flex-wrap: wrap;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.brand span {
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.theme {
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.github {
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+  opacity: 0.7;
+}
+.github:hover {
+  opacity: 1;
+}
+
+main {
+  flex: 1;
+  width: min(860px, 100%);
+  margin: 1.5rem auto 3rem;
+  padding: 0 1rem;
+}
+
+.typodown {
+  border: 1px solid var(--td-border);
+  border-radius: 8px;
+  min-height: 70vh;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}

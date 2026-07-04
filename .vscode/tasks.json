@@ -1,0 +1,29 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "watch",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "watch"],
+      "options": {
+        "cwd": "${workspaceFolder}/apps/typodown-vsx"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "esbuild",
+        "fileLocation": ["relative", "${workspaceFolder}/apps/typodown-vsx"],
+        "pattern": {
+          "regexp": "^.*\\[(?:ERROR|WARNING)\\]\\s+(.*)$",
+          "message": 1
+        },
+        "background": {
+          "activeOnStart": false,
+          "endsPattern": "build finished, watching for changes"
+        }
+      },
+      "presentation": { "reveal": "never" },
+      "group": { "kind": "build", "isDefault": true }
+    }
+  ]
+}

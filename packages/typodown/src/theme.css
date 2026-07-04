@@ -1,0 +1,648 @@
+/* @vemonet/typodown - GitHub-style theme with light/dark support.
+ *
+ * Theming is driven by CSS variables on `.typodown`. The theme is selected via
+ * the `data-td-theme` attribute ("light" | "dark" | "auto"); "auto" follows the
+ * OS colour-scheme preference.
+ *
+ * The Typora-style behaviour lives at the bottom: `.td-mark` elements (the raw
+ * markdown syntax) are hidden until their construct gains the `.td-on` class. */
+
+.typodown {
+  --td-fg: #1f2328;
+  --td-bg: #ffffff;
+  --td-muted: #59636e;
+  --td-faint: #818b98;
+  --td-border: #d1d9e0;
+  --td-border-muted: #d8dee4;
+  --td-link: #0969da;
+  --td-code-bg: rgba(129, 139, 152, 0.12);
+  --td-code-fg: #1f2328;
+  --td-block-bg: #f6f8fa;
+  --td-selection: #b4d5fe;
+
+  --td-note: #0969da;
+  --td-tip: #1a7f37;
+  --td-important: #8250df;
+  --td-warning: #9a6700;
+  --td-caution: #cf222e;
+
+  --td-font:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji";
+  --td-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  color: var(--td-fg);
+  background: var(--td-bg);
+  font-family: var(--td-font);
+  font-size: 16px;
+  line-height: 1.6;
+  box-sizing: border-box;
+}
+
+.typodown *,
+.typodown *::before,
+.typodown *::after {
+  box-sizing: border-box;
+}
+
+/* ---- dark theme --------------------------------------------------------- */
+
+.typodown[data-td-theme="dark"] {
+  --td-fg: #e6edf3;
+  --td-bg: #0d1117;
+  --td-muted: #9198a1;
+  --td-faint: #6e7681;
+  --td-border: #3d444d;
+  --td-border-muted: #2f353d;
+  --td-link: #4493f8;
+  --td-code-bg: rgba(101, 108, 118, 0.2);
+  --td-code-fg: #e6edf3;
+  --td-block-bg: #151b23;
+  --td-selection: #234a80;
+
+  --td-note: #4493f8;
+  --td-tip: #3fb950;
+  --td-important: #ab7df8;
+  --td-warning: #d29922;
+  --td-caution: #f85149;
+}
+
+@media (prefers-color-scheme: dark) {
+  .typodown[data-td-theme="auto"] {
+    --td-fg: #e6edf3;
+    --td-bg: #0d1117;
+    --td-muted: #9198a1;
+    --td-faint: #6e7681;
+    --td-border: #3d444d;
+    --td-border-muted: #2f353d;
+    --td-link: #4493f8;
+    --td-code-bg: rgba(101, 108, 118, 0.2);
+    --td-code-fg: #e6edf3;
+    --td-block-bg: #151b23;
+    --td-selection: #234a80;
+
+    --td-note: #4493f8;
+    --td-tip: #3fb950;
+    --td-important: #ab7df8;
+    --td-warning: #d29922;
+    --td-caution: #f85149;
+  }
+}
+
+/* ---- editable surface --------------------------------------------------- */
+
+.typodown-content {
+  outline: none;
+  padding: 1rem 1.25rem;
+  caret-color: var(--td-fg);
+  -webkit-font-smoothing: antialiased;
+  /* Collapse soft breaks (a single newline inside a paragraph) to a space, the
+   * way rendered Markdown does. Pinned explicitly so a host stylesheet (e.g. the
+   * VS Code webview) cannot make it `pre` and turn soft breaks into hard ones.
+   * Code blocks re-enable `pre-wrap` below. */
+  white-space: normal;
+}
+
+.typodown-content ::selection {
+  background: var(--td-selection);
+}
+
+.typodown-content[data-empty]::before {
+  content: attr(data-placeholder);
+  color: var(--td-faint);
+  pointer-events: none;
+  position: absolute;
+}
+
+/* ---- block spacing ------------------------------------------------------ */
+
+.td-block {
+  margin: 0 0 16px;
+}
+
+.td-block:last-child {
+  margin-bottom: 0;
+}
+
+/* A blank line is a real, navigable empty line (one line-height, no extra
+ * margin) so empty lines can be added freely and stepped through with the arrow
+ * keys. */
+.td-block.td-blank {
+  margin: 0;
+}
+/* The single blank line that directly follows a content block is just the
+ * paragraph separator: drop it from the flow so the gap comes from the
+ * (collapsing) block margins, as in rendered Markdown, rather than a visible
+ * empty line. `display: none` (not `height: 0`) is important so it does not form
+ * a block formatting context that would stop the surrounding margins from
+ * collapsing. It reappears when the caret is on it, so an empty line you are
+ * typing into still shows the cursor. */
+.td-block.td-blank.td-blank-sep {
+  display: none;
+}
+.td-block.td-blank.td-blank-sep.td-line-active {
+  display: block;
+}
+
+.typodown-content h1,
+.typodown-content h2,
+.typodown-content h3,
+.typodown-content h4,
+.typodown-content h5,
+.typodown-content h6 {
+  margin: 24px 0 16px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.typodown-content h1 {
+  font-size: 2em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--td-border-muted);
+}
+.typodown-content h2 {
+  font-size: 1.5em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--td-border-muted);
+}
+.typodown-content h3 {
+  font-size: 1.25em;
+}
+.typodown-content h4 {
+  font-size: 1em;
+}
+.typodown-content h5 {
+  font-size: 0.875em;
+}
+.typodown-content h6 {
+  font-size: 0.85em;
+  color: var(--td-muted);
+}
+
+.typodown-content a {
+  color: var(--td-link);
+  text-decoration: none;
+}
+.typodown-content a:hover {
+  text-decoration: underline;
+}
+
+.typodown-content strong {
+  font-weight: 600;
+}
+.typodown-content del {
+  text-decoration: line-through;
+}
+
+.typodown-content img {
+  max-width: 100%;
+}
+
+/* Inline code and code spans. */
+.td-code-span {
+  font-family: var(--td-mono);
+  font-size: 0.9em;
+  padding: 0.2em 0.4em;
+  margin: 0;
+  background: var(--td-code-bg);
+  border-radius: 6px;
+}
+
+/* <kbd>: rendered as a physical keyboard key, Typora-style. */
+.typodown-content kbd {
+  display: inline-block;
+  font-family: var(--td-mono);
+  font-size: 0.85em;
+  line-height: 1.2;
+  padding: 0.15em 0.5em;
+  min-width: 1em;
+  text-align: center;
+  color: var(--td-fg);
+  background: var(--td-block-bg);
+  border: 1px solid var(--td-border);
+  border-radius: 6px;
+  box-shadow:
+    0 1px 0 var(--td-border),
+    inset 0 -1px 0 var(--td-border-muted);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* Inline HTML. A standalone tag (void tag, comment) is wrapped in a
+ * `.td-html-inline` span holding its rendered effect; paired tags become the
+ * live element itself. Either way the raw `<tag>` source is a `.td-mark` that is
+ * hidden while idle and revealed (dimmed) when the caret is on the construct. */
+.td-html-inline {
+  display: inline;
+}
+.td-html-raw {
+  font-family: var(--td-mono);
+  font-size: 0.9em;
+}
+
+/* Block-level HTML. The rendered view is in flow (it sizes the block); the raw
+ * markdown is a transparent overlay so the caret can land on the block. When
+ * active the raw becomes the in-flow, dimmed element and the view is hidden. */
+.td-html {
+  position: relative;
+}
+.td-html > .td-html-raw {
+  position: absolute;
+  inset: 0;
+  display: block;
+  white-space: pre-wrap;
+  font-family: var(--td-mono);
+  font-size: 0.9em;
+  color: transparent;
+}
+.td-html.td-on > .td-html-raw {
+  position: static;
+  color: var(--td-faint);
+}
+
+/* Fenced code blocks. */
+.td-code-block {
+  background: var(--td-block-bg);
+  border-radius: 6px;
+  padding: 12px 16px;
+  border: 1px solid var(--td-border-muted);
+}
+.td-code-block code {
+  font-family: var(--td-mono);
+  font-size: 0.9em;
+  white-space: pre-wrap;
+  word-break: break-word;
+  display: block;
+  background: transparent;
+}
+
+/* Blockquotes. */
+.typodown-content blockquote {
+  margin: 0 0 16px;
+  padding: 0.4em 1em;
+  color: var(--td-muted);
+  background: var(--td-block-bg);
+  border-left: 0.25em solid var(--td-border);
+  border-radius: 0 6px 6px 0;
+}
+
+/* GFM alerts (> [!NOTE] etc). The selector must outrank `.typodown-content
+ * blockquote` above (which sets the border color via the `border-left`
+ * shorthand) so the accent colour actually wins on the left bar. */
+.typodown-content blockquote.td-alert {
+  border-left-color: var(--td-alert-color, var(--td-border));
+  color: var(--td-fg);
+}
+.td-alert-note {
+  --td-alert-color: var(--td-note);
+}
+.td-alert-tip {
+  --td-alert-color: var(--td-tip);
+}
+.td-alert-important {
+  --td-alert-color: var(--td-important);
+}
+.td-alert-warning {
+  --td-alert-color: var(--td-warning);
+}
+.td-alert-caution {
+  --td-alert-color: var(--td-caution);
+}
+.td-alert-title {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  color: var(--td-alert-color);
+  margin-bottom: 4px;
+  user-select: none;
+}
+.td-alert-title::before {
+  content: "";
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  background-color: var(--td-alert-color);
+  mask: var(--td-alert-icon) center / contain no-repeat;
+  -webkit-mask: var(--td-alert-icon) center / contain no-repeat;
+}
+.td-alert-title::after {
+  content: attr(data-label);
+}
+/* The raw "> [!NOTE]" text: always present (selectable, transparent when idle)
+ * so the caret can land on the line; shown faint when the construct is active. */
+.td-alert-raw {
+  display: inline;
+  white-space: pre;
+  font-family: var(--td-mono);
+  font-size: 0.9em;
+  color: transparent;
+}
+.td-on > .td-alert-raw {
+  color: var(--td-faint);
+}
+.td-alert-note {
+  --td-alert-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z'/%3E%3C/svg%3E");
+}
+.td-alert-tip {
+  --td-alert-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 1.5c-2.363 0-4 1.69-4 3.75 0 .984.424 1.625.984 2.304l.214.253c.223.264.47.556.673.848.284.411.537.896.621 1.49a.75.75 0 0 1-1.484.211c-.04-.282-.163-.547-.37-.847a8.456 8.456 0 0 0-.542-.68c-.084-.1-.173-.205-.268-.32C3.201 7.75 2.5 6.766 2.5 5.25 2.5 2.31 4.863 0 8 0s5.5 2.31 5.5 5.25c0 1.516-.701 2.5-1.328 3.259-.095.115-.184.22-.268.319-.207.245-.383.453-.541.681-.208.3-.33.565-.37.847a.751.751 0 0 1-1.485-.212c.084-.593.337-1.078.621-1.489.203-.292.45-.584.673-.848.075-.088.147-.173.213-.253.561-.679.985-1.32.985-2.304 0-2.06-1.637-3.75-4-3.75ZM5.75 12h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1 0-1.5ZM6 15.25a.75.75 0 0 1 .75-.75h2.5a.75.75 0 0 1 0 1.5h-2.5a.75.75 0 0 1-.75-.75Z'/%3E%3C/svg%3E");
+}
+.td-alert-important {
+  --td-alert-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Zm7 2.25v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM8 8a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z'/%3E%3C/svg%3E");
+}
+.td-alert-warning {
+  --td-alert-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0 1 14.082 15H1.918a1.75 1.75 0 0 1-1.543-2.575Zm1.763.707a.25.25 0 0 0-.44 0L1.698 13.132a.25.25 0 0 0 .22.368h12.164a.25.25 0 0 0 .22-.368Zm.53 3.996v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 11a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z'/%3E%3C/svg%3E");
+}
+.td-alert-caution {
+  --td-alert-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.47.22A.749.749 0 0 1 5 0h6c.199 0 .389.079.53.22l4.25 4.25c.141.14.22.331.22.53v6a.749.749 0 0 1-.22.53l-4.25 4.25A.749.749 0 0 1 11 16H5a.749.749 0 0 1-.53-.22L.22 11.53A.749.749 0 0 1 0 11V5c0-.199.079-.389.22-.53Zm.84 1.28L1.5 5.31v5.38l3.81 3.81h5.38l3.81-3.81V5.31L10.69 1.5ZM8 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 8 4Zm0 8a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z'/%3E%3C/svg%3E");
+}
+
+.td-quote-line {
+  min-height: 1.6em;
+}
+
+/* Lists. */
+.td-list {
+  padding-left: 2em;
+  margin: 0 0 16px;
+}
+/* Nested lists sit inside an item, so no outer margin. */
+.td-list .td-list {
+  margin: 0;
+}
+.td-list-item {
+  margin: 0.25em 0;
+  position: relative;
+}
+.td-task {
+  list-style: none;
+}
+
+/* GitHub-style bullet styles per nesting level. */
+ul.td-list {
+  list-style-type: disc;
+}
+ul.td-list ul.td-list {
+  list-style-type: circle;
+}
+ul.td-list ul.td-list ul.td-list {
+  list-style-type: square;
+}
+ol.td-list {
+  list-style-type: decimal;
+}
+ol.td-list ol.td-list {
+  list-style-type: lower-alpha;
+}
+ol.td-list ol.td-list ol.td-list {
+  list-style-type: lower-roman;
+}
+.td-task-box {
+  margin: 0 0.4em 0 -1.4em;
+  vertical-align: middle;
+}
+
+/* Tables. The rendered table is in flow so the block is sized to it; the raw
+ * markdown is a transparent overlay on top (selectable, so the caret can land on
+ * the block). When the block is active the raw becomes the in-flow, visible
+ * element and the table is hidden (see the reveal section). */
+.td-table-block {
+  position: relative;
+}
+.td-table-view {
+  border-collapse: collapse;
+  display: table;
+  width: auto;
+}
+.td-table-raw {
+  position: absolute;
+  inset: 0;
+  display: block;
+  white-space: pre-wrap;
+  font-family: var(--td-mono);
+  font-size: 0.9em;
+  color: transparent;
+}
+.td-table-view th,
+.td-table-view td {
+  border: 1px solid var(--td-border);
+  padding: 6px 13px;
+}
+.td-table-view th {
+  font-weight: 600;
+  background: var(--td-block-bg);
+}
+
+/* Horizontal rule. The raw "---" text is always present (selectable, transparent
+ * when idle) so the caret can always land on the line; the rendered rule is an
+ * absolutely positioned overlay hidden while the construct is active. */
+.td-hr-block {
+  position: relative;
+}
+.td-hr-raw {
+  display: inline;
+  white-space: pre;
+  font-family: var(--td-mono);
+  font-size: 0.9em;
+  color: transparent;
+}
+.td-hr-view {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 2px solid var(--td-border);
+  pointer-events: none;
+}
+
+/* ---- Typora-style syntax reveal ---------------------------------------- */
+
+/* Raw markdown syntax is hidden by default. The editor adds `.td-on` to the
+ * single construct the caret sits inside; its own marks (always direct children
+ * of the construct element) are then revealed. Nested constructs each reveal
+ * independently, so only what the cursor is on shows its syntax. */
+.td-mark {
+  display: none;
+  color: var(--td-faint);
+  font-weight: normal;
+  font-style: normal;
+}
+
+.td-on > .td-mark {
+  display: inline;
+}
+
+.td-on > .td-fence {
+  display: block;
+}
+
+/* Reveal the raw "---" (kept inline + transparent when idle) and hide the rule. */
+.td-on > .td-hr-raw {
+  color: var(--td-faint);
+}
+/* Active table: bring the raw source back into flow (so it sizes the block) and
+ * make it visible; the table itself is hidden below. */
+.td-on > .td-table-raw {
+  position: static;
+  color: var(--td-faint);
+}
+
+.td-table-raw,
+.td-code-block .td-fence {
+  white-space: pre-wrap;
+  font-family: var(--td-mono);
+  font-size: 0.9em;
+}
+
+/* When the construct is revealed, hide its rendered "view" and show the source. */
+.td-on > .td-hr-view,
+.td-on > .td-image-view,
+.td-on > .td-table-view,
+.td-on > .td-html-view {
+  display: none;
+}
+
+/* A revealed list item drops its native bullet / hides its checkbox so the raw
+ * "- " / "1. " / "[x] " marker shows in their place. The marker is pulled out of
+ * flow into the left gutter (right-aligned to the content edge) so the item text
+ * stays put, no horizontal jump when the marker reveals. */
+li.td-on {
+  list-style: none;
+}
+li.td-on > .td-task-box {
+  display: none;
+}
+li.td-on > .td-list-mark {
+  position: absolute;
+  right: 100%;
+  white-space: pre;
+}
+
+/* On the alert's first line, show the raw "> [!NOTE]" instead of the label. */
+.td-on > .td-alert-title {
+  display: none;
+}
+
+/* ---- syntax highlighting ------------------------------------------------ */
+
+.typodown {
+  --syn-keyword: #cf222e;
+  --syn-string: #0a3069;
+  --syn-comment: #6e7781;
+  --syn-number: #0550ae;
+  --syn-function: #8250df;
+  --syn-variable: #953800;
+  --syn-tag: #116329;
+  --syn-attr: #0550ae;
+  --syn-property: #0550ae;
+  --syn-boolean: #0550ae;
+  --syn-iri: #0a3069;
+  --syn-prefixed: #8250df;
+}
+
+.typodown[data-td-theme="dark"] {
+  --syn-keyword: #ff7b72;
+  --syn-string: #a5d6ff;
+  --syn-comment: #8b949e;
+  --syn-number: #79c0ff;
+  --syn-function: #d2a8ff;
+  --syn-variable: #ffa657;
+  --syn-tag: #7ee787;
+  --syn-attr: #79c0ff;
+  --syn-property: #79c0ff;
+  --syn-boolean: #79c0ff;
+  --syn-iri: #a5d6ff;
+  --syn-prefixed: #d2a8ff;
+}
+
+@media (prefers-color-scheme: dark) {
+  .typodown[data-td-theme="auto"] {
+    --syn-keyword: #ff7b72;
+    --syn-string: #a5d6ff;
+    --syn-comment: #8b949e;
+    --syn-number: #79c0ff;
+    --syn-function: #d2a8ff;
+    --syn-variable: #ffa657;
+    --syn-tag: #7ee787;
+    --syn-attr: #79c0ff;
+    --syn-property: #79c0ff;
+    --syn-boolean: #79c0ff;
+    --syn-iri: #a5d6ff;
+    --syn-prefixed: #d2a8ff;
+  }
+}
+
+.td-tok-keyword {
+  color: var(--syn-keyword);
+}
+.td-tok-string {
+  color: var(--syn-string);
+}
+.td-tok-comment {
+  color: var(--syn-comment);
+  font-style: italic;
+}
+.td-tok-number {
+  color: var(--syn-number);
+}
+.td-tok-boolean {
+  color: var(--syn-boolean);
+}
+.td-tok-function {
+  color: var(--syn-function);
+}
+.td-tok-variable {
+  color: var(--syn-variable);
+}
+.td-tok-tag {
+  color: var(--syn-tag);
+}
+.td-tok-attr {
+  color: var(--syn-attr);
+}
+.td-tok-property {
+  color: var(--syn-property);
+}
+.td-tok-iri {
+  color: var(--syn-iri);
+  text-decoration: underline;
+}
+.td-tok-prefixed {
+  color: var(--syn-prefixed);
+}
+.td-tok-operator,
+.td-tok-punctuation {
+  color: var(--td-muted);
+}
+
+/* ---- language autocomplete dropdown ------------------------------------ */
+
+.typodown {
+  position: relative;
+}
+
+.td-lang-menu {
+  position: absolute;
+  z-index: 20;
+  min-width: 140px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--td-bg);
+  border: 1px solid var(--td-border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  font-family: var(--td-font);
+  font-size: 0.85rem;
+}
+
+.td-lang-item {
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.td-lang-item[aria-selected="true"] {
+  background: var(--td-selection);
+}

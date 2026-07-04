@@ -1,0 +1,112 @@
+{
+  "name": "typodown-vsx",
+  "displayName": "Typodown",
+  "version": "0.0.0",
+  "description": "View and edit Markdown with the Typodown WYSIWYG editor (Typora-style, GitHub Flavored Markdown).",
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "editor",
+    "gfm",
+    "markdown",
+    "typora",
+    "wysiwyg"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vemonet/typodown.git",
+    "directory": "apps/typodown-vsx"
+  },
+  "publisher": "vemonet",
+  "main": "./dist/extension.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "check": "vp check",
+    "vscode:prepublish": "node build.mjs --production",
+    "package": "vsce package --no-dependencies",
+    "publish:vsce": "vsce package && vsce publish",
+    "publish:ovsx": "ovsx publish"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "@types/vscode": "^1.84.0",
+    "@vemonet/typodown": "*",
+    "esbuild": "^0.24.0",
+    "ovsx": "^1.0.2",
+    "typescript": "^6.0.3",
+    "vite-plus": "^0.2.0"
+  },
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "typodown.editor",
+        "displayName": "Typodown",
+        "selector": [
+          {
+            "filenamePattern": "*.md"
+          },
+          {
+            "filenamePattern": "*.markdown"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
+    "commands": [
+      {
+        "command": "typodown-vsx.openWith",
+        "title": "Open with Typodown",
+        "category": "Typodown",
+        "icon": "logo.png"
+      },
+      {
+        "command": "typodown-vsx.openToSide",
+        "title": "Open with Typodown to the Side",
+        "category": "Typodown"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "typodown-vsx.openWith",
+          "when": "resourceExtname == .md || resourceExtname == .markdown",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "typodown-vsx.openWith",
+          "when": "resourceExtname == .md || resourceExtname == .markdown",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Typodown",
+      "properties": {
+        "typodown.theme": {
+          "type": "string",
+          "enum": [
+            "editor",
+            "light",
+            "dark"
+          ],
+          "enumDescriptions": [
+            "Follow the current VS Code color theme",
+            "Typodown light (GitHub light)",
+            "Typodown dark (GitHub dark)"
+          ],
+          "default": "editor",
+          "description": "Color theme for the Typodown markdown editor."
+        }
+      }
+    }
+  },
+  "icon": "logo.png",
+  "engines": {
+    "vscode": "^1.84.0"
+  }
+}

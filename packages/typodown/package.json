@@ -1,0 +1,51 @@
+{
+  "name": "@vemonet/typodown",
+  "version": "0.0.0",
+  "description": "A Typora-like WYSIWYG markdown editor for the web. Renders GitHub Flavored Markdown inline and reveals the raw markdown syntax on the block under the cursor.",
+  "keywords": [
+    "contenteditable",
+    "editor",
+    "gfm",
+    "markdown",
+    "typora",
+    "wysiwyg"
+  ],
+  "homepage": "https://vemonet.github.io/typodown",
+  "bugs": {
+    "url": "https://github.com/vemonet/typodown/issues"
+  },
+  "license": "MIT",
+  "author": "Vincent Emonet <vincent.emonet@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vemonet/typodown.git"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json",
+    "./style.css": "./dist/style.css"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "dev": "vp dev",
+    "test": "vp test",
+    "check": "vp check",
+    "build": "vp pack",
+    "build:demo": "vp build",
+    "preview": "vp preview",
+    "prepublishOnly": "vp run build"
+  },
+  "devDependencies": {
+    "@tsdown/css": "^0.22.3",
+    "@types/node": "^25.6.2",
+    "@typescript/native-preview": "7.0.0-dev.20260509.2",
+    "typescript": "^6.0.3",
+    "vite-plus": "^0.2.0"
+  }
+}
