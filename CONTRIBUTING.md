@@ -1,4 +1,16 @@
-# Development
+# 🛠️ Development
+
+[![CI](https://github.com/vemonet/typodown/actions/workflows/ci.yml/badge.svg)](https://github.com/vemonet/typodown/actions/workflows/ci.yml)
+
+> [!IMPORTANT]
+>
+> Requires [Vite+](https://viteplus.dev/guide/) installed.
+
+Lint:
+
+```sh
+vp check --fix
+```
 
 Check everything is ready:
 
@@ -6,33 +18,33 @@ Check everything is ready:
 vp run ready
 ```
 
-Run the `tests`:
+Run the tests:
 
 ```bash
-vp run -r test
+vp test
 ```
 
 Build the monorepo:
 
 ```bash
-vp run -r build
+vp run build
 ```
 
-## Start demo website
+## ⚡️ Start demo website
 
-Run lib dev server:
+Run dev server:
 
 ```sh
 vp run @vemonet/typodown#dev
 ```
 
-Build demo website:
+Build website:
 
 ```sh
 vp run @vemonet/typodown#build:demo
 ```
 
-## Start VSCode extension
+## 🧩 Start VSCode extension
 
 Build lib:
 
@@ -40,17 +52,22 @@ Build lib:
 vp run @vemonet/typodown#build
 ```
 
-Start the VSCode extension dev host using **F5** in VSCode.
+Start the VSCode extension dev host using <kbd>F5</kbd> in VSCode.
 
-## Release
+Build and install extension in local VSCode:
 
 ```sh
-npm run release
+vp run install:vsx
 ```
 
-## Todo
+## 🏷️ Release
 
-- [ ] Don't switch tables to raw, enable to edit directly in the rendered table. With a small 3 dots button that appears when cursor in the table (top left of the table), show submenu with actions like insert row
-- [ ] Enable markdown rendering of text inside cell of a table
-- [ ] Support HTML in the markdown, including `<kbd>`
-- [ ] Look into [`@chenglou/pretext`](https://github.com/chenglou/pretext) for fast text layout
+```sh
+vp run release
+```
+
+## ☑️ Todo
+
+- [ ] Don't switch tables to raw, enable to edit directly in the rendered table. With a small 3 dots button that appears when cursor in the table (top left of the table), show submenu with actions like insert row. Enable markdown rendering of text inside cell of a table
+- [ ] Support local image link in HTML
+- [ ] Add command bar floating top of editor? For bold, link, etc. Default is hidden, use short ut to show it, can be enabled as always show in `createTypodown()`

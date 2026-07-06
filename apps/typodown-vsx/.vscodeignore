@@ -6,5 +6,6 @@ tsconfig.json
 vite.config.ts
 **/*.map
 **/*.ts
-!dist/**
+!dist/extension.js
+!dist/webview.js
 node_modules/**

@@ -2,7 +2,7 @@
   "name": "typodown-vsx",
   "displayName": "Typodown",
   "version": "0.0.0",
-  "description": "View and edit Markdown with the Typodown WYSIWYG editor (Typora-style, GitHub Flavored Markdown).",
+  "description": "View and edit Markdown with a WYSIWYG editor inspired by Typora.",
   "categories": [
     "Other"
   ],
@@ -14,6 +14,10 @@
     "wysiwyg"
   ],
   "license": "MIT",
+  "author": {
+    "name": "Vincent Emonet",
+    "email": "vincent.emonet@gmail.com"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vemonet/typodown.git",
@@ -26,7 +30,7 @@
     "watch": "node build.mjs --watch",
     "check": "vp check",
     "vscode:prepublish": "node build.mjs --production",
-    "package": "vsce package --no-dependencies",
+    "package": "vsce package --no-dependencies --out typodown-vsx.vsix",
     "publish:vsce": "vsce package && vsce publish",
     "publish:ovsx": "ovsx publish"
   },

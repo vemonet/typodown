@@ -16,7 +16,7 @@ export function htmlToMarkdown(html: string): string {
     .replace(/\n+$/, "");
 }
 
-// Tags whose content is a block: rendered on its own, separated by a blank line.
+/** Tags whose content is a block: rendered on its own, separated by a blank line. */
 const BLOCK = new Set([
   "p",
   "div",
@@ -111,8 +111,9 @@ function serialize(node: Node): string {
   }
 }
 
-// Apply an emphasis marker, but only around non-empty content, and move any
-// surrounding spaces outside the markers (Markdown ignores `** text **`).
+/** Apply an emphasis marker, but only around non-empty content, and move any
+ * surrounding spaces outside the markers (Markdown ignores `** text **`).
+ */
 function wrap(text: string, marker: string): string {
   const core = text.trim();
   if (!core) return text;

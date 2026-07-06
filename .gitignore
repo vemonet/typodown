@@ -7,3 +7,4 @@ dist-demo
 logs
 *.log
 .DS_Store
+.tmp

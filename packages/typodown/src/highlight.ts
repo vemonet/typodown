@@ -347,6 +347,14 @@ export const LANGUAGES: string[] = [
   "markdown",
   "turtle",
   "graphql",
+  "mermaid",
+];
+
+/** All names offered by the code-block language dropdown: canonical names plus
+ *  their short aliases (js, ts, py, ...). */
+export const LANGUAGE_SUGGESTIONS: string[] = [
+  ...LANGUAGES,
+  ...Object.keys(ALIASES).filter((alias) => !LANGUAGES.includes(alias)),
 ];
 
 function getGrammar(lang: string): Grammar | null {
@@ -354,7 +362,7 @@ function getGrammar(lang: string): Grammar | null {
   return GRAMMARS[key] ?? GRAMMARS[ALIASES[key] ?? ""] ?? null;
 }
 
-// Reverse map: canonical name → aliases that resolve to it.
+/** Reverse map: canonical name → aliases that resolve to it. */
 const ALIAS_OF: Map<string, string[]> = (() => {
   const m = new Map<string, string[]>();
   for (const [alias, canonical] of Object.entries(ALIASES)) {

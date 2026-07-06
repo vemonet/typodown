@@ -3,7 +3,6 @@
   "version": "0.0.0",
   "description": "A Typora-like WYSIWYG markdown editor for the web. Renders GitHub Flavored Markdown inline and reveals the raw markdown syntax on the block under the cursor.",
   "keywords": [
-    "contenteditable",
     "editor",
     "gfm",
     "markdown",
@@ -15,7 +14,10 @@
     "url": "https://github.com/vemonet/typodown/issues"
   },
   "license": "MIT",
-  "author": "Vincent Emonet <vincent.emonet@gmail.com>",
+  "author": {
+    "name": "Vincent Emonet",
+    "email": "vincent.emonet@gmail.com"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vemonet/typodown.git"
@@ -24,6 +26,9 @@
     "dist"
   ],
   "type": "module",
+  "types": "./dist/index.d.mts",
+  "unpkg": "./dist/index.umd.js",
+  "jsdelivr": "./dist/index.umd.js",
   "exports": {
     ".": "./dist/index.mjs",
     "./package.json": "./package.json",
@@ -41,11 +46,46 @@
     "preview": "vp preview",
     "prepublishOnly": "vp run build"
   },
+  "dependencies": {
+    "@codemirror/autocomplete": "^6.20.3",
+    "@codemirror/commands": "^6.10.4",
+    "@codemirror/lang-markdown": "^6.5.0",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.0",
+    "@codemirror/view": "^6.43.4",
+    "@lezer/common": "^1.5.2",
+    "@lezer/highlight": "^1.2.3",
+    "@lezer/markdown": "^1.6.4",
+    "katex": "^0.16.47",
+    "mermaid": "^11.16.0"
+  },
   "devDependencies": {
     "@tsdown/css": "^0.22.3",
     "@types/node": "^25.6.2",
     "@typescript/native-preview": "7.0.0-dev.20260509.2",
+    "commonmark-spec": "^0.31.2",
     "typescript": "^6.0.3",
     "vite-plus": "^0.2.0"
+  },
+  "inlinedDependencies": {
+    "@codemirror/autocomplete": "6.20.3",
+    "@codemirror/commands": "6.10.4",
+    "@codemirror/lang-css": "6.3.1",
+    "@codemirror/lang-html": "6.4.11",
+    "@codemirror/lang-javascript": "6.2.5",
+    "@codemirror/lang-markdown": "6.5.0",
+    "@codemirror/language": "6.12.4",
+    "@codemirror/state": "6.7.0",
+    "@codemirror/view": "6.43.4",
+    "@lezer/common": "1.5.2",
+    "@lezer/css": "1.3.4",
+    "@lezer/highlight": "1.2.3",
+    "@lezer/html": "1.3.13",
+    "@lezer/javascript": "1.5.4",
+    "@lezer/lr": "1.4.10",
+    "@lezer/markdown": "1.6.4",
+    "@marijn/find-cluster-break": "1.0.3",
+    "style-mod": "4.1.3",
+    "w3c-keyname": "2.2.8"
   }
 }

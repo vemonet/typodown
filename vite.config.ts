@@ -12,5 +12,12 @@ export default defineConfig({
   },
   run: {
     cache: true,
+    tasks: {
+      "install:vsx": {
+        command:
+          "npm run build -w @vemonet/typodown && npm run package -w typodown-vsx && code --install-extension apps/typodown-vsx/typodown-vsx.vsix --force",
+        cache: false,
+      },
+    },
   },
 });

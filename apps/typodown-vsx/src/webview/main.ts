@@ -24,7 +24,16 @@ const VSCODE_THEME_CSS = `
   --td-code-bg: var(--vscode-textCodeBlock-background, rgba(128,128,128,0.15));
   --td-code-fg: var(--vscode-editor-foreground);
   --td-block-bg: var(--vscode-textCodeBlock-background, rgba(128,128,128,0.1));
+  --td-table-header-bg: var(--vscode-editorInlayHint-background, var(--vscode-textCodeBlock-background, rgba(128,128,128,0.18)));
+  --td-table-alt-bg: var(--vscode-textCodeBlock-background, rgba(128,128,128,0.08));
   --td-selection: var(--vscode-editor-selectionBackground);
+}
+
+/* Inset the editor surface so markdown lines don't stretch to the pane edges.
+ * Applies regardless of theme setting. Padding (not margin) on the wrapper so
+ * the editor background still fills the full width. */
+.typodown {
+  padding: 0 max(1.5rem, 4vw) 2rem;
 }`;
 
 for (const css of [themeCss, VSCODE_THEME_CSS]) {

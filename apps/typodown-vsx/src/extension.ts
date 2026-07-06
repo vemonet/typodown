@@ -101,8 +101,8 @@ class TypodownEditorProvider implements vscode.CustomTextEditorProvider {
     const csp = [
       "default-src 'none'",
       `img-src ${webview.cspSource} https: data:`,
-      `style-src ${webview.cspSource} 'unsafe-inline'`,
-      `font-src ${webview.cspSource}`,
+      `style-src ${webview.cspSource} 'unsafe-inline' https://cdn.jsdelivr.net`,
+      `font-src ${webview.cspSource} https://cdn.jsdelivr.net`,
       `script-src 'nonce-${nonce}'`,
     ].join("; ");
 
