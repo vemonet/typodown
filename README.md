@@ -5,19 +5,21 @@
 
 **Open source WYSIWYG Markdown editor, inspired by [Typora](https://typora.io).**
 
-[⚡️ Live demo](https://vemonet.github.io/typodown) · [📦 npm package](https://www.npmjs.com/package/@vemonet/typodown) · [🧩 VSCode extension](https://marketplace.visualstudio.com/items?itemName=vemonet.typodown-vsx)
+[⚡️ Live demo](https://vemonet.github.io/typodown) · [🧩 VSCode extension](https://marketplace.visualstudio.com/items?itemName=vemonet.typodown-vsx) · [📦 npm package](https://www.npmjs.com/package/@vemonet/typodown)
 
 </div>
 
 ---
 
-Typodown renders markdown inline as you type. There is no split preview pane: the styled text is the document. Move your caret into a heading, bold, code span, or link and its raw markdown markers (`#`, `**`, `` ` ``) reveal just for that construct, like Typora.
+Typodown blends reading and writing markdown into one continuous motion. Markdown renders where you type, there is no preview pane to keep in sync, no mode to toggle, no markup cluttering the page.
+
+Move your caret into a heading, bold, code span or link and only its raw markers (`#`, `**`, `` ` ``) surface for the moment you edit them, then settle back into place as you move on. The content stay central, the syntax stays out of the way.
 
 ## Why
 
-There are lots of markdown editors out there, but none get it right like [Typora](https://typora.io) does. Rich text editors that export to markdown are not what we are looking for, we want to edit markdown while it's rendered, not have to deal with a ms office lookalike.
+There are lots of markdown editors out there, but none are getting it right like [Typora](https://typora.io) does. Rich text editors that export to markdown are not what we are looking for, we want to edit markdown while it's rendered, not have to deal with a ms office lookalike.
 
-The problem is that Typora is a closed desktop app so it can't be integrated anywhere.
+The problem is that Typora is a closed source desktop app, hence it can't be integrated anywhere outside this desktop app.
 
 This library implements a simple editor component that enable to edit markdown anywhere JS works, and it comes with a companion VSCode extension.
 

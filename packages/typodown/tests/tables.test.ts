@@ -1,6 +1,32 @@
 import { expect, test } from "vite-plus/test";
 import { EditorSelection, EditorState } from "@codemirror/state";
-import { findLenientTables, isDelimRow, splitCells } from "../src/live-preview.ts";
+import type { EditorView } from "@codemirror/view";
+import {
+  addTableColumn,
+  addTableRow,
+  cellsInRange,
+  deleteTable,
+  escapeCellPipes,
+  findLenientTables,
+  isDelimRow,
+  renderCellHTML,
+  splitCells,
+} from "../src/live-preview.ts";
+
+// A minimal EditorView mock: the table helpers only need view.state and
+// view.dispatch. dispatch applies the transaction so successive reads see the
+// updated document.
+function viewWith(doc: string): EditorView {
+  let state = EditorState.create({ doc });
+  return {
+    get state() {
+      return state;
+    },
+    dispatch(...specs: Parameters<EditorView["dispatch"]>) {
+      state = state.update(...specs).state;
+    },
+  } as EditorView;
+}
 
 // ---- splitCells ----------------------------------------------------------
 
@@ -89,13 +115,15 @@ test("findLenientTables renders a table Lezer rejects (caret elsewhere)", () => 
   expect(out[0]!.to).toBe(state.doc.line(7).to);
 });
 
-test("findLenientTables reveals raw markdown when the caret is in the table", () => {
+test("findLenientTables always renders, even when the caret is in the table", () => {
+  // Tables are now edited inside the rendered grid widget; the raw source is
+  // never revealed for a caret inside the table.
   const doc = `text\n\n${lenientTable}`;
   const tableStart = stateWith(doc, 0).doc.line(3).from;
   const state = stateWith(doc, tableStart); // caret inside the table
   const out: { from: number; to: number }[] = [];
   findLenientTables(state, [], out as never);
-  expect(out).toHaveLength(0);
+  expect(out).toHaveLength(1);
 });
 
 test("findLenientTables skips ranges Lezer already claimed (no double render)", () => {
@@ -119,4 +147,82 @@ test("findLenientTables does not fire inside a claimed code block", () => {
   const out: { from: number; to: number }[] = [];
   findLenientTables(state, [[fenceStart, fenceEnd]], out as never);
   expect(out).toHaveLength(0);
+});
+
+// ---- escapeCellPipes -----------------------------------------------------
+
+test("escapeCellPipes escapes free pipes but leaves code-span pipes alone", () => {
+  expect(escapeCellPipes("a | b")).toBe("a \\| b");
+  // Pipes inside a backtick code span are content, not delimiters.
+  expect(escapeCellPipes('`"light" | "dark" | "auto"`')).toBe('`"light" | "dark" | "auto"`');
+  // Already-escaped pipes are not double-escaped.
+  expect(escapeCellPipes("a \\| b")).toBe("a \\| b");
+});
+
+// ---- cellsInRange --------------------------------------------------------
+
+test("cellsInRange returns each cell's document offsets", () => {
+  const line = "| a | b |";
+  const cells = cellsInRange(line, 100);
+  expect(cells).toHaveLength(2);
+  expect(cells[0]!.text).toBe(" a ");
+  expect(cells[0]!.from).toBe(101);
+  expect(cells[0]!.to).toBe(104);
+  expect(cells[1]!.text).toBe(" b ");
+  expect(cells[1]!.from).toBe(105);
+  expect(cells[1]!.to).toBe(108);
+});
+
+test("cellsInRange keeps a code-span pipe out of the split", () => {
+  const cells = cellsInRange("| `a | b` | c |", 0);
+  expect(cells).toHaveLength(2);
+  expect(cells[0]!.text).toBe(" `a | b` ");
+  expect(cells[1]!.text).toBe(" c ");
+});
+
+// ---- renderCellHTML -------------------------------------------------------
+
+test("renderCellHTML renders code spans, emphasis and links", () => {
+  expect(renderCellHTML("`code`")).toBe("<code>code</code>");
+  expect(renderCellHTML("**b**")).toBe("<strong>b</strong>");
+  expect(renderCellHTML("*i*")).toBe("<em>i</em>");
+  expect(renderCellHTML("~~s~~")).toBe("<s>s</s>");
+  expect(renderCellHTML("[x](https://a.com)")).toBe('<a href="https://a.com">x</a>');
+});
+
+test("renderCellHTML renders raw HTML and escapes plain text", () => {
+  expect(renderCellHTML("<b>bold</b>")).toBe("<b>bold</b>");
+  expect(renderCellHTML("a < b")).toBe("a &lt; b");
+});
+
+test("renderCellHTML keeps a union type's pipes inside its code span", () => {
+  expect(renderCellHTML('`"light" | "dark" | "auto"`')).toBe(
+    '<code>"light" | "dark" | "auto"</code>',
+  );
+});
+
+// ---- addTableRow / addTableColumn / deleteTable -------------------------
+
+const simpleTable = "| a | b |\n| --- | --- |\n| 1 | 2 |";
+
+test("addTableRow appends an empty body row matching the column count", () => {
+  const view = viewWith(simpleTable);
+  addTableRow(view, 0);
+  expect(view.state.doc.toString()).toBe("| a | b |\n| --- | --- |\n| 1 | 2 |\n| | |");
+});
+
+test("addTableColumn adds a cell to every row", () => {
+  const view = viewWith(simpleTable);
+  addTableColumn(view, 0);
+  const lines = view.state.doc.toString().split("\n");
+  expect(splitCells(lines[0]!)).toEqual(["a", "b", ""]);
+  expect(splitCells(lines[1]!)).toEqual(["---", "---", "---"]);
+  expect(splitCells(lines[2]!)).toEqual(["1", "2", ""]);
+});
+
+test("deleteTable removes the table and one trailing newline", () => {
+  const view = viewWith(`before\n\n${simpleTable}\n\nafter`);
+  const tableFrom = "before\n\n".length;
+  deleteTable(view, tableFrom);
+  expect(view.state.doc.toString()).toBe("before\n\nafter");
 });

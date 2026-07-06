@@ -36,6 +36,7 @@ import { livePreview, ALERT_KINDS, markerEndOnLine } from "./live-preview.ts";
 import { Math as MathExtension } from "./math.ts";
 import { matchLanguages } from "./highlight.ts";
 import { htmlToMarkdown } from "./clipboard.ts";
+import { defaultMenuItems, openContextMenu, type MenuItemsProvider } from "./menu.ts";
 
 export type Theme = "light" | "dark" | "auto";
 
@@ -59,6 +60,13 @@ export interface TypodownOptions {
   onChange?: (value: string) => void;
   /** Render raw HTML blocks/tags as live widgets. Defaults to true. */
   html?: boolean;
+  /**
+   * Provide the items shown in the editor's right-click context menu. Return an
+   * empty array to suppress the custom menu (the browser's native menu shows).
+   * Defaults to a single "Add table" item that opens a rows/columns dialog.
+   * Spread `defaultMenuItems(ctx)` to extend the defaults with your own items.
+   */
+  menuItems?: MenuItemsProvider;
 }
 
 /** A Typora-style live-preview Markdown editor built on CodeMirror 6. */
@@ -66,9 +74,11 @@ export class Typodown {
   readonly wrapper: HTMLElement;
   private readonly view: EditorView;
   private readonly getClipboardText?: () => string | Promise<string>;
+  private readonly menuItems?: MenuItemsProvider;
 
   constructor(parent: HTMLElement, options: TypodownOptions = {}) {
     this.getClipboardText = options.getClipboardText;
+    this.menuItems = options.menuItems;
 
     this.wrapper = document.createElement("div");
     this.wrapper.className = "typodown";
@@ -92,6 +102,7 @@ export class Typodown {
         ...completionKeymap,
         { key: "Mod-b", run: wrap("**") },
         { key: "Mod-i", run: wrap("*") },
+        { key: "`", run: closeFenceOnThirdBacktick },
         { key: "`", run: wrapBacktick },
         { key: "Mod-k", run: (v) => this.insertLink(v) },
         { key: "Mod-Shift-v", run: (v) => this.plainPaste(v) },
@@ -125,6 +136,7 @@ export class Typodown {
       EditorView.domEventHandlers({
         paste: (event, view) => this.handlePaste(event, view),
         mousedown: (event, view) => this.handleMouseDown(event, view),
+        contextmenu: (event, view) => this.handleContextMenu(event, view),
       }),
       // Cmd/Ctrl+A: select the code content when inside a code block. Handled at
       // highest precedence with stopPropagation so a host (e.g. the VS Code
@@ -183,9 +195,34 @@ export class Typodown {
   }
 
   setValue(value: string): void {
+    const state = this.view.state;
+    const oldDoc = state.doc.toString();
+    // Map the existing selection through the whole-document replacement via
+    // the longest common prefix/suffix between old and new docs. Without this,
+    // CodeMirror's default mapping drops the caret at position 0 (the start
+    // of the inserted text) every time the host pushes an update -- e.g. VS
+    // Code's "format on save" / "trim trailing whitespace on save" modifying
+    // the document -- yanking the caret to the top of the file.
+    const ranges = state.selection.ranges.map((r) =>
+      EditorSelection.range(
+        mapPosThroughReplacement(oldDoc, value, r.from),
+        mapPosThroughReplacement(oldDoc, value, r.to),
+      ),
+    );
     this.view.dispatch({
-      changes: { from: 0, to: this.view.state.doc.length, insert: value },
+      changes: { from: 0, to: oldDoc.length, insert: value },
+      selection: EditorSelection.create(ranges, state.selection.mainIndex),
     });
+    // clampCursorPastMarker only runs on selection-only transactions, so
+    // re-clamp the main caret in case the mapped position landed inside a
+    // hidden marker prefix on its new line.
+    const main = this.view.state.selection.main;
+    if (!main.empty) return;
+    const line = this.view.state.doc.lineAt(main.head);
+    const markEnd = markerEndOnLine(this.view.state, line);
+    if (markEnd != null && main.head < markEnd) {
+      this.view.dispatch({ selection: { anchor: markEnd } });
+    }
   }
 
   setTheme(theme: Theme): void {
@@ -241,6 +278,20 @@ export class Typodown {
       event.preventDefault();
       window.open(url, "_blank", "noopener,noreferrer");
     }
+  }
+
+  /** Right-click opens the context menu (defaults to "Add table"; consumers can
+   * extend via the `menuItems` option). The native browser menu is suppressed
+   * whenever our menu has items to show. */
+  private handleContextMenu(event: MouseEvent, view: EditorView): boolean {
+    const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+    const resolvedPos = pos ?? -1;
+    const provider = this.menuItems ?? defaultMenuItems;
+    const items = provider({ view, pos: resolvedPos, getClipboardText: this.getClipboardText });
+    if (items.length === 0) return false;
+    event.preventDefault();
+    openContextMenu({ x: event.clientX, y: event.clientY }, view, resolvedPos, items);
+    return true;
   }
 
   /** Cmd/Ctrl+K: wrap the selection (or word) as a link; paste a URL from the
@@ -405,6 +456,40 @@ function inRawBlock(tree: ReturnType<typeof syntaxTree>, pos: number): boolean {
 const wrapBacktick: Command = (view) => {
   if (view.state.selection.ranges.every((r) => r.empty)) return false;
   return wrap("`")(view);
+};
+
+/** Typing the third backtick on a line that's just two backticks (with optional
+ * leading whitespace) auto-closes the fence: the third backtick is inserted
+ * along with a closing fence on a new line, and the caret lands at the
+ * info-string position on the opening fence line, where typing a letter opens
+ * the language autocomplete (the "language selector"). Inside a code block /
+ * table / HTML block the line would be content (or a closing fence), so the
+ * auto-close is skipped there. */
+export const closeFenceOnThirdBacktick: Command = (view) => {
+  const { state } = view;
+  const range = state.selection.main;
+  if (!range.empty) return false;
+  const pos = range.head;
+  const line = state.doc.lineAt(pos);
+  if (pos !== line.to) return false;
+  if (!/^\s*``$/.test(line.text)) return false;
+  if (inRawBlock(syntaxTree(state), pos)) return false;
+  view.dispatch({
+    changes: { from: pos, to: pos, insert: "`\n\n```" },
+    selection: { anchor: pos + 1 },
+    userEvent: "input",
+    scrollIntoView: true,
+  });
+  // The language selector input is rendered by live-preview once the block
+  // becomes active; focus it so the user can type or pick a language directly.
+  if (typeof globalThis.requestAnimationFrame === "function") {
+    globalThis.requestAnimationFrame(() => {
+      const input = view.contentDOM?.querySelector<HTMLInputElement>(".cm-td-lang-input");
+      input?.focus();
+      input?.select();
+    });
+  }
+  return true;
 };
 
 /** Toggle an emphasis marker around each selection. With no selection it inserts
@@ -696,6 +781,27 @@ export const arrowLeftPastMarker: Command = (view) => {
 };
 
 // ---- helpers --------------------------------------------------------------
+
+/** Map a document offset through a full-document replacement using the longest
+ * common prefix and suffix between the old and new texts, so the offset lands
+ * at the same logical spot. Offsets inside the changed region clamp to the end
+ * of the common prefix. Used by `setValue` to keep the caret where the user
+ * left it instead of letting CodeMirror drop it at position 0. */
+export function mapPosThroughReplacement(oldDoc: string, newDoc: string, pos: number): number {
+  const minLen = Math.min(oldDoc.length, newDoc.length);
+  let prefix = 0;
+  while (prefix < minLen && oldDoc[prefix] === newDoc[prefix]) prefix++;
+  let suffix = 0;
+  while (
+    suffix < minLen - prefix &&
+    oldDoc[oldDoc.length - 1 - suffix] === newDoc[newDoc.length - 1 - suffix]
+  ) {
+    suffix++;
+  }
+  if (pos <= prefix) return pos;
+  if (pos >= oldDoc.length - suffix) return pos + (newDoc.length - oldDoc.length);
+  return prefix;
+}
 
 /** Expand an empty selection at `pos` to the run of word characters it sits in.
  * If the caret is not on a word character, returns an empty range at `pos`. */

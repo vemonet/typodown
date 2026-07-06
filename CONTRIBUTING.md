@@ -71,3 +71,4 @@ vp run release
 - [ ] Don't switch tables to raw, enable to edit directly in the rendered table. With a small 3 dots button that appears when cursor in the table (top left of the table), show submenu with actions like insert row. Enable markdown rendering of text inside cell of a table
 - [ ] Support local image link in HTML
 - [ ] Add command bar floating top of editor? For bold, link, etc. Default is hidden, use short ut to show it, can be enabled as always show in `createTypodown()`
+- [ ] Add right click menu option to add a table. This opens a small popup with 2 fields to provide number of rows and columns

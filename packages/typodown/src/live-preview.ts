@@ -270,17 +270,31 @@ class MermaidWidget extends WidgetType {
 }
 
 class TableWidget extends WidgetType {
-  constructor(readonly source: string) {
+  readonly nRows: number;
+  readonly nCols: number;
+  constructor(
+    readonly source: string,
+    readonly from: number,
+  ) {
     super();
+    const lines = source.split("\n").filter((l) => l.trim() !== "" && l.includes("|"));
+    this.nRows = lines.length;
+    this.nCols = lines.length > 0 ? splitCells(lines[0]!).length : 0;
   }
+  // Preserve the DOM (and any in-progress cell editing) when only cell text
+  // changed: same position, same row/column count. Structural edits (a row or
+  // column added/removed) or a table that moved force a fresh widget, which
+  // re-renders every cell from the document.
   eq(other: TableWidget): boolean {
-    return other.source === this.source;
+    return other.from === this.from && other.nRows === this.nRows && other.nCols === this.nCols;
   }
-  toDOM(): HTMLElement {
-    return renderTable(this.source);
+  toDOM(view: EditorView): HTMLElement {
+    return renderTable(this.source, view, this.from);
   }
+  // Own the events: clicks/keys go to the contentEditable cells and the menu
+  // button, CodeMirror must not try to move its own selection into them.
   ignoreEvent(): boolean {
-    return false;
+    return true;
   }
 }
 
@@ -382,6 +396,17 @@ const MARK_NAMES = new Set([
   "QuoteMark",
 ]);
 
+// Escape text for HTML text content. Quotes are left alone (they're only
+// significant inside attribute values; see escAttr).
+function esc(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Escape a string for use inside a double-quoted attribute value.
+function escAttr(s: string): string {
+  return esc(s).replace(/"/g, "&quot;");
+}
+
 /** Split a markdown table row into cells. A `|` inside a backtick code span or
  * after a backslash is content, not a delimiter (per the GFM spec). Leading
  * and trailing pipes are stripped. */
@@ -458,27 +483,31 @@ function codeSpanText(node: SyntaxNode, src: string): string {
   return text;
 }
 
-function emitChildren(node: SyntaxNode, parent: Node, src: string): void {
+function emitChildrenHTML(node: SyntaxNode, src: string): string {
+  let out = "";
   let pos = node.from;
-  for (const child of children(node)) {
-    if (child.from > pos) parent.appendChild(document.createTextNode(src.slice(pos, child.from)));
-    emitNode(child, parent, src);
-    pos = child.to;
+  for (const c of children(node)) {
+    if (c.from > pos) out += esc(src.slice(pos, c.from));
+    out += emitNodeHTML(c, src);
+    pos = c.to;
   }
-  if (pos < node.to) parent.appendChild(document.createTextNode(src.slice(pos, node.to)));
+  if (pos < node.to) out += esc(src.slice(pos, node.to));
+  return out;
 }
 
-// Emit only the inline content of `node` that falls between `from` and `to`
-// (used for a link's bracketed text, which excludes the `(url)` destination).
-function emitRange(node: SyntaxNode, parent: Node, src: string, from: number, to: number): void {
+// Emit only the inline content of `node` between `from` and `to` (used for a
+// link's bracketed text, which excludes the `(url)` destination).
+function emitRangeHTML(node: SyntaxNode, src: string, from: number, to: number): string {
+  let out = "";
   let pos = from;
-  for (const child of children(node)) {
-    if (child.to <= from || child.from >= to) continue;
-    if (child.from > pos) parent.appendChild(document.createTextNode(src.slice(pos, child.from)));
-    emitNode(child, parent, src);
-    pos = child.to;
+  for (const c of children(node)) {
+    if (c.to <= from || c.from >= to) continue;
+    if (c.from > pos) out += esc(src.slice(pos, c.from));
+    out += emitNodeHTML(c, src);
+    pos = c.to;
   }
-  if (pos < to) parent.appendChild(document.createTextNode(src.slice(pos, to)));
+  if (pos < to) out += esc(src.slice(pos, to));
+  return out;
 }
 
 // All direct children of a node, in source order. (@lezer/common's getChildren
@@ -489,121 +518,476 @@ function children(node: SyntaxNode): SyntaxNode[] {
   return out;
 }
 
-function emitNode(node: SyntaxNode, parent: Node, src: string): void {
-  if (MARK_NAMES.has(node.name)) return;
+function emitNodeHTML(node: SyntaxNode, src: string): string {
+  if (MARK_NAMES.has(node.name)) return "";
   switch (node.name) {
     case "Escape":
-      parent.appendChild(document.createTextNode(src.slice(node.from + 1, node.to)));
-      return;
+      return esc(src.slice(node.from + 1, node.to));
     case "HardBreak":
-      parent.appendChild(document.createElement("br"));
-      return;
+      return "<br>";
     case "SoftBreak":
-      parent.appendChild(document.createTextNode(" "));
-      return;
-    case "Emphasis": {
-      const el = document.createElement("em");
-      emitChildren(node, el, src);
-      parent.appendChild(el);
-      return;
-    }
-    case "StrongEmphasis": {
-      const el = document.createElement("strong");
-      emitChildren(node, el, src);
-      parent.appendChild(el);
-      return;
-    }
-    case "Strikethrough": {
-      const el = document.createElement("s");
-      emitChildren(node, el, src);
-      parent.appendChild(el);
-      return;
-    }
-    case "InlineCode": {
-      const code = document.createElement("code");
-      code.textContent = codeSpanText(node, src);
-      parent.appendChild(code);
-      return;
-    }
+      return " ";
+    case "Emphasis":
+      return `<em>${emitChildrenHTML(node, src)}</em>`;
+    case "StrongEmphasis":
+      return `<strong>${emitChildrenHTML(node, src)}</strong>`;
+    case "Strikethrough":
+      return `<s>${emitChildrenHTML(node, src)}</s>`;
+    case "InlineCode":
+      return `<code>${esc(codeSpanText(node, src))}</code>`;
     case "Autolink": {
       const urlNode = node.getChild("URL");
       const url = urlNode ? src.slice(urlNode.from, urlNode.to) : "";
       const href = url.includes("@") && !/^[a-z][a-z0-9+.-]*:/i.test(url) ? `mailto:${url}` : url;
-      const a = document.createElement("a");
-      a.href = sanitizeUrl(href);
-      a.textContent = url;
-      parent.appendChild(a);
-      return;
+      return `<a href="${escAttr(sanitizeUrl(href))}">${esc(url)}</a>`;
     }
     case "Link": {
       const marks = node.getChildren("LinkMark");
-      const a = document.createElement("a");
       // An inline destination `[t](url)` has 4 marks; reference forms are left
-      // un-resolved (a cell has no document-level reference definitions).
+      // unresolved (a cell has no document-level reference definitions).
+      let href = "";
       if (marks.length >= 3) {
         const urlNode = node.getChild("URL");
         if (urlNode) {
           let url = src.slice(urlNode.from, urlNode.to);
           if (url.startsWith("<") && url.endsWith(">")) url = url.slice(1, -1);
-          a.href = sanitizeUrl(url);
+          href = sanitizeUrl(url);
         }
       }
-      if (marks.length >= 2) {
-        emitRange(node, a, src, marks[0]!.to, marks[1]!.from);
-      } else {
-        emitChildren(node, a, src);
-      }
-      parent.appendChild(a);
-      return;
+      const text =
+        marks.length >= 2
+          ? emitRangeHTML(node, src, marks[0]!.to, marks[1]!.from)
+          : emitChildrenHTML(node, src);
+      return `<a href="${escAttr(href)}">${text}</a>`;
     }
     case "Image": {
       const marks = node.getChildren("ImageMark");
-      const img = document.createElement("img");
+      let isrc = "";
+      let alt = "";
       if (marks.length >= 3) {
         const urlNode = node.getChild("URL");
         if (urlNode) {
           let url = src.slice(urlNode.from, urlNode.to);
           if (url.startsWith("<") && url.endsWith(">")) url = url.slice(1, -1);
-          img.src = sanitizeUrl(url);
+          isrc = sanitizeUrl(url);
         }
       }
-      if (marks.length >= 2) img.alt = src.slice(marks[0]!.to, marks[1]!.from).trim();
-      parent.appendChild(img);
-      return;
+      if (marks.length >= 2) alt = src.slice(marks[0]!.to, marks[1]!.from).trim();
+      return `<img src="${escAttr(isrc)}" alt="${escAttr(alt)}">`;
     }
     case "URL": {
-      // Bare GFM autolink URL not wrapped in a Link/Autolink.
+      // A bare GFM autolink (not wrapped in a Link/Autolink).
       const url = src.slice(node.from, node.to);
-      const a = document.createElement("a");
-      a.href = sanitizeUrl(url);
-      a.textContent = url;
-      parent.appendChild(a);
-      return;
+      return `<a href="${escAttr(sanitizeUrl(url))}">${esc(url)}</a>`;
     }
     case "HTMLTag":
-      parent.appendChild(document.createTextNode(src.slice(node.from, node.to)));
-      return;
+      // Render raw HTML in cells (like Typora). The cell is set via innerHTML,
+      // so the tag is parsed by the browser. Text around it is escaped above.
+      return src.slice(node.from, node.to);
     default:
-      emitChildren(node, parent, src);
+      return emitChildrenHTML(node, src);
   }
 }
 
-/** Render a table cell's inline markdown to a DOM fragment. Falls back to
- * plain text if parsing fails for any reason. */
-export function renderInline(text: string): Node {
-  const frag = document.createDocumentFragment();
-  if (text === "") return frag;
+/** Render a table cell's inline markdown (and raw HTML) to an HTML string,
+ * suitable for `cell.innerHTML`. Falls back to escaped text on parse error. */
+export function renderCellHTML(text: string): string {
+  if (text === "") return "";
   try {
-    emitChildren(inlineParser.parse(text).topNode, frag, text);
-    if (frag.childNodes.length === 0) frag.textContent = text;
-    return frag;
+    return emitChildrenHTML(inlineParser.parse(text).topNode, text);
   } catch {
-    frag.textContent = text;
-    return frag;
+    return esc(text);
   }
 }
 
-function renderTable(source: string): HTMLElement {
+/** Escape a free `|` (one not inside a code span and not already backslash-
+ * escaped) so the cell text stays a single GFM table cell when written back.
+ * Pipes inside backtick code spans and existing `\|` escapes are left alone. */
+export function escapeCellPipes(text: string): string {
+  let out = "";
+  let inCode = false;
+  let codeTicks = 0;
+  let i = 0;
+  while (i < text.length) {
+    const code = text.charCodeAt(i);
+    if (code === 96 /* ` */) {
+      let n = 0;
+      while (text.charCodeAt(i + n) === 96) n++;
+      if (!inCode) {
+        inCode = true;
+        codeTicks = n;
+      } else if (n >= codeTicks) {
+        inCode = false;
+        codeTicks = 0;
+      }
+      out += text.slice(i, i + n);
+      i += n;
+      continue;
+    }
+    if (code === 92 /* \ */) {
+      out += text.slice(i, i + 2);
+      i += 2;
+      continue;
+    }
+    if (code === 124 /* | */ && !inCode) {
+      out += "\\|";
+      i++;
+      continue;
+    }
+    out += text[i]!;
+    i++;
+  }
+  return out;
+}
+
+// Split a single table row line into cells, each with its document offsets.
+// `lineFrom` is the offset of the line's first character. A cell's [from, to]
+// spans the text between two delimiting pipes (exclusive of the pipes); the
+// surrounding padding spaces are part of the range and get replaced on edit.
+export function cellsInRange(
+  line: string,
+  lineFrom: number,
+): { text: string; from: number; to: number }[] {
+  const startMatch = /^[ \t]*\|/.exec(line);
+  let start = startMatch ? startMatch[0].length : 0;
+  let end = line.length;
+  const endMatch = /\|[ \t]*$/.exec(line);
+  if (endMatch) end = endMatch.index;
+  const cells: { text: string; from: number; to: number }[] = [];
+  let cellFrom = start;
+  let i = start;
+  while (i < end) {
+    const code = line.charCodeAt(i);
+    if (code === 92 /* \ */) {
+      i += 2;
+      continue;
+    }
+    if (code === 96 /* ` */) {
+      let n = 0;
+      while (line.charCodeAt(i + n) === 96) n++;
+      i += n;
+      let closed = false;
+      while (i < end) {
+        if (line.charCodeAt(i) === 96) {
+          let m = 0;
+          while (line.charCodeAt(i + m) === 96) m++;
+          if (m >= n) {
+            i += m;
+            closed = true;
+            break;
+          }
+          i += m;
+        } else {
+          i++;
+        }
+      }
+      if (!closed) i = end;
+      continue;
+    }
+    if (code === 124 /* | */) {
+      cells.push({ text: line.slice(cellFrom, i), from: lineFrom + cellFrom, to: lineFrom + i });
+      cellFrom = i + 1;
+      i++;
+      continue;
+    }
+    i++;
+  }
+  cells.push({ text: line.slice(cellFrom, end), from: lineFrom + cellFrom, to: lineFrom + end });
+  return cells;
+}
+
+// Read the contiguous table lines (header, delimiter, body) starting at `from`.
+// A line belongs to the table while it is non-blank and contains a pipe.
+function readTableLines(view: EditorView, from: number): string[] {
+  const doc = view.state.doc;
+  const start = doc.lineAt(from);
+  const lines: string[] = [];
+  let i = start.number;
+  while (i <= doc.lines) {
+    const line = doc.line(i);
+    if (line.text.trim() === "" || !line.text.includes("|")) break;
+    lines.push(line.text);
+    i++;
+  }
+  return lines;
+}
+
+function getTableExtent(view: EditorView, from: number): { from: number; to: number } {
+  const doc = view.state.doc;
+  const start = doc.lineAt(from);
+  let i = start.number;
+  while (i <= doc.lines) {
+    const line = doc.line(i);
+    if (line.text.trim() === "" || !line.text.includes("|")) break;
+    i++;
+  }
+  const last = doc.line(Math.max(start.number, i - 1));
+  return { from: start.from, to: last.to };
+}
+
+// The document range of cell (docLineIdx, colIdx). docLineIdx is 0-based from
+// the table's first line (0 = header, 1 = delimiter, 2+ = body rows).
+function getCellRange(
+  view: EditorView,
+  from: number,
+  docLineIdx: number,
+  colIdx: number,
+): { from: number; to: number } | null {
+  const doc = view.state.doc;
+  const start = doc.lineAt(from);
+  const line = doc.line(start.number + docLineIdx);
+  const cells = cellsInRange(line.text, line.from);
+  return cells[colIdx] ?? null;
+}
+
+// Write a cell's new text back into the document. Escapes free pipes so the
+// row stays a single row. The widget's DOM is preserved across this text-only
+// change (eq compares structure), so the cell element stays alive for the
+// caller to re-render.
+function syncCellText(
+  view: EditorView,
+  from: number,
+  docLineIdx: number,
+  colIdx: number,
+  newText: string,
+): void {
+  const cell = getCellRange(view, from, docLineIdx, colIdx);
+  if (!cell) return;
+  view.dispatch({ changes: { from: cell.from, to: cell.to, insert: escapeCellPipes(newText) } });
+}
+
+/** Append a new empty body row after the table's last row. */
+export function addTableRow(view: EditorView, from: number): void {
+  const lines = readTableLines(view, from);
+  if (lines.length < 2) return;
+  const nCols = splitCells(lines[0]!).length;
+  const newRow = "|" + " |".repeat(nCols);
+  const extent = getTableExtent(view, from);
+  view.dispatch({ changes: { from: extent.to, insert: "\n" + newRow } });
+}
+
+/** Append a new empty column to every row (header, delimiter, body). Rewrites
+ * the table in canonical padded form. */
+export function addTableColumn(view: EditorView, from: number): void {
+  const lines = readTableLines(view, from);
+  if (lines.length < 2) return;
+  const newLines = lines.map((line, idx) => {
+    const cells = splitCells(line);
+    cells.push(idx === 1 ? "---" : "");
+    return "| " + cells.join(" | ") + " |";
+  });
+  const extent = getTableExtent(view, from);
+  view.dispatch({ changes: { from: extent.from, to: extent.to, insert: newLines.join("\n") } });
+}
+
+/** Remove the whole table (and its trailing newline plus one trailing blank
+ * line) from the document, so deleting it doesn't leave a stray blank line. */
+export function deleteTable(view: EditorView, from: number): void {
+  const extent = getTableExtent(view, from);
+  const doc = view.state.doc;
+  let to = extent.to;
+  if (doc.sliceString(to, to + 1) === "\n") {
+    to += 1;
+    // Eat one following blank line if present.
+    const after = doc.lineAt(to);
+    if (after.text === "" && after.to < doc.length) to = after.to + 1;
+  }
+  view.dispatch({ changes: { from: extent.from, to } });
+}
+
+function placeCaretAtEnd(el: HTMLElement): void {
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  const sel = document.getSelection();
+  sel?.removeAllRanges();
+  sel?.addRange(range);
+}
+
+function onCellFocus(cell: HTMLElement, view: EditorView, from: number): void {
+  // Mark the cell as actively editing. onCellBlur checks this flag and skips
+  // if it's not set: a re-entrant blur (fired because view.dispatch inside the
+  // first blur touched the widget DOM) must not re-dispatch, or it would
+  // overwrite the user's edit with the rendered textContent.
+  cell.dataset.editing = "1";
+  // Switch to raw-text editing mode: show the cell's raw markdown (read fresh
+  // from the document) as plain text and place the caret at the end.
+  const docLineIdx = Number(cell.dataset.row);
+  const colIdx = Number(cell.dataset.col);
+  const range = getCellRange(view, from, docLineIdx, colIdx);
+  if (!range) return;
+  cell.textContent = view.state.doc.sliceString(range.from, range.to).trim();
+  placeCaretAtEnd(cell);
+}
+
+function onCellBlur(cell: HTMLElement, view: EditorView, from: number): void {
+  // Skip if the cell wasn't in editing mode (e.g. a re-entrant blur fired by
+  // the decoration rebuild, or a blur on a freshly-created cell that was never
+  // focused). Without this guard the second blur reads the rendered
+  // textContent -- which has markdown markers stripped -- and dispatches that,
+  // silently deleting the user's edit.
+  if (cell.dataset.editing !== "1") return;
+  cell.dataset.editing = "";
+  const docLineIdx = Number(cell.dataset.row);
+  const colIdx = Number(cell.dataset.col);
+  const raw = cell.textContent ?? "";
+  syncCellText(view, from, docLineIdx, colIdx, raw);
+  // The widget DOM is preserved across this text-only change (structure eq),
+  // so the cell element is still alive: re-render it as formatted markdown.
+  // Guard with isConnected in case the widget was rebuilt (eq=false) between
+  // the dispatch above and now, which would detach this cell element.
+  if (cell.isConnected) cell.innerHTML = renderCellHTML(escapeCellPipes(raw));
+}
+
+function onCellKeydown(e: KeyboardEvent, cell: HTMLElement): void {
+  if (e.key === "Tab") {
+    e.preventDefault();
+    const table = cell.closest("table");
+    if (!table) return;
+    const cells = Array.from(table.querySelectorAll<HTMLElement>("td, th"));
+    const idx = cells.indexOf(cell);
+    const next = e.shiftKey ? cells[idx - 1] : cells[idx + 1];
+    next?.focus();
+    return;
+  }
+  if (e.key === "Enter") {
+    e.preventDefault();
+    const table = cell.closest("table");
+    if (!table) return;
+    const tr = cell.closest("tr");
+    if (!tr) return;
+    const rows = Array.from(table.querySelectorAll("tr"));
+    const nextRow = rows[rows.indexOf(tr) + 1];
+    const nextCell = nextRow?.querySelector<HTMLElement>("td, th");
+    nextCell?.focus();
+    return;
+  }
+  if (e.key === "Escape") {
+    e.preventDefault();
+    cell.blur();
+  }
+}
+
+function makeCell(
+  tag: "th" | "td",
+  text: string,
+  colIdx: number,
+  docLineIdx: number,
+  view: EditorView,
+  from: number,
+  align: string,
+): HTMLElement {
+  const cell = document.createElement(tag);
+  cell.contentEditable = "plaintext-only";
+  cell.dataset.row = String(docLineIdx);
+  cell.dataset.col = String(colIdx);
+  if (align) cell.style.textAlign = align;
+  cell.innerHTML = renderCellHTML(text);
+
+  // Debounced sync: write the cell's text to the document while typing, so the
+  // document is always current (VSCode can save without needing to blur first).
+  // The widget's eq returns true for text-only changes, so the DOM (and the
+  // cell's caret) is preserved across the dispatch.
+  let syncTimer: ReturnType<typeof setTimeout> | null = null;
+  const syncToDoc = (): void => {
+    const di = Number(cell.dataset.row);
+    const ci = Number(cell.dataset.col);
+    syncCellText(view, from, di, ci, cell.textContent ?? "");
+  };
+
+  cell.addEventListener("focus", () => onCellFocus(cell, view, from));
+  cell.addEventListener("input", () => {
+    if (syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => {
+      syncTimer = null;
+      syncToDoc();
+    }, 300);
+  });
+  cell.addEventListener("blur", () => {
+    if (syncTimer) {
+      clearTimeout(syncTimer);
+      syncTimer = null;
+    }
+    onCellBlur(cell, view, from);
+  });
+  cell.addEventListener("keydown", (e) => onCellKeydown(e, cell));
+  // GFM cells can't span lines, so collapse pasted newlines to spaces and drop
+  // any rich-text formatting (the cell is plaintext-only anyway).
+  cell.addEventListener("paste", (e) => {
+    e.preventDefault();
+    const text = (e as ClipboardEvent).clipboardData?.getData("text/plain") ?? "";
+    const clean = text.replace(/\r?\n/g, " ");
+    document.execCommand("insertText", false, clean);
+  });
+  return cell;
+}
+
+const TABLE_MENU_ATTR = "data-td-table-menu";
+
+function closeTableMenu(): void {
+  document.querySelectorAll<HTMLElement>(`[${TABLE_MENU_ATTR}]`).forEach((m) => m.remove());
+}
+
+function openTableMenu(btn: HTMLElement, view: EditorView, from: number): void {
+  closeTableMenu();
+  const menu = document.createElement("div");
+  menu.className = "cm-td-table-menu";
+  menu.setAttribute(TABLE_MENU_ATTR, "");
+  const items: Array<[string, () => void]> = [
+    ["Add row", () => addTableRow(view, from)],
+    ["Add column", () => addTableColumn(view, from)],
+    ["Delete table", () => deleteTable(view, from)],
+  ];
+  for (const [label, action] of items) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "cm-td-table-menu-item";
+    item.textContent = label;
+    item.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      action();
+      closeTableMenu();
+    });
+    menu.appendChild(item);
+  }
+  const rect = btn.getBoundingClientRect();
+  menu.style.position = "fixed";
+  menu.style.right = `${window.innerWidth - rect.right}px`;
+  menu.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+  document.body.appendChild(menu);
+  // Close on the next outside mousedown (deferred so the opening click doesn't
+  // immediately close it) and on Escape.
+  setTimeout(() => {
+    const onDown = (ev: MouseEvent): void => {
+      if (!menu.contains(ev.target as Node)) {
+        closeTableMenu();
+        document.removeEventListener("mousedown", onDown);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+  }, 0);
+}
+
+function makeMenuButton(view: EditorView, from: number): HTMLElement {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "cm-td-table-menu-btn";
+  btn.title = "Table actions";
+  btn.setAttribute("aria-label", "Table actions");
+  btn.innerHTML =
+    '<svg viewBox="0 0 4 16" width="4" height="16" aria-hidden="true">' +
+    '<circle cx="2" cy="3" r="1.5"/><circle cx="2" cy="8" r="1.5"/>' +
+    '<circle cx="2" cy="13" r="1.5"/></svg>';
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openTableMenu(btn, view, from);
+  });
+  return btn;
+}
+
+function renderTable(source: string, view: EditorView, from: number): HTMLElement {
   const wrap = document.createElement("div");
   wrap.className = "cm-td-table-wrap";
   const rows = source.split("\n").filter((l) => l.trim() !== "" && l.includes("|"));
@@ -616,32 +1000,29 @@ function renderTable(source: string): HTMLElement {
     const r = c.endsWith(":");
     return l && r ? "center" : r ? "right" : l ? "left" : "";
   });
+  const headerCells = splitCells(rows[0]!);
   const table = document.createElement("table");
   table.className = "cm-td-table";
   const thead = document.createElement("thead");
   const htr = document.createElement("tr");
-  splitCells(rows[0]!).forEach((c, i) => {
-    const th = document.createElement("th");
-    th.appendChild(renderInline(c));
-    if (align[i]) th.style.textAlign = align[i]!;
-    htr.appendChild(th);
+  headerCells.forEach((c, i) => {
+    htr.appendChild(makeCell("th", c, i, 0, view, from, align[i] ?? ""));
   });
   thead.appendChild(htr);
   table.appendChild(thead);
   const tbody = document.createElement("tbody");
-  for (const line of rows.slice(2)) {
+  rows.slice(2).forEach((line, bodyIdx) => {
     const tr = document.createElement("tr");
     const cs = splitCells(line);
-    splitCells(rows[0]!).forEach((_, i) => {
-      const td = document.createElement("td");
-      td.appendChild(renderInline(cs[i] ?? ""));
-      if (align[i]) td.style.textAlign = align[i]!;
-      tr.appendChild(td);
+    const docLineIdx = bodyIdx + 2; // skip header (0) + delimiter (1)
+    headerCells.forEach((_, i) => {
+      tr.appendChild(makeCell("td", cs[i] ?? "", i, docLineIdx, view, from, align[i] ?? ""));
     });
     tbody.appendChild(tr);
-  }
+  });
   table.appendChild(tbody);
   wrap.appendChild(table);
+  wrap.appendChild(makeMenuButton(view, from));
   return wrap;
 }
 
@@ -1248,12 +1629,13 @@ function buildBlocks(state: EditorState, config: LivePreviewConfig): DecorationS
     enter: (node) => {
       if (node.name === "Table") {
         claim(node.from, node.to);
-        if (touches(state, node.from, node.to)) return;
+        // Tables are always rendered as an editable grid widget; cell editing
+        // happens inside the widget, so the caret never needs the raw source.
         const first = doc.lineAt(node.from);
         const last = doc.lineAt(node.to > node.from ? node.to - 1 : node.to);
         out.push(
           Decoration.replace({
-            widget: new TableWidget(doc.sliceString(first.from, last.to)),
+            widget: new TableWidget(doc.sliceString(first.from, last.to), first.from),
             block: true,
           }).range(first.from, last.to),
         );
@@ -1355,14 +1737,12 @@ export function findLenientTables(
     }
     const first = header;
     const last = doc.line(end);
-    if (!touches(state, first.from, last.to)) {
-      out.push(
-        Decoration.replace({
-          widget: new TableWidget(doc.sliceString(first.from, last.to)),
-          block: true,
-        }).range(first.from, last.to),
-      );
-    }
+    out.push(
+      Decoration.replace({
+        widget: new TableWidget(doc.sliceString(first.from, last.to), first.from),
+        block: true,
+      }).range(first.from, last.to),
+    );
     i = end + 1;
   }
 }

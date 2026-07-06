@@ -501,6 +501,7 @@
 /* ---- tables ------------------------------------------------------------- */
 
 .typodown .cm-td-table-wrap {
+  position: relative;
   overflow-x: auto;
   /* The table is a block widget, so line-level paragraph gaps don't reach it;
    * give it its own vertical breathing room (padding is inside the widget box,
@@ -514,6 +515,10 @@
 .typodown .cm-td-table td {
   border: 1px solid var(--td-border);
   padding: 6px 13px;
+  /* Cells are contentEditable plaintext; keep the caret inside the cell and
+   * let typing flow naturally without the editor's monospace/line-height. */
+  outline: none;
+  cursor: text;
 }
 .typodown .cm-td-table th {
   font-weight: 600;
@@ -521,6 +526,168 @@
 }
 .typodown .cm-td-table tbody tr:nth-child(even) {
   background: var(--td-table-alt-bg);
+}
+/* The "..." actions button, pinned to the table's bottom-right corner. */
+.typodown .cm-td-table-menu-btn {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--td-border);
+  border-radius: 3px;
+  background: var(--td-bg, #fff);
+  color: var(--td-text-muted, #57606a);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.typodown .cm-td-table-menu-btn svg {
+  fill: currentColor;
+}
+.typodown .cm-td-table-wrap:hover .cm-td-table-menu-btn,
+.typodown .cm-td-table-menu-btn:focus-visible {
+  opacity: 1;
+}
+.typodown .cm-td-table-menu-btn:hover {
+  background: var(--td-table-header-bg);
+}
+
+/* The actions dropdown, rendered on document.body so it isn't clipped. */
+.cm-td-table-menu {
+  z-index: 1000;
+  min-width: 120px;
+  padding: 4px;
+  border: 1px solid var(--td-border, #d0d7de);
+  border-radius: 6px;
+  background: var(--td-bg, #fff);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  font: inherit;
+}
+.cm-td-table-menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--td-text, #1f2328);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.cm-td-table-menu-item:hover {
+  background: var(--td-table-header-bg, #f6f8fa);
+}
+
+/* ---- right-click context menu ------------------------------------------ */
+
+.cm-td-context-menu {
+  z-index: 1000;
+  min-width: 160px;
+  padding: 4px;
+  border: 1px solid var(--td-border, #d0d7de);
+  border-radius: 6px;
+  background: var(--td-bg, #fff);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  font-family: var(--td-font, sans-serif);
+  font-size: 0.9rem;
+}
+.cm-td-context-menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--td-fg, #1f2328);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.cm-td-context-menu-item:hover:not(:disabled) {
+  background: var(--td-table-header-bg, #f6f8fa);
+}
+.cm-td-context-menu-item:disabled {
+  color: var(--td-faint, #818b98);
+  cursor: default;
+}
+.cm-td-context-menu-separator {
+  margin: 4px 2px;
+  border: 0;
+  border-top: 1px solid var(--td-border-muted, #d8dee4);
+}
+
+/* ---- insert-table dialog ------------------------------------------------ */
+
+.cm-td-insert-table-dialog {
+  z-index: 1000;
+  padding: 12px;
+  border: 1px solid var(--td-border, #d0d7de);
+  border-radius: 8px;
+  background: var(--td-bg, #fff);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  font-family: var(--td-font, sans-serif);
+  font-size: 0.9rem;
+  color: var(--td-fg, #1f2328);
+}
+.cm-td-insert-table-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cm-td-insert-table-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cm-td-insert-table-field-label {
+  flex: 0 0 64px;
+  color: var(--td-muted, #59636e);
+}
+.cm-td-insert-table-input {
+  width: 72px;
+  padding: 4px 6px;
+  border: 1px solid var(--td-border, #d0d7de);
+  border-radius: 4px;
+  background: var(--td-bg, #fff);
+  color: var(--td-fg, #1f2328);
+  font: inherit;
+}
+.cm-td-insert-table-input:focus {
+  outline: 2px solid var(--td-link, #0969da);
+  outline-offset: -1px;
+}
+.cm-td-insert-table-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 12px;
+}
+.cm-td-insert-table-btn {
+  padding: 5px 12px;
+  border: 1px solid var(--td-border, #d0d7de);
+  border-radius: 4px;
+  background: var(--td-bg, #fff);
+  color: var(--td-fg, #1f2328);
+  font: inherit;
+  cursor: pointer;
+}
+.cm-td-insert-table-btn:hover {
+  background: var(--td-table-header-bg, #f6f8fa);
+}
+.cm-td-insert-table-confirm {
+  border-color: var(--td-link, #0969da);
+  background: var(--td-link, #0969da);
+  color: #fff;
+}
+.cm-td-insert-table-confirm:hover {
+  background: var(--td-link, #0969da);
+  filter: brightness(0.95);
 }
 
 /* ---- mermaid diagrams ---------------------------------------------------- */
