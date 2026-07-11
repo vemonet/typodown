@@ -26,6 +26,7 @@ import {
   type Range,
   RangeSet,
   StateField,
+  type Text,
 } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import type { SyntaxNode, SyntaxNodeRef } from "@lezer/common";
@@ -51,6 +52,21 @@ const ALERT_LABEL: Record<AlertKind, string> = {
  That is what reveals the raw syntax for the construct under the caret. */
 function touches(state: EditorState, from: number, to: number): boolean {
   return state.selection.ranges.some((r) => r.from <= to && r.to >= from);
+}
+
+/** Returns the 1-based {open, close} line numbers of the YAML front matter
+ * delimiters if the document begins with `---\n...yaml...\n---` (or `...`).
+ * Scans at most 200 lines to avoid O(N) cost on large documents without front
+ * matter. */
+function parseFrontMatter(doc: Text): { open: number; close: number } | null {
+  if (doc.lines < 3) return null;
+  if (doc.line(1).text.trimEnd() !== "---") return null;
+  const limit = Math.min(doc.lines, 200);
+  for (let n = 2; n <= limit; n++) {
+    const t = doc.line(n).text.trimEnd();
+    if (t === "---" || t === "...") return { open: 1, close: n };
+  }
+  return null;
 }
 
 /** The document offset of the end of the always-hidden marker prefix on `line`
@@ -898,10 +914,13 @@ function makeCell(
   cell.addEventListener("focus", () => onCellFocus(cell, view, from));
   cell.addEventListener("input", () => {
     if (syncTimer) clearTimeout(syncTimer);
+    // Keep this short: until it fires the document doesn't have the cell's
+    // latest text, so a save (or a host-pushed update, e.g. format-on-save
+    // echoing back) that lands in the window loses those keystrokes.
     syncTimer = setTimeout(() => {
       syncTimer = null;
       syncToDoc();
-    }, 300);
+    }, 100);
   });
   cell.addEventListener("blur", () => {
     if (syncTimer) {
@@ -912,12 +931,29 @@ function makeCell(
   });
   cell.addEventListener("keydown", (e) => onCellKeydown(e, cell));
   // GFM cells can't span lines, so collapse pasted newlines to spaces and drop
-  // any rich-text formatting (the cell is plaintext-only anyway).
+  // any rich-text formatting (the cell is plaintext-only anyway). Insert via
+  // the Selection API: execCommand is a no-op in plaintext-only contenteditable
+  // (Chromium), and stopPropagation keeps CodeMirror's paste handler (which
+  // targets the document selection, not the cell) out of it.
   cell.addEventListener("paste", (e) => {
     e.preventDefault();
-    const text = (e as ClipboardEvent).clipboardData?.getData("text/plain") ?? "";
+    e.stopPropagation();
+    const text = e.clipboardData?.getData("text/plain") ?? "";
     const clean = text.replace(/\r?\n/g, " ");
-    document.execCommand("insertText", false, clean);
+    if (!clean) return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !cell.contains(sel.anchorNode)) return;
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    const node = document.createTextNode(clean);
+    range.insertNode(node);
+    range.setStartAfter(node);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    // Manual DOM insertion fires no "input" event; dispatch one so the
+    // debounced doc sync above picks up the pasted text.
+    cell.dispatchEvent(new Event("input"));
   });
   return cell;
 }
@@ -1035,10 +1071,14 @@ const markFaint = Decoration.mark({ class: "cm-td-mark" });
 
 class DecoBuilder {
   readonly out: Range<Decoration>[] = [];
+  private readonly fm: { open: number; close: number } | null;
+  private fmApplied = false;
   constructor(
     readonly state: EditorState,
     readonly config: LivePreviewConfig,
-  ) {}
+  ) {
+    this.fm = parseFrontMatter(state.doc);
+  }
 
   private on(from: number, to: number): boolean {
     return touches(this.state, from, to);
@@ -1063,6 +1103,15 @@ class DecoBuilder {
   }
 
   build(from: number, to: number): void {
+    const doc = this.state.doc;
+    if (this.fm && !this.fmApplied) {
+      const openLine = doc.line(this.fm.open);
+      const closeLine = doc.line(this.fm.close);
+      if (from <= closeLine.to && to >= openLine.from) {
+        this.fmApplied = true;
+        this.frontMatter(doc);
+      }
+    }
     const tree = syntaxTree(this.state);
     tree.iterate({
       from,
@@ -1091,6 +1140,13 @@ class DecoBuilder {
     const last = doc.lineAt(to).number;
     while (n <= last) {
       const line = doc.line(n);
+      // Lines inside the front matter block are owned by frontMatter(); never
+      // run the blank-separator collapse logic on them (it would mark blank
+      // lines inside the YAML block as `cm-td-blank-sep`).
+      if (this.fm && n > this.fm.open && n < this.fm.close) {
+        n++;
+        continue;
+      }
       if (line.length !== 0) {
         n++;
         continue;
@@ -1205,6 +1261,15 @@ class DecoBuilder {
   }
 
   private enter(node: SyntaxNodeRef): void {
+    // Skip nodes inside the front matter block. Lezer parses --- as
+    // ThematicBreak / SetextHeading, which would conflict with front matter
+    // decorations (e.g. replacing --- with an <hr> widget).
+    if (this.fm) {
+      const doc = this.state.doc;
+      const fmFrom = doc.line(this.fm.open).from;
+      const fmTo = doc.line(this.fm.close).to;
+      if (node.from >= fmFrom && node.from < fmTo) return;
+    }
     const name = node.name;
 
     if (/^ATXHeading[1-6]$/.test(name)) {
@@ -1259,6 +1324,37 @@ class DecoBuilder {
         return;
       default:
         return;
+    }
+  }
+
+  /** Apply line styles and YAML syntax highlighting to a front matter block. */
+  private frontMatter(doc: Text): void {
+    const fm = this.fm!;
+    const openLine = doc.line(fm.open);
+    const closeLine = doc.line(fm.close);
+
+    // Hide the --- delimiter lines (same as fenced code fence lines).
+    this.out.push(Decoration.line({ class: "cm-td-fence-hidden" }).range(openLine.from));
+    this.out.push(Decoration.line({ class: "cm-td-fence-hidden" }).range(closeLine.from));
+
+    const firstContent = fm.open + 1;
+    const lastContent = fm.close - 1;
+    if (firstContent > lastContent) return; // empty front matter
+
+    for (let n = firstContent; n <= lastContent; n++) {
+      const line = doc.line(n);
+      const cls = ["cm-td-code"];
+      if (n === firstContent) cls.push("cm-td-fm-top");
+      if (n === lastContent) cls.push("cm-td-code-bottom");
+      this.out.push(Decoration.line({ class: cls.join(" ") }).range(line.from));
+    }
+
+    // Apply YAML syntax highlighting to the content between delimiters.
+    const contentFrom = doc.line(firstContent).from;
+    const contentTo = doc.line(lastContent).to;
+    const text = doc.sliceString(contentFrom, contentTo);
+    for (const tok of tokenize(text, "yaml")) {
+      this.mark(contentFrom + tok.from, contentFrom + tok.to, `cm-td-tok-${tok.type}`);
     }
   }
 
@@ -1374,8 +1470,18 @@ class DecoBuilder {
     }
     const active = this.on(node.from, node.to);
     this.mark(node.from, node.to, "cm-td-link");
-    for (const c of this.children(node)) {
-      if (c.name === "LinkMark" || c.name === "URL" || c.name === "LinkTitle") {
+    // Only hide the destination URL (the one in `(...)`), not a URL that is the
+    // link's display text: when the text is itself a URL Lezer parses it as a
+    // URL node between `[` and `]`, and hiding it would blank the link out.
+    const marks = this.children(node);
+    const closeBracket = marks.find(
+      (c) => c.name === "LinkMark" && this.state.doc.sliceString(c.from, c.to) === "]",
+    );
+    const destFrom = closeBracket ? closeBracket.to : node.to;
+    for (const c of marks) {
+      if (c.name === "LinkMark" || c.name === "LinkTitle") {
+        this.syntax(c.from, c.to, active);
+      } else if (c.name === "URL" && c.from >= destFrom) {
         this.syntax(c.from, c.to, active);
       }
     }

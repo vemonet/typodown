@@ -1,47 +1,12 @@
-// Right-click context menu and the "Add table" dialog.
+// The "Add table" dialog and table-insertion helpers.
 //
-// A `contextmenu` DOM event on the editor opens a small floating menu near the
-// cursor. By default it offers "Add table", which opens a dialog asking for a
-// row/column count and inserts a fresh GFM table at the caret. Consumers can
-// extend or replace the menu via the `menuItems` option (see TypodownOptions).
+// The editor deliberately does NOT redefine the right-click / long-press menu:
+// the browser's native menu keeps native copy/paste working everywhere
+// (especially mobile, where the selection toolbar is the only way to paste).
+// "Add table" is reachable from the floating toolbar instead (see toolbar.ts).
 
 import { type EditorView } from "@codemirror/view";
-import { redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
 
-/** A single entry in the right-click context menu. */
-export interface MenuItem {
-  /** Visible label (omit for separators). */
-  label?: string;
-  /**
-   * Run when the item is clicked. `pos` is the document offset under the
-   * cursor (-1 when the click missed the content).
-   */
-  action?: (view: EditorView, pos: number) => void;
-  /** Render as a non-clickable horizontal separator (ignore `label`/`action`). */
-  separator?: boolean;
-  /** Greyed-out and non-clickable. */
-  disabled?: boolean;
-}
-
-/** Context handed to a `MenuItemsProvider`. */
-export interface MenuContext {
-  view: EditorView;
-  /** Document offset under the right-click, or -1 when the click missed the content. */
-  pos: number;
-  /**
-   * Read the clipboard for the built-in "Paste" item. Uses the embedder-provided
-   * reader when available (e.g. VS Code webviews where `navigator.clipboard` is
-   * blocked), otherwise falls back to `navigator.clipboard.readText()`.
-   */
-  getClipboardText?: () => string | Promise<string>;
-}
-
-/** A function returning the items to show for a given context. Return an empty
- * array to show nothing (the native browser menu is then suppressed too, since
- * `contextmenu` was preventDefaulted; return nothing/empty to opt out entirely). */
-export type MenuItemsProvider = (ctx: MenuContext) => MenuItem[];
-
-const MENU_ATTR = "data-td-context-menu";
 const DIALOG_ATTR = "data-td-insert-table";
 
 /** Build the markdown source for a GFM table of the given size.
@@ -82,156 +47,6 @@ export function insertTable(view: EditorView, rows: number, cols: number): void 
     userEvent: "input",
     scrollIntoView: true,
   });
-}
-
-/** The default context menu items: the native editing actions (Cut, Copy,
- * Paste, Undo, Redo) plus "Add table" which opens the rows/columns dialog.
- * Spread this in your own `menuItems` provider to keep the defaults while adding
- * your own entries. */
-export function defaultMenuItems(ctx: MenuContext): MenuItem[] {
-  const { view, getClipboardText } = ctx;
-  const sel = view.state.selection.main;
-  const hasSelection = !sel.empty;
-  return [
-    { label: "Cut", disabled: !hasSelection, action: () => cutSelection(view) },
-    { label: "Copy", disabled: !hasSelection, action: () => copySelection(view) },
-    { label: "Paste", action: () => pasteFromClipboard(view, getClipboardText) },
-    { separator: true },
-    { label: "Undo", disabled: undoDepth(view.state) === 0, action: () => undo(view) },
-    { label: "Redo", disabled: redoDepth(view.state) === 0, action: () => redo(view) },
-    { separator: true },
-    { label: "Add table", action: () => openAddTableDialog(view) },
-  ];
-}
-
-function openAddTableDialog(view: EditorView): void {
-  const head = view.state.selection.main.head;
-  const coords = view.coordsAtPos(head);
-  const x = coords ? coords.left : window.innerWidth / 2;
-  const y = coords ? coords.bottom + 4 : window.innerHeight / 2;
-  openInsertTableDialog({ x, y }, view, (rows, cols) => insertTable(view, rows, cols));
-}
-
-/** Copy the current selection to the clipboard. Uses `document.execCommand` so
- * it works in VS Code webviews (where `navigator.clipboard.writeText` is
- * blocked), falling back to the async Clipboard API. */
-export function copySelection(view: EditorView): void {
-  const sel = view.state.selection.main;
-  if (sel.empty) return;
-  view.focus();
-  try {
-    if (document.execCommand("copy")) return;
-  } catch {
-    // fall through to the async API
-  }
-  void navigator.clipboard?.writeText?.(view.state.sliceDoc(sel.from, sel.to));
-}
-
-/** Cut the current selection to the clipboard, deleting it from the document. */
-export function cutSelection(view: EditorView): void {
-  const sel = view.state.selection.main;
-  if (sel.empty) return;
-  view.focus();
-  try {
-    if (document.execCommand("cut")) return;
-  } catch {
-    // fall through to the async API
-  }
-  const text = view.state.sliceDoc(sel.from, sel.to);
-  void navigator.clipboard?.writeText?.(text).then(() => {
-    view.dispatch({ changes: { from: sel.from, to: sel.to }, userEvent: "delete" });
-    view.focus();
-  });
-}
-
-/** Paste clipboard text at the current selection, replacing it. Uses the
- * embedder-provided `getClipboardText` when given (e.g. VS Code webview),
- * otherwise `navigator.clipboard.readText()`. */
-export function pasteFromClipboard(
-  view: EditorView,
-  getClipboardText?: () => string | Promise<string>,
-): void {
-  const read = getClipboardText ?? (() => navigator.clipboard?.readText?.() ?? "");
-  void Promise.resolve(read())
-    .then((text) => {
-      if (text) view.dispatch(view.state.replaceSelection(text), { userEvent: "input.paste" });
-      view.focus();
-    })
-    .catch(() => {
-      view.focus();
-    });
-}
-
-/** Open the context menu at the given screen coordinates. */
-export function openContextMenu(
-  anchor: { x: number; y: number },
-  view: EditorView,
-  pos: number,
-  items: MenuItem[],
-): void {
-  closeContextMenu();
-  if (items.length === 0) return;
-
-  const menu = document.createElement("div");
-  menu.className = "cm-td-context-menu";
-  menu.setAttribute(MENU_ATTR, "");
-  inheritTheme(menu, view);
-
-  for (const item of items) {
-    if (item.separator) {
-      const sep = document.createElement("hr");
-      sep.className = "cm-td-context-menu-separator";
-      menu.appendChild(sep);
-      continue;
-    }
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "cm-td-context-menu-item";
-    btn.textContent = item.label ?? "";
-    btn.disabled = !!item.disabled;
-    btn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (btn.disabled) return;
-      const action = item.action;
-      closeContextMenu();
-      if (action) action(view, pos);
-    });
-    menu.appendChild(btn);
-  }
-
-  menu.style.position = "fixed";
-  document.body.appendChild(menu);
-  // Clamp into the viewport after measuring.
-  const rect = menu.getBoundingClientRect();
-  menu.style.left = `${Math.min(anchor.x, window.innerWidth - rect.width - 8)}px`;
-  menu.style.top = `${Math.min(anchor.y + 4, window.innerHeight - rect.height - 8)}px`;
-
-  // Close on the next outside mousedown (deferred so the opening click doesn't
-  // immediately close it) and on Escape.
-  setTimeout(() => {
-    const onDown = (ev: MouseEvent): void => {
-      if (!menu.contains(ev.target as Node)) {
-        closeContextMenu();
-        document.removeEventListener("mousedown", onDown);
-        document.removeEventListener("keydown", onKey);
-      }
-    };
-    const onKey = (ev: KeyboardEvent): void => {
-      if (ev.key === "Escape") {
-        closeContextMenu();
-        document.removeEventListener("mousedown", onDown);
-        document.removeEventListener("keydown", onKey);
-      }
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-  }, 0);
-}
-
-/** Close any open context menu. */
-export function closeContextMenu(): void {
-  document.querySelectorAll<HTMLElement>(`[${MENU_ATTR}]`).forEach((m) => m.remove());
 }
 
 /** Open a small dialog asking for a row and column count, then call `onConfirm`. */
@@ -348,7 +163,7 @@ export function closeInsertTableDialog(): void {
 
 // ---- helpers --------------------------------------------------------------
 
-/** Copy the theme CSS variables from the `.typodown` wrapper onto a menu/dialog
+/** Copy the theme CSS variables from the `.typodown` wrapper onto a dialog
  * element that lives on `document.body` (outside the wrapper, so it can't
  * inherit them). The variables are scoped to `.typodown` in theme.css. */
 function inheritTheme(el: HTMLElement, view: EditorView): void {

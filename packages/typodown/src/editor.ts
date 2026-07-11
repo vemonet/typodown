@@ -36,7 +36,12 @@ import { livePreview, ALERT_KINDS, markerEndOnLine } from "./live-preview.ts";
 import { Math as MathExtension } from "./math.ts";
 import { matchLanguages } from "./highlight.ts";
 import { htmlToMarkdown } from "./clipboard.ts";
-import { defaultMenuItems, openContextMenu, type MenuItemsProvider } from "./menu.ts";
+import {
+  createToolbar,
+  defaultToolbarActions,
+  type ToolbarHandle,
+  type ToolbarMode,
+} from "./toolbar.ts";
 
 export type Theme = "light" | "dark" | "auto";
 
@@ -61,12 +66,15 @@ export interface TypodownOptions {
   /** Render raw HTML blocks/tags as live widgets. Defaults to true. */
   html?: boolean;
   /**
-   * Provide the items shown in the editor's right-click context menu. Return an
-   * empty array to suppress the custom menu (the browser's native menu shows).
-   * Defaults to a single "Add table" item that opens a rows/columns dialog.
-   * Spread `defaultMenuItems(ctx)` to extend the defaults with your own items.
+   * Visibility of the floating formatting toolbar (bold, italic, ..., add
+   * table) pinned to the top of the editor.
+   * - "auto" (default): starts visible on small screens, hidden on large ones.
+   * - "shown": starts visible everywhere.
+   * - "hidden": starts hidden everywhere.
+   * Whatever the mode, a small floating button in the top-left margin lets the
+   * user show / hide it.
    */
-  menuItems?: MenuItemsProvider;
+  toolbar?: ToolbarMode;
 }
 
 /** A Typora-style live-preview Markdown editor built on CodeMirror 6. */
@@ -74,11 +82,10 @@ export class Typodown {
   readonly wrapper: HTMLElement;
   private readonly view: EditorView;
   private readonly getClipboardText?: () => string | Promise<string>;
-  private readonly menuItems?: MenuItemsProvider;
+  private readonly toolbar: ToolbarHandle;
 
   constructor(parent: HTMLElement, options: TypodownOptions = {}) {
     this.getClipboardText = options.getClipboardText;
-    this.menuItems = options.menuItems;
 
     this.wrapper = document.createElement("div");
     this.wrapper.className = "typodown";
@@ -91,7 +98,10 @@ export class Typodown {
       clampCursorPastMarker,
       history(),
       EditorView.lineWrapping,
-      autocompletion({ override: [languageCompletions, alertCompletions], icons: false }),
+      autocompletion({
+        override: [languageCompletions, alertCompletions, frontMatterCompletions],
+        icons: false,
+      }),
       EditorView.contentAttributes.of({
         spellcheck: options.spellcheck ? "true" : "false",
         "aria-label": "Markdown editor",
@@ -136,7 +146,6 @@ export class Typodown {
       EditorView.domEventHandlers({
         paste: (event, view) => this.handlePaste(event, view),
         mousedown: (event, view) => this.handleMouseDown(event, view),
-        contextmenu: (event, view) => this.handleContextMenu(event, view),
       }),
       // Cmd/Ctrl+A: select the code content when inside a code block. Handled at
       // highest precedence with stopPropagation so a host (e.g. the VS Code
@@ -177,6 +186,15 @@ export class Typodown {
       state: EditorState.create({ doc: options.value ?? "", extensions }),
       parent: this.wrapper,
     });
+    this.toolbar = createToolbar(
+      this.wrapper,
+      this.view,
+      options.toolbar ?? "auto",
+      defaultToolbarActions({
+        wrapMarker: (marker) => (view) => void wrap(marker)(view),
+        insertLink: (view) => void this.insertLink(view),
+      }),
+    );
     // The transaction filter only runs on transactions, not on the initial
     // state, so if the document opens on a marker line with the caret at the
     // very start (before the bullet), clamp it to the content start now.
@@ -197,12 +215,12 @@ export class Typodown {
   setValue(value: string): void {
     const state = this.view.state;
     const oldDoc = state.doc.toString();
-    // Map the existing selection through the whole-document replacement via
-    // the longest common prefix/suffix between old and new docs. Without this,
-    // CodeMirror's default mapping drops the caret at position 0 (the start
-    // of the inserted text) every time the host pushes an update -- e.g. VS
-    // Code's "format on save" / "trim trailing whitespace on save" modifying
-    // the document -- yanking the caret to the top of the file.
+    // Map the existing selection through the whole-document replacement so the
+    // caret stays where the user left it. Without this, CodeMirror's default
+    // mapping drops the caret at position 0 (the start of the inserted text)
+    // every time the host pushes an update -- e.g. VS Code's "format on save"
+    // / "trim trailing whitespace on save" modifying the document -- yanking it
+    // to the top of the file. See `mapPosThroughReplacement` for the mapping.
     const ranges = state.selection.ranges.map((r) =>
       EditorSelection.range(
         mapPosThroughReplacement(oldDoc, value, r.from),
@@ -229,11 +247,22 @@ export class Typodown {
     this.wrapper.dataset.tdTheme = theme;
   }
 
+  /** Scroll the viewport so the start of `line` (1-indexed) is centred, without
+   * moving the caret. Used by hosts that show a clickable outline of the
+   * document's headings. Out-of-range lines clamp to the first / last line. */
+  scrollToLine(line: number): void {
+    const doc = this.view.state.doc;
+    const n = Math.max(1, Math.min(line, doc.lines));
+    const pos = doc.line(n).from;
+    this.view.dispatch({ effects: EditorView.scrollIntoView(pos, { y: "center" }) });
+  }
+
   focus(): void {
     this.view.focus();
   }
 
   destroy(): void {
+    this.toolbar.destroy();
     this.view.destroy();
     this.wrapper.remove();
   }
@@ -242,11 +271,24 @@ export class Typodown {
 
   private handlePaste(event: ClipboardEvent, view: EditorView): boolean {
     const html = event.clipboardData?.getData("text/html") ?? "";
-    if (!html) return false; // let CodeMirror insert the plain text
+    const plain = event.clipboardData?.getData("text/plain") ?? "";
+    // No HTML: let CodeMirror insert the plain text itself, but if the caret is
+    // in a blockquote/callout we still need to repeat the `>` prefix, so take
+    // over the paste when the plain text is multi-line inside a quote.
+    if (!html) {
+      const quoted = quoteMultilinePaste(view.state, plain);
+      if (quoted === plain) return false;
+      event.preventDefault();
+      view.dispatch(view.state.replaceSelection(quoted), {
+        scrollIntoView: true,
+        userEvent: "input.paste",
+      });
+      return true;
+    }
     const md = htmlToMarkdown(html);
     if (!md) return false;
     event.preventDefault();
-    view.dispatch(view.state.replaceSelection(md), {
+    view.dispatch(view.state.replaceSelection(quoteMultilinePaste(view.state, md)), {
       scrollIntoView: true,
       userEvent: "input.paste",
     });
@@ -260,7 +302,10 @@ export class Typodown {
     if (!read) return false;
     void read
       .then((text) => {
-        if (text) view.dispatch(view.state.replaceSelection(text), { userEvent: "input.paste" });
+        if (text)
+          view.dispatch(view.state.replaceSelection(quoteMultilinePaste(view.state, text)), {
+            userEvent: "input.paste",
+          });
       })
       .catch(() => {
         // Clipboard unavailable: nothing to paste.
@@ -278,20 +323,6 @@ export class Typodown {
       event.preventDefault();
       window.open(url, "_blank", "noopener,noreferrer");
     }
-  }
-
-  /** Right-click opens the context menu (defaults to "Add table"; consumers can
-   * extend via the `menuItems` option). The native browser menu is suppressed
-   * whenever our menu has items to show. */
-  private handleContextMenu(event: MouseEvent, view: EditorView): boolean {
-    const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
-    const resolvedPos = pos ?? -1;
-    const provider = this.menuItems ?? defaultMenuItems;
-    const items = provider({ view, pos: resolvedPos, getClipboardText: this.getClipboardText });
-    if (items.length === 0) return false;
-    event.preventDefault();
-    openContextMenu({ x: event.clientX, y: event.clientY }, view, resolvedPos, items);
-    return true;
   }
 
   /** Cmd/Ctrl+K: wrap the selection (or word) as a link; paste a URL from the
@@ -374,9 +405,9 @@ export function createTypodown(parent: HTMLElement, options?: TypodownOptions): 
  * On an already-blank line, insert a single newline instead so repeated
  * Enters don't double up on blank lines.
  */
-function insertParagraph(view: EditorView): boolean {
+export function insertParagraph(view: EditorView): boolean {
   const { state } = view;
-  if (inRawBlock(syntaxTree(state), state.selection.main.head)) {
+  if (inRawBlock(state, state.selection.main.head)) {
     return insertNewline(view);
   }
   view.dispatch(
@@ -439,12 +470,22 @@ function enclosingParagraph(
 }
 
 /** Whether `pos` is inside a construct with its own line semantics -- source
- * code, a table row, raw HTML -- where a newline is just a newline, not a
- * paragraph break. */
-function inRawBlock(tree: ReturnType<typeof syntaxTree>, pos: number): boolean {
-  const node = tree.resolveInner(pos, -1);
+ * code, a table row, raw HTML, or YAML front matter -- where a newline is just
+ * a newline, not a paragraph break. */
+function inRawBlock(state: EditorState, pos: number): boolean {
+  const node = syntaxTree(state).resolveInner(pos, -1);
   for (let n: typeof node | null = node; n; n = n.parent) {
     if (/FencedCode|CodeBlock|Table|HTMLBlock/.test(n.name)) return true;
+  }
+  // Front matter has no dedicated syntax node (Lezer parses `---` as
+  // HorizontalRule / SetextHeading), so detect it by line scanning: a
+  // newline inside the YAML block is just a newline, like in a code block.
+  const fm = frontMatterBounds(state);
+  if (fm) {
+    const doc = state.doc;
+    const fmFrom = doc.line(fm.openLine).from;
+    const fmTo = doc.line(fm.closeLine).to;
+    if (pos > fmFrom && pos < fmTo) return true;
   }
   return false;
 }
@@ -473,7 +514,7 @@ export const closeFenceOnThirdBacktick: Command = (view) => {
   const line = state.doc.lineAt(pos);
   if (pos !== line.to) return false;
   if (!/^\s*``$/.test(line.text)) return false;
-  if (inRawBlock(syntaxTree(state), pos)) return false;
+  if (inRawBlock(state, pos)) return false;
   view.dispatch({
     changes: { from: pos, to: pos, insert: "`\n\n```" },
     selection: { anchor: pos + 1 },
@@ -493,14 +534,39 @@ export const closeFenceOnThirdBacktick: Command = (view) => {
 };
 
 /** Toggle an emphasis marker around each selection. With no selection it inserts
- * an empty pair and places the caret between the markers.
+ * an empty pair and places the caret between the markers. When the caret (or
+ * selection) is already inside a construct of the same kind, it toggles it off
+ * by stripping the surrounding marks -- mirroring the Cmd+K link unwrap.
  */
-function wrap(marker: string): Command {
+export function wrap(marker: string): Command {
   const m = marker.length;
   return (view) => {
     const { state } = view;
     view.dispatch(
       state.changeByRange((range) => {
+        const marks = emphasisMarksAt(state, range.from, range.to, marker);
+        if (marks) {
+          const openLen = marks.openTo - marks.openFrom;
+          const closeLen = marks.closeTo - marks.closeFrom;
+          // Map a position through the two mark deletions so the caret / selection
+          // lands at the same logical spot in the unwrapped text.
+          const mapPos = (p: number): number => {
+            if (p <= marks.openFrom) return p;
+            if (p <= marks.openTo) return marks.openFrom;
+            if (p <= marks.closeFrom) return p - openLen;
+            if (p <= marks.closeTo) return marks.closeFrom - openLen;
+            return p - openLen - closeLen;
+          };
+          return {
+            changes: [
+              { from: marks.openFrom, to: marks.openTo },
+              { from: marks.closeFrom, to: marks.closeTo },
+            ],
+            range: range.empty
+              ? EditorSelection.cursor(mapPos(range.head))
+              : EditorSelection.range(mapPos(range.from), mapPos(range.to)),
+          };
+        }
         const before = state.sliceDoc(range.from - m, range.from);
         const after = state.sliceDoc(range.to, range.to + m);
         if (before === marker && after === marker) {
@@ -622,6 +688,23 @@ const deleteCodeBlockAtStart: Command = (view) => {
   view.dispatch({ changes, selection: { anchor: openLine.from }, userEvent: "delete" });
   return true;
 };
+
+// When the caret sits inside a blockquote or callout, a multi-line paste must
+// repeat the leading `>` prefix on every new line, otherwise only the first
+// pasted line stays in the block (it lands on the already-prefixed line) and
+// the rest break out of the quote. Empty lines keep the bare `>` marker so the
+// markdown stays canonical. Returns the text unchanged when there is nothing to
+// continue (single line, or caret not in a quote).
+export function quoteMultilinePaste(state: EditorState, text: string): string {
+  if (!text.includes("\n")) return text;
+  const line = state.doc.lineAt(state.selection.main.from);
+  const prefix = /^(\s*(?:> ?)+)/.exec(line.text)?.[1];
+  if (!prefix) return text;
+  return text
+    .split("\n")
+    .map((l, i) => (i === 0 ? l : `${prefix}${l}`.trimEnd()))
+    .join("\n");
+}
 
 // Enter after a `> [!NOTE/TIP/...]` alert marker inserts an empty `>` separator
 // line (paragraph break inside the blockquote) and a `> ` content line, landing
@@ -782,25 +865,54 @@ export const arrowLeftPastMarker: Command = (view) => {
 
 // ---- helpers --------------------------------------------------------------
 
-/** Map a document offset through a full-document replacement using the longest
- * common prefix and suffix between the old and new texts, so the offset lands
- * at the same logical spot. Offsets inside the changed region clamp to the end
- * of the common prefix. Used by `setValue` to keep the caret where the user
- * left it instead of letting CodeMirror drop it at position 0. */
+/** Map a document offset through a full-document replacement so it lands at the
+ * same logical spot. Offsets in the unchanged common prefix stay put; offsets in
+ * the common suffix shift by the length delta (so a line inserted before a
+ * caret sitting at the end of the file follows that end); offsets inside the
+ * changed middle keep their line and column within the middle, clamped to the
+ * new line's length. That middle rule is what stops "format on save" / "trim
+ * trailing whitespace on save" from yanking the caret to the top of the file:
+ * the previous behaviour clamped any middle offset to the end of the common
+ * prefix, which is 0 as soon as the first line is touched. Used by `setValue`
+ * to keep the caret where the user left it. */
 export function mapPosThroughReplacement(oldDoc: string, newDoc: string, pos: number): number {
-  const minLen = Math.min(oldDoc.length, newDoc.length);
+  const oldLen = oldDoc.length;
+  const newLen = newDoc.length;
+  if (pos === 0 || oldLen === 0) return Math.min(pos, newLen);
+  const minLen = Math.min(oldLen, newLen);
   let prefix = 0;
   while (prefix < minLen && oldDoc[prefix] === newDoc[prefix]) prefix++;
+  if (pos <= prefix) return pos;
   let suffix = 0;
-  while (
-    suffix < minLen - prefix &&
-    oldDoc[oldDoc.length - 1 - suffix] === newDoc[newDoc.length - 1 - suffix]
-  ) {
+  while (suffix < minLen - prefix && oldDoc[oldLen - 1 - suffix] === newDoc[newLen - 1 - suffix]) {
     suffix++;
   }
-  if (pos <= prefix) return pos;
-  if (pos >= oldDoc.length - suffix) return pos + (newDoc.length - oldDoc.length);
-  return prefix;
+  if (pos >= oldLen - suffix) return pos + (newLen - oldLen);
+  // The caret is inside the changed middle (between the common prefix and
+  // suffix): keep its line and column within the middle rather than clamping
+  // to the prefix end, which can be 0 and would yank it to the top of the file.
+  const midStart = prefix;
+  const newMidEnd = newLen - suffix;
+  let line = 0;
+  let col = 0;
+  for (let i = midStart; i < pos; i++) {
+    if (oldDoc[i] === "\n") {
+      line++;
+      col = 0;
+    } else {
+      col++;
+    }
+  }
+  let nl = midStart;
+  let curLine = 0;
+  while (curLine < line && nl < newMidEnd) {
+    if (newDoc[nl] === "\n") curLine++;
+    nl++;
+  }
+  if (curLine < line) return newMidEnd; // the middle lost this line
+  let lineEnd = nl;
+  while (lineEnd < newMidEnd && newDoc[lineEnd] !== "\n") lineEnd++;
+  return nl + Math.min(col, lineEnd - nl);
 }
 
 /** Expand an empty selection at `pos` to the run of word characters it sits in.
@@ -863,6 +975,49 @@ function linkRangeAt(
   return result;
 }
 
+/** If the caret or selection [from, to] sits inside an emphasis / inline-code
+ * construct that uses `marker`, return the source ranges of its opening and
+ * closing marks so `wrap` can strip them to toggle the construct off. Only
+ * matches when the whole selection lies within the construct. */
+function emphasisMarksAt(
+  state: EditorState,
+  from: number,
+  to: number,
+  marker: string,
+): { openFrom: number; openTo: number; closeFrom: number; closeTo: number } | null {
+  const name =
+    marker === "**"
+      ? "StrongEmphasis"
+      : marker === "*"
+        ? "Emphasis"
+        : marker === "~~"
+          ? "Strikethrough"
+          : marker === "`"
+            ? "InlineCode"
+            : null;
+  if (!name) return null;
+  const markName =
+    marker === "`" ? "CodeMark" : marker === "~~" ? "StrikethroughMark" : "EmphasisMark";
+  const tree = syntaxTree(state);
+  for (const pos of [from, to]) {
+    const node = tree.resolveInner(pos, -1);
+    for (let n: typeof node | null = node; n; n = n.parent) {
+      if (n.name !== name) continue;
+      if (from < n.from || to > n.to) continue; // selection crosses the boundary
+      const marks = n.getChildren(markName);
+      if (marks.length >= 2) {
+        return {
+          openFrom: marks[0]!.from,
+          openTo: marks[0]!.to,
+          closeFrom: marks[marks.length - 1]!.from,
+          closeTo: marks[marks.length - 1]!.to,
+        };
+      }
+    }
+  }
+  return null;
+}
+
 /** Language autocomplete on a fenced code block's info string. Picking a
  * language also closes the block (adds the matching closing fence and drops the
  * caret inside) when it is still open, so typing ```lang gives you a ready block. */
@@ -915,6 +1070,65 @@ function alertCompletions(context: CompletionContext): CompletionResult | null {
     .map((label) => ({ label, type: "keyword", apply: `${label}]` }));
   if (options.length === 0) return null;
   return { from, to: context.pos, options, filter: false };
+}
+
+// ---- YAML front matter completions ----------------------------------------
+
+// OKF / Open Knowledge Foundation Open Data Handbook resource `MediaType`
+// values (https://github.com/okfn/opendatahandbook), used as suggestions for
+// the YAML front matter `type:` field. The value can be anything: these are
+// only suggestions, the editor lets free text through.
+const OKF_RESOURCE_TYPES = [
+  "Articles",
+  "Publications",
+  "Publication",
+  "Video",
+  "Website",
+  "Podcast",
+];
+
+/** Returns the 1-based {openLine, closeLine} of the YAML front matter block
+ * if the document begins with `---\\n...\\n---` (or `...`), otherwise null. */
+function frontMatterBounds(state: EditorState): { openLine: number; closeLine: number } | null {
+  const doc = state.doc;
+  if (doc.lines < 3) return null;
+  if (doc.line(1).text.trimEnd() !== "---") return null;
+  const limit = Math.min(doc.lines, 200);
+  for (let n = 2; n <= limit; n++) {
+    const t = doc.line(n).text.trimEnd();
+    if (t === "---" || t === "...") return { openLine: 1, closeLine: n };
+  }
+  return null;
+}
+
+/** Autocomplete for the YAML front matter `type:` field (OKF convention):
+ * suggests the OKF Open Data Handbook resource `MediaType` values. The value
+ * can be anything, these are only suggestions. */
+function frontMatterCompletions(context: CompletionContext): CompletionResult | null {
+  const bounds = frontMatterBounds(context.state);
+  if (!bounds) return null;
+
+  const doc = context.state.doc;
+  const openLineEnd = doc.line(bounds.openLine).to;
+  const closeLineFrom = doc.line(bounds.closeLine).from;
+  const pos = context.pos;
+
+  // Cursor must be strictly inside the front matter block.
+  if (pos <= openLineEnd || pos >= closeLineFrom) return null;
+
+  const line = doc.lineAt(pos);
+  const textBefore = line.text.slice(0, pos - line.from);
+
+  // Value completions for the `type:` field (OKF convention).
+  const typeMatch = /^type:\s*(.*)$/.exec(textBefore);
+  if (typeMatch) {
+    const typed = typeMatch[1]!.trimStart();
+    const valueFrom = pos - typed.length;
+    const options = OKF_RESOURCE_TYPES.map((v) => ({ label: v, type: "text" as const }));
+    return { from: valueFrom, to: line.to, options };
+  }
+
+  return null;
 }
 
 /** Whether the fenced code block opened on `lineNumber` already has a closing fence. */

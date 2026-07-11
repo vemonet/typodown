@@ -56,18 +56,18 @@
 
 .typodown[data-td-theme="dark"] {
   --td-fg: #e6edf3;
-  --td-bg: #212830;
+  --td-bg: #161819;
   --td-muted: #9198a1;
   --td-faint: #6e7681;
-  --td-border: #3d444d;
-  --td-border-muted: #2f353d;
+  --td-border: #2d3139;
+  --td-border-muted: #23272d;
   --td-link: #4493f8;
   --td-code-bg: rgba(101, 108, 118, 0.2);
   --td-code-fg: #e6edf3;
-  --td-block-bg: #151b23;
-  --td-code-block-bg: #262c36;
-  --td-table-header-bg: #262d36;
-  --td-table-alt-bg: #2a323d;
+  --td-block-bg: #1c1f26;
+  --td-code-block-bg: #1c1f26;
+  --td-table-header-bg: #1c1f26;
+  --td-table-alt-bg: #1a1d22;
   --td-selection: rgba(56, 139, 253, 0.4);
 
   --td-note: #4493f8;
@@ -93,18 +93,18 @@
 @media (prefers-color-scheme: dark) {
   .typodown[data-td-theme="auto"] {
     --td-fg: #e6edf3;
-    --td-bg: #212830;
+    --td-bg: #161819;
     --td-muted: #9198a1;
     --td-faint: #6e7681;
-    --td-border: #3d444d;
-    --td-border-muted: #2f353d;
+    --td-border: #2d3139;
+    --td-border-muted: #23272d;
     --td-link: #4493f8;
     --td-code-bg: rgba(101, 108, 118, 0.2);
     --td-code-fg: #e6edf3;
-    --td-block-bg: #151b23;
-    --td-code-block-bg: #262c36;
-    --td-table-header-bg: #262d36;
-    --td-table-alt-bg: #2a323d;
+    --td-block-bg: #1c1f26;
+    --td-code-block-bg: #1c1f26;
+    --td-table-header-bg: #1c1f26;
+    --td-table-alt-bg: #1a1d22;
     --td-selection: rgba(56, 139, 253, 0.4);
 
     --td-note: #4493f8;
@@ -300,6 +300,15 @@
   padding-bottom: 10px;
   /* Anchor for the floating language selector. */
   position: relative;
+}
+
+/* Front matter top: like cm-td-code-top but no paragraph gap border, since
+ * YAML front matter is always at position 0 of the document. */
+.typodown .cm-td-fm-top {
+  --cm-td-code-top: inset 0 1px 0 var(--td-border-muted);
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  padding-top: 10px;
 }
 
 /* The language selector floats just outside the block's bottom-right corner
@@ -584,42 +593,82 @@
   background: var(--td-table-header-bg, #f6f8fa);
 }
 
-/* ---- right-click context menu ------------------------------------------ */
+/* ---- floating formatting toolbar ---------------------------------------- */
 
-.cm-td-context-menu {
-  z-index: 1000;
-  min-width: 160px;
-  padding: 4px;
+.cm-td-toolbar-anchor {
+  position: sticky;
+  top: 8px;
+  height: 0;
+  z-index: 20;
+}
+.cm-td-toolbar {
+  position: relative;
+  width: max-content;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100% - 16px);
+  padding: 3px 6px;
   border: 1px solid var(--td-border, #d0d7de);
-  border-radius: 6px;
+  border-radius: 9999px;
   background: var(--td-bg, #fff);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  font-family: var(--td-font, sans-serif);
-  font-size: 0.9rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  overflow-x: auto;
+  scrollbar-width: none;
 }
-.cm-td-context-menu-item {
-  display: block;
-  width: 100%;
-  padding: 6px 10px;
+.cm-td-toolbar::-webkit-scrollbar {
+  display: none;
+}
+.cm-td-toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  padding: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: 9999px;
   background: transparent;
-  color: var(--td-fg, #1f2328);
-  text-align: left;
+  color: var(--td-muted, #59636e);
   cursor: pointer;
-  font: inherit;
 }
-.cm-td-context-menu-item:hover:not(:disabled) {
+.cm-td-toolbar-btn:hover {
   background: var(--td-table-header-bg, #f6f8fa);
+  color: var(--td-fg, #1f2328);
 }
-.cm-td-context-menu-item:disabled {
-  color: var(--td-faint, #818b98);
-  cursor: default;
+.cm-td-toolbar-sep {
+  flex-shrink: 0;
+  width: 1px;
+  height: 18px;
+  margin: 0 3px;
+  background: var(--td-border-muted, #d8dee4);
 }
-.cm-td-context-menu-separator {
-  margin: 4px 2px;
-  border: 0;
-  border-top: 1px solid var(--td-border-muted, #d8dee4);
+.cm-td-toolbar-show {
+  position: absolute;
+  top: 0;
+  /* Float in the margin left of the text column. The offset is measured by
+   * toolbar.ts (as much as 2.75rem, less when the host page leaves less room
+   * before the viewport edge); hosts can override `left` to reposition. */
+  left: var(--td-toolbar-show-left, -2.75rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--td-border, #d0d7de);
+  border-radius: 9999px;
+  background: var(--td-bg, #fff);
+  color: var(--td-muted, #59636e);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  opacity: 0.75;
+}
+.cm-td-toolbar-show:hover {
+  opacity: 1;
+  color: var(--td-fg, #1f2328);
 }
 
 /* ---- insert-table dialog ------------------------------------------------ */

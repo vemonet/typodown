@@ -30,9 +30,7 @@
     "watch": "node build.mjs --watch",
     "check": "vp check",
     "vscode:prepublish": "node build.mjs --production",
-    "package": "vsce package --no-dependencies --out typodown-vsx.vsix",
-    "publish:vsce": "vsce package && vsce publish",
-    "publish:ovsx": "ovsx publish"
+    "publish:vsx": "vsce package && vsce publish && ovsx publish"
   },
   "devDependencies": {
     "@types/node": "^25.6.2",

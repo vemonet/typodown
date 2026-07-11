@@ -8,13 +8,6 @@
   ],
   "type": "module",
   "scripts": {
-    "ready": "vp check && vp run -r test && vp run -r build",
-    "dev": "vp run @vemonet/typodown#dev",
-    "build": "vp run -r build",
-    "build:demo": "vp run @vemonet/typodown#build:demo",
-    "changelog": "git cliff -o CHANGELOG.md --tag v$(npm pkg get version | tr -d '\"')",
-    "release": "bumpp -r --all --commit --tag --push --execute \"npm run changelog\" && npm run publish:packages",
-    "publish:packages": "npm publish -w @vemonet/typodown && npm run publish:vsce -w typodown-vsx && npm run publish:ovsx -w typodown-vsx",
     "prepare": "vp config"
   },
   "devDependencies": {

@@ -1,6 +1,6 @@
 # 🛠️ Development
 
-[![CI](https://github.com/vemonet/typodown/actions/workflows/ci.yml/badge.svg)](https://github.com/vemonet/typodown/actions/workflows/ci.yml)
+[![CI](https://github.com/vemonet/typodown/actions/workflows/ci.yml/badge.svg)](https://github.com/vemonet/typodown/actions/workflows/ci.yml) [![Release](https://github.com/vemonet/typodown/actions/workflows/release.yml/badge.svg)](https://github.com/vemonet/typodown/actions/workflows/release.yml)
 
 > [!IMPORTANT]
 >
@@ -30,23 +30,23 @@ Build the monorepo:
 vp run build
 ```
 
-## ⚡️ Start demo website
+## ⚡️ Demo website
 
 Run dev server:
 
 ```sh
-vp run @vemonet/typodown#dev
+vp run dev
 ```
 
 Build website:
 
 ```sh
-vp run @vemonet/typodown#build:demo
+vp run build:demo
 ```
 
-## 🧩 Start VSCode extension
+## 🧩 VSCode extension
 
-Build lib:
+Build lib first:
 
 ```sh
 vp run @vemonet/typodown#build
@@ -54,21 +54,52 @@ vp run @vemonet/typodown#build
 
 Start the VSCode extension dev host using <kbd>F5</kbd> in VSCode.
 
-Build and install extension in local VSCode:
+Build and install extension in your local VSCode:
 
 ```sh
 vp run install:vsx
 ```
 
+## 💻 Desktop and smartphone app
+
+Built with [Tauri v2](https://v2.tauri.app/).
+
+Start in dev:
+
+```sh
+vp run dev:app
+```
+
+Build desktop app:
+
+```sh
+vp run build:app
+```
+
+Build Android `.apk`:
+
+```sh
+vp run build:apk
+```
+
 ## 🏷️ Release
+
+> [!IMPORTANT]
+>
+> You must add these repo secrets or the Android job fails:
+>
+> - `ANDROID_KEYSTORE_BASE64`: your `typodown.jks` base64-encoded (`base64 -i ~/.keystores/typodown.jks | pbcopy`)
+> - `ANDROID_KEYSTORE_PASSWORD`
+> - `ANDROID_KEY_PASSWORD` (same as previous)
+> - `ANDROID_KEY_ALIAS` (`typodown`)
 
 ```sh
 vp run release
 ```
 
+> > > > [!NOTE]
+> > > > The npm package and VSCode extension will be built and published locally, then a GitHub actions workflow will generate artefacts for the different platforms (desktop app and android `.apk`)
+
 ## ☑️ Todo
 
-- [ ] Don't switch tables to raw, enable to edit directly in the rendered table. With a small 3 dots button that appears when cursor in the table (top left of the table), show submenu with actions like insert row. Enable markdown rendering of text inside cell of a table
 - [ ] Support local image link in HTML
-- [ ] Add command bar floating top of editor? For bold, link, etc. Default is hidden, use short ut to show it, can be enabled as always show in `createTypodown()`
-- [ ] Add right click menu option to add a table. This opens a small popup with 2 fields to provide number of rows and columns

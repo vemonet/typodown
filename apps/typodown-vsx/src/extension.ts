@@ -49,6 +49,13 @@ class TypodownEditorProvider implements vscode.CustomTextEditorProvider {
     // Track the text the webview currently holds so we can tell our own edits
     // (which echo back through onDidChangeTextDocument) from external ones.
     let syncedText = document.getText();
+    // Our applyEdit calls are async, so consecutive keystrokes (or a keystroke
+    // racing a format-on-save edit) can interleave. Serialize them through a
+    // queue and suppress change events while any are in flight: reacting to an
+    // intermediate state used to post stale text back to the webview, which
+    // replaced the document under the user and teleported the caret.
+    let applyQueue: Thenable<unknown> = Promise.resolve();
+    let applying = 0;
 
     const post = (message: HostMessage): void => {
       void webview.postMessage(message);
@@ -56,6 +63,7 @@ class TypodownEditorProvider implements vscode.CustomTextEditorProvider {
 
     const changeSub = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() !== document.uri.toString()) return;
+      if (applying > 0) return; // our own edits in flight; reconciled at drain
       const text = document.getText();
       if (text === syncedText) return; // our own edit coming back
       syncedText = text;
@@ -77,19 +85,51 @@ class TypodownEditorProvider implements vscode.CustomTextEditorProvider {
         syncedText = document.getText();
         post({ type: "init", text: syncedText, theme: readTheme() });
       } else if (message.type === "edit") {
-        if (message.text === document.getText()) return;
         syncedText = message.text;
-        void this.replaceDocument(document, message.text);
+        applying++;
+        const settle = (): void => {
+          applying--;
+          if (applying > 0) return;
+          // The queue drained: if an external edit (e.g. trim/format on
+          // save) interleaved with ours, push the final state once.
+          const text = document.getText();
+          if (text !== syncedText) {
+            syncedText = text;
+            post({ type: "update", text });
+          }
+        };
+        applyQueue = applyQueue
+          .then(() => this.replaceDocument(document, message.text))
+          .then(settle, settle);
       } else if (message.type === "clipboard") {
         void vscode.env.clipboard.readText().then((text) => post({ type: "clipboard", text }));
       }
     });
   }
 
+  /** Apply the webview's text as a minimal edit (common prefix / suffix
+   * trimmed) rather than a whole-document replace, so VS Code sees the actual
+   * keystroke-sized change: undo stays granular and save participants (trim,
+   * format) compose with it instead of fighting a full rewrite. */
   private replaceDocument(document: vscode.TextDocument, text: string): Thenable<boolean> {
+    const old = document.getText();
+    if (old === text) return Promise.resolve(true);
+    const minLen = Math.min(old.length, text.length);
+    let prefix = 0;
+    while (prefix < minLen && old[prefix] === text[prefix]) prefix++;
+    let suffix = 0;
+    while (
+      suffix < minLen - prefix &&
+      old[old.length - 1 - suffix] === text[text.length - 1 - suffix]
+    ) {
+      suffix++;
+    }
     const edit = new vscode.WorkspaceEdit();
-    const wholeRange = new vscode.Range(0, 0, document.lineCount, 0);
-    edit.replace(document.uri, wholeRange, text);
+    edit.replace(
+      document.uri,
+      new vscode.Range(document.positionAt(prefix), document.positionAt(old.length - suffix)),
+      text.slice(prefix, text.length - suffix),
+    );
     return vscode.workspace.applyEdit(edit);
   }
 

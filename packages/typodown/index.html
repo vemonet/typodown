@@ -186,7 +186,11 @@
       import { createTypodown } from "/src/index.ts";
       import "/src/theme.css";
 
-      const SAMPLE = `# Typodown
+      const SAMPLE = `---
+type: Articles
+---
+
+# Typodown
 
 A **Typora-like** WYSIWYG editor for **GitHub Flavored Markdown**, built on _CodeMirror 6_. Put your cursor on any styled text and its raw \`markdown\` syntax appears, just like Typora. Write each paragraph on one line and let it wrap: a single newline stays on the same paragraph, a blank line starts a new one.
 

@@ -34,12 +34,14 @@ test("final-newline append leaves a mid-doc caret untouched", () => {
   expect(mapPosThroughReplacement("foo\nbar", "foo\nbar\n", 7)).toBe(7);
 });
 
-test("caret inside a changed region clamps to the prefix end", () => {
-  // "aaaaaaaaaa" -> "xxx": no common prefix/suffix, caret at 5 clamps to 0.
-  expect(mapPosThroughReplacement("aaaaaaaaaa", "xxx", 5)).toBe(0);
-  // "abcabcabc" -> "abcXYZabc": prefix=3 ("abc"), suffix=3 ("abc"),
-  // changed region in old is [3, 6). Caret at 4 is inside -> clamps to 3.
-  expect(mapPosThroughReplacement("abcabcabc", "abcXYZabc", 4)).toBe(3);
+test("caret inside a changed region keeps its line and column", () => {
+  // No common prefix/suffix: the caret at col 5 clamps to the new line's
+  // length (3) instead of being yanked to the start of the document.
+  expect(mapPosThroughReplacement("aaaaaaaaaa", "xxx", 5)).toBe(3);
+  // "abcabcabc" -> "abcXYZabc": prefix=3 ("abc"), suffix=3 ("abc"), middle
+  // "abc" -> "XYZ". Caret at 4 (col 1 of the middle) keeps its column,
+  // landing on "Y" (4) rather than clamping to the prefix end (3).
+  expect(mapPosThroughReplacement("abcabcabc", "abcXYZabc", 4)).toBe(4);
 });
 
 test("caret after the changed region shifts by the delta", () => {
@@ -52,8 +54,10 @@ test("caret after the changed region shifts by the delta", () => {
   expect(mapPosThroughReplacement("abc", "abXYZc", 3)).toBe(6);
 });
 
-test("completely different docs clamp the caret to the start", () => {
-  expect(mapPosThroughReplacement("old content here", "brand new doc", 10)).toBe(0);
+test("completely different docs keep the caret at its column", () => {
+  // Single-line docs with no common prefix/suffix: the caret stays at its
+  // column (clamped to the new line's length) rather than jumping to 0.
+  expect(mapPosThroughReplacement("old content here", "brand new doc", 10)).toBe(10);
 });
 
 // ---- end-to-end dispatch (the bug: caret must not jump to 0) ------------
@@ -124,4 +128,14 @@ test("setValue maps the caret through an insertion before it", () => {
   // old: f0 o1 o2 \n3 b4 a5 r6. Caret at 7 = end of doc.
   // prefix=4 ("foo\n"), suffix=3 ("bar"). Caret at 7 is in suffix -> 7 + 9 = 16.
   expect(applySetValue("foo\nbar", 7, "foo\nINSERTED\nbar")).toBe(16);
+});
+
+test("trim trailing whitespace around the caret keeps it on its line", () => {
+  // The reported bug: VS Code's "trim trailing whitespace on save" trims lines
+  // above and below the caret. The caret, mid-line on the untouched middle
+  // line, used to clamp to the common-prefix end (near the top of the file).
+  // It now stays on its line at its column.
+  const old = "line one   \nline two\nline three   ";
+  const next = "line one\nline two\nline three";
+  expect(applySetValue(old, 17, next)).toBe(14); // 't' of "two"
 });

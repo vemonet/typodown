@@ -5,16 +5,17 @@
 
 A [Typora](https://typora.io)-inspired WYSIWYG markdown editor for the web, built on [CodeMirror 6](https://codemirror.net) for battle-tested editing, selection and viewport virtualisation.
 
-The markdown source is the single source of truth: there is no separate preview pane, the styled text is rendered inline and edited directly. Move the caret into a heading, bold run, code span or link and its raw markdown markers (`#`, `**`, `` ` ``) reveal for just that construct, like Typora.
+The markdown source is the single source of truth: there is no separate preview pane, the styled text is rendered inline and edited directly. Move the caret into a heading, bold run, code span or link and its raw markdown markers (`#`, `**`, `` ` ``) reveal for just that construct — exactly the Typora feel, as an embeddable component.
 
 **[⚡️ Live demo →](https://vemonet.github.io/typodown)**
 
 ## Features
 
-- **WYSIWYG markdown editing.** Edit rendered markdown directly. No preview to keep in sync. No rich text edition panel.
+- **WYSIWYG markdown editing.** Edit rendered markdown directly. No preview to keep in sync, no rich-text mode.
 - **Syntax reveals under the cursor.** Only the construct holding the caret shows its raw syntax, everything else stays rendered.
-- **GitHub Flavored Markdown.** Headings, emphasis, strikethrough, code spans and fenced code (with syntax highlighting for many languages), blockquotes, GFM alerts (`> [!NOTE]`), task lists, tables, images, links, autolinks, horizontal rules, and LaTeX maths (inline `$...$` and block `$$...$$` rendered with [KaTeX](https://katex.org)).
-- **GitHub theme, light and dark.** Ships a stylesheet that follows the OS colour scheme, or can be pinned to light/dark.
+- **GitHub Flavored Markdown.** Headings, emphasis, strikethrough, inline code and fenced code (with syntax highlighting and a language autocomplete), blockquotes, GFM alerts (`> [!NOTE]`), task lists, editable tables, images, links, autolinks, horizontal rules, YAML front matter, and LaTeX math (inline `$...$` and block `$$...$$` rendered with [KaTeX](https://katex.org)).
+- **Floating toolbar.** Bold, italic, links, insert table — shown by default on small screens, tucked into the margin on large ones.
+- **GitHub theme, light and dark.** Ships a stylesheet that follows the OS colour scheme, or can be pinned to light/dark. Theming is CSS variables, easy to remap (the VSCode extension maps them onto the active VSCode theme).
 - **Familiar shortcuts.** <kbd>Cmd/Ctrl</kbd>+<kbd>B</kbd> bold, <kbd>Cmd/Ctrl</kbd>+<kbd>I</kbd> italic, <kbd>Cmd/Ctrl</kbd>+<kbd>K</kbd> link, <kbd>Tab</kbd> / <kbd>Shift+Tab</kbd> indent / outdent, <kbd>Cmd/Ctrl</kbd>+<kbd>Z</kbd> undo / redo.
 
 ## Install
@@ -61,15 +62,16 @@ A standalone UMD build (CodeMirror and Lezer bundled in) is available as `dist/i
 
 ### Options
 
-| Option             | Type                      | Default          | Description                             |
-| ------------------ | ------------------------- | ---------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `value`            | `string`                  | `""`             | Initial markdown content.               |
-| `theme`            | `"light"                  | "dark"           | "auto"`                                 | `"auto"`                                                                                                                                     | Colour theme. `auto` follows the OS preference. |
-| `placeholder`      | `string`                  | `""`             | Shown while the document is empty.      |
-| `spellcheck`       | `boolean`                 | `false`          | Enable the browser's native spellcheck. |
-| `html`             | `boolean`                 | `true`           | Allow raw HTML in the markdown.         |
-| `onChange`         | `(value: string) => void` |                  | Called whenever the content changes.    |
-| `getClipboardText` | `() => string             | Promise<string>` | `navigator.clipboard.readText`          | Read the clipboard for the `Cmd/Ctrl+K` link shortcut. Provide this in embedders where the Clipboard API is blocked (e.g. VS Code webviews). |
+| Option             | Type                              | Default                        | Description                                                                                                                                      |
+| ------------------ | --------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `value`            | `string`                          | `""`                           | Initial markdown content.                                                                                                                        |
+| `theme`            | `"light" \| "dark" \| "auto"`     | `"auto"`                       | Colour theme. `auto` follows the OS preference.                                                                                                  |
+| `placeholder`      | `string`                          | `""`                           | Shown while the document is empty.                                                                                                               |
+| `spellcheck`       | `boolean`                         | `false`                        | Enable the browser's native spellcheck.                                                                                                          |
+| `html`             | `boolean`                         | `true`                         | Render raw HTML blocks/tags as live widgets.                                                                                                     |
+| `toolbar`          | `"auto" \| "shown" \| "hidden"`   | `"auto"`                       | Floating formatting toolbar. `auto` starts visible on small screens and hidden on large ones; a floating button toggles it either way.           |
+| `onChange`         | `(value: string) => void`         |                                | Called whenever the content changes.                                                                                                             |
+| `getClipboardText` | `() => string \| Promise<string>` | `navigator.clipboard.readText` | Read the clipboard for the <kbd>Cmd/Ctrl</kbd>+<kbd>K</kbd> link shortcut. Provide it where the Clipboard API is blocked (e.g. VSCode webviews). |
 
 > `LANGUAGES` and `matchLanguages` are also exported for standalone use with the fenced-code language picker.
 
