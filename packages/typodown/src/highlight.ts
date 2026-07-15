@@ -1,13 +1,56 @@
-// Lightweight, dependency-free syntax highlighter.
+// Syntax highlighting for fenced code blocks and front matter.
 //
-// `tokenize(code, lang)` returns tokens with offsets relative to the start of
-// `code`. Unmatched characters are left as gaps (rendered plain), so the
-// renderer can rebuild pieces covering the whole code range for caret mapping.
-//
-// Each grammar is an ordered list of rules; the first rule that matches at the
-// cursor wins. Rules use sticky (`y`) regexes so they only match at the current
-// position. A rule with an empty `type` consumes text without colouring it
-// (used to swallow identifiers so keywords are not matched mid-word).
+// Highlighting is delegated to CodeMirror's own language parsers (the same
+// Lezer grammars CodeMirror uses when a whole document is in that language):
+// `tokenize(code, lang)` parses the snippet with the matching parser, walks the
+// resulting tree with `@lezer/highlight`, and returns tokens whose `type` is one
+// of our theme classes (see `cm-td-tok-*` in theme.css). Offsets are relative to
+// the start of `code`; ranges the grammar does not tag are left as gaps
+// (rendered plain), matching the previous tokenizer's contract.
+
+import type { Parser } from "@lezer/common";
+import { StreamLanguage, type StreamParser } from "@codemirror/language";
+import { highlightTree, tagHighlighter, tags as t } from "@lezer/highlight";
+
+// First-party LR grammars.
+import {
+  javascriptLanguage,
+  jsxLanguage,
+  tsxLanguage,
+  typescriptLanguage,
+} from "@codemirror/lang-javascript";
+import { pythonLanguage } from "@codemirror/lang-python";
+import { StandardSQL } from "@codemirror/lang-sql";
+import { jsonLanguage } from "@codemirror/lang-json";
+import { htmlLanguage } from "@codemirror/lang-html";
+import { cssLanguage } from "@codemirror/lang-css";
+import { xmlLanguage } from "@codemirror/lang-xml";
+import { javaLanguage } from "@codemirror/lang-java";
+import { cppLanguage } from "@codemirror/lang-cpp";
+import { rustLanguage } from "@codemirror/lang-rust";
+import { phpLanguage } from "@codemirror/lang-php";
+import { yamlLanguage } from "@codemirror/lang-yaml";
+import { goLanguage } from "@codemirror/lang-go";
+
+// Legacy stream grammars for languages without a first-party Lezer package.
+import { csharp, kotlin, objectiveC, scala } from "@codemirror/legacy-modes/mode/clike";
+import { shell } from "@codemirror/legacy-modes/mode/shell";
+import { ruby } from "@codemirror/legacy-modes/mode/ruby";
+import { swift } from "@codemirror/legacy-modes/mode/swift";
+import { sparql } from "@codemirror/legacy-modes/mode/sparql";
+import { turtle } from "@codemirror/legacy-modes/mode/turtle";
+import { lua } from "@codemirror/legacy-modes/mode/lua";
+import { perl } from "@codemirror/legacy-modes/mode/perl";
+import { r } from "@codemirror/legacy-modes/mode/r";
+import { toml } from "@codemirror/legacy-modes/mode/toml";
+import { dockerFile } from "@codemirror/legacy-modes/mode/dockerfile";
+import { powerShell } from "@codemirror/legacy-modes/mode/powershell";
+import { groovy } from "@codemirror/legacy-modes/mode/groovy";
+import { haskell } from "@codemirror/legacy-modes/mode/haskell";
+import { clojure } from "@codemirror/legacy-modes/mode/clojure";
+import { julia } from "@codemirror/legacy-modes/mode/julia";
+import { diff } from "@codemirror/legacy-modes/mode/diff";
+import { properties } from "@codemirror/legacy-modes/mode/properties";
 
 export interface Token {
   from: number;
@@ -15,289 +58,114 @@ export interface Token {
   type: string;
 }
 
-interface Rule {
-  type: string;
-  re: RegExp;
+/** Map Lezer highlight tags onto our theme's token classes (the `type` in the
+ * returned tokens, rendered as `cm-td-tok-<type>`). Only these classes exist in
+ * the theme; anything a grammar leaves untagged renders plain.
+ */
+const HIGHLIGHTER = tagHighlighter([
+  {
+    tag: [
+      t.keyword,
+      t.controlKeyword,
+      t.operatorKeyword,
+      t.definitionKeyword,
+      t.moduleKeyword,
+      t.modifier,
+      t.self,
+    ],
+    class: "keyword",
+  },
+  { tag: [t.bool, t.null, t.atom], class: "boolean" },
+  {
+    tag: [t.string, t.special(t.string), t.docString, t.character, t.regexp, t.attributeValue],
+    class: "string",
+  },
+  { tag: [t.comment, t.lineComment, t.blockComment, t.docComment], class: "comment" },
+  { tag: [t.number, t.integer, t.float], class: "number" },
+  {
+    tag: [
+      t.function(t.variableName),
+      t.function(t.propertyName),
+      t.macroName,
+      t.typeName,
+      t.className,
+      t.namespace,
+    ],
+    class: "function",
+  },
+  { tag: [t.propertyName, t.definition(t.propertyName)], class: "property" },
+  {
+    tag: [t.variableName, t.labelName, t.local(t.variableName), t.special(t.variableName)],
+    class: "variable",
+  },
+  { tag: [t.tagName], class: "tag" },
+  { tag: [t.attributeName], class: "attr" },
+  {
+    tag: [
+      t.operator,
+      t.arithmeticOperator,
+      t.logicOperator,
+      t.bitwiseOperator,
+      t.compareOperator,
+      t.updateOperator,
+      t.definitionOperator,
+      t.typeOperator,
+      t.controlOperator,
+    ],
+    class: "operator",
+  },
+  {
+    tag: [t.punctuation, t.separator, t.bracket, t.paren, t.brace, t.squareBracket, t.angleBracket],
+    class: "punctuation",
+  },
+]);
+
+function stream(parser: StreamParser<unknown>): Parser {
+  return StreamLanguage.define(parser).parser;
 }
-type Grammar = Rule[];
 
-function rx(pattern: string, insensitive = false): RegExp {
-  return new RegExp(pattern, insensitive ? "iy" : "y");
-}
-
-function words(list: string): string {
-  return list.trim().split(/\s+/).join("|");
-}
-
-// ---- shared rules -------------------------------------------------------
-
-const STR_DOUBLE: Rule = { type: "string", re: rx(`"(?:\\\\.|[^"\\\\\\n])*"?`) };
-const STR_SINGLE: Rule = { type: "string", re: rx(`'(?:\\\\.|[^'\\\\\\n])*'?`) };
-const STR_TEMPLATE: Rule = { type: "string", re: rx("`(?:\\\\.|[^`\\\\])*`?") };
-const COMMENT_SLASH: Rule = { type: "comment", re: rx("//[^\\n]*") };
-const COMMENT_BLOCK: Rule = { type: "comment", re: rx("/\\*[\\s\\S]*?\\*/") };
-const COMMENT_HASH: Rule = { type: "comment", re: rx("#[^\\n]*") };
-const NUMBER: Rule = {
-  type: "number",
-  re: rx("0[xX][0-9a-fA-F]+|\\b\\d[\\d_]*(?:\\.\\d+)?(?:[eE][+-]?\\d+)?"),
-};
-const IDENT_SKIP: Rule = { type: "", re: rx("[A-Za-z_$][\\w$]*") };
-const OPERATOR: Rule = { type: "operator", re: rx("[+\\-*/%=<>!&|^~?:]+") };
-const PUNCT: Rule = { type: "punctuation", re: rx("[{}()\\[\\].,;]") };
-const FUNC: Rule = { type: "function", re: rx("[A-Za-z_$][\\w$]*(?=\\s*\\()") };
-
-// Build a C-like grammar from a keyword list.
-function clike(keywords: string, constants = "true false null"): Grammar {
-  return [
-    COMMENT_SLASH,
-    COMMENT_BLOCK,
-    STR_DOUBLE,
-    STR_SINGLE,
-    STR_TEMPLATE,
-    NUMBER,
-    { type: "keyword", re: rx(`(?:${words(keywords)})\\b`) },
-    { type: "boolean", re: rx(`(?:${words(constants)})\\b`) },
-    FUNC,
-    IDENT_SKIP,
-    OPERATOR,
-    PUNCT,
-  ];
-}
-
-const JS = clike(
-  `const let var function return if else for while do switch case default break
-   continue new delete typeof instanceof in of this class extends super import
-   export from as async await yield try catch finally throw void interface type
-   enum implements public private protected readonly abstract namespace declare
-   keyof infer satisfies static get set`,
-  "true false null undefined NaN Infinity",
-);
-
-const PY: Grammar = [
-  COMMENT_HASH,
-  { type: "string", re: rx(`[rbfRBF]?"""[\\s\\S]*?"""`) },
-  { type: "string", re: rx(`[rbfRBF]?'''[\\s\\S]*?'''`) },
-  { type: "string", re: rx(`[rbfRBF]?"(?:\\\\.|[^"\\\\\\n])*"?`) },
-  { type: "string", re: rx(`[rbfRBF]?'(?:\\\\.|[^'\\\\\\n])*'?`) },
-  { type: "function", re: rx("@[\\w.]+") },
-  NUMBER,
-  {
-    type: "keyword",
-    re: rx(
-      `(?:${words(`def class return if elif else for while break continue import
-       from as pass with try except finally raise lambda yield global nonlocal
-       in is not and or async await del assert match case`)})\\b`,
-    ),
-  },
-  { type: "boolean", re: rx("(?:None|True|False)\\b") },
-  FUNC,
-  IDENT_SKIP,
-  OPERATOR,
-  PUNCT,
-];
-
-const SQL: Grammar = [
-  { type: "comment", re: rx("--[^\\n]*") },
-  COMMENT_BLOCK,
-  { type: "string", re: rx(`'(?:''|[^'])*'?`) },
-  { type: "string", re: rx(`"(?:""|[^"])*"?`) },
-  NUMBER,
-  {
-    type: "keyword",
-    re: rx(
-      `(?:${words(`select from where insert into update delete set values create
-       table alter drop truncate join left right inner outer full cross on using
-       group by order having limit offset as and or not null is in like between
-       distinct union all case when then else end primary key foreign references
-       index unique default constraint asc desc count sum avg min max exists`)})\\b`,
-      true,
-    ),
-  },
-  { type: "boolean", re: rx("(?:true|false|null)\\b", true) },
-  FUNC,
-  IDENT_SKIP,
-  OPERATOR,
-  PUNCT,
-];
-
-const SPARQL: Grammar = [
-  COMMENT_HASH,
-  { type: "string", re: rx(`"""[\\s\\S]*?"""|'''[\\s\\S]*?'''`) },
-  STR_DOUBLE,
-  STR_SINGLE,
-  { type: "iri", re: rx('<[^<>"{}|^`\\s]*>') },
-  { type: "variable", re: rx("[?$][A-Za-z_][\\w]*") },
-  { type: "attr", re: rx("@[A-Za-z-]+") },
-  { type: "number", re: rx("[+-]?\\b\\d[\\d]*(?:\\.\\d+)?(?:[eE][+-]?\\d+)?") },
-  {
-    type: "keyword",
-    re: rx(
-      `(?:${words(`prefix base select construct describe ask where from named
-       distinct reduced order by asc desc limit offset group having filter
-       optional union minus graph service bind values as exists not in insert
-       delete data with using clear drop create load add move copy silent to
-       separator`)})\\b`,
-      true,
-    ),
-  },
-  {
-    type: "function",
-    re: rx(
-      `(?:${words(`str lang langmatches datatype bound iri uri bnode rand abs
-       ceil floor round concat strlen ucase lcase encode_for_uri contains
-       strstarts strends strbefore strafter year month day hours minutes seconds
-       timezone tz now uuid struuid md5 sha1 sha256 sha384 sha512 coalesce if
-       strlang strdt sameterm isiri isuri isblank isliteral isnumeric regex
-       substr replace count sum min max avg sample group_concat`)})\\b`,
-      true,
-    ),
-  },
-  // Prefixed names (foo:bar) and the "a" keyword (rdf:type).
-  { type: "prefixed", re: rx("[A-Za-z_][\\w.-]*:[A-Za-z_][\\w.-]*|[A-Za-z_][\\w.-]*:") },
-  { type: "keyword", re: rx("a(?=\\s)") },
-  IDENT_SKIP,
-  OPERATOR,
-  { type: "punctuation", re: rx("[{}().,;]") },
-];
-
-const JSON_G: Grammar = [
-  { type: "property", re: rx(`"(?:\\\\.|[^"\\\\])*"(?=\\s*:)`) },
-  { type: "string", re: rx(`"(?:\\\\.|[^"\\\\])*"?`) },
-  NUMBER,
-  { type: "boolean", re: rx("(?:true|false|null)\\b") },
-  PUNCT,
-];
-
-const YAML_G: Grammar = [
-  COMMENT_HASH,
-  { type: "property", re: rx("[\\w.-]+(?=\\s*:)") },
-  STR_DOUBLE,
-  STR_SINGLE,
-  { type: "boolean", re: rx("(?:true|false|null|yes|no|~)\\b", true) },
-  NUMBER,
-  { type: "punctuation", re: rx("[-:?\\[\\]{},]") },
-];
-
-const CSS_G: Grammar = [
-  COMMENT_BLOCK,
-  { type: "keyword", re: rx("@[\\w-]+") },
-  STR_DOUBLE,
-  STR_SINGLE,
-  { type: "number", re: rx("#[0-9a-fA-F]{3,8}\\b") },
-  { type: "property", re: rx("[A-Za-z-]+(?=\\s*:)") },
-  { type: "function", re: rx("[A-Za-z-]+(?=\\()") },
-  { type: "number", re: rx("\\b\\d+(?:\\.\\d+)?(?:px|em|rem|%|vh|vw|s|ms|deg|fr|pt|ex|ch)?") },
-  { type: "punctuation", re: rx("[{}();:,]") },
-];
-
-const MARKUP: Grammar = [
-  { type: "comment", re: rx("<!--[\\s\\S]*?-->") },
-  { type: "tag", re: rx("</?[A-Za-z][\\w-]*|/?>") },
-  { type: "attr", re: rx("[A-Za-z_:][\\w:.-]*(?==)") },
-  STR_DOUBLE,
-  STR_SINGLE,
-];
-
-const BASH: Grammar = [
-  COMMENT_HASH,
-  STR_DOUBLE,
-  STR_SINGLE,
-  { type: "variable", re: rx("\\$\\{?[A-Za-z_]\\w*\\}?|\\$[0-9@*#?$!-]") },
-  {
-    type: "keyword",
-    re: rx(
-      `(?:${words(`if then elif else fi for while until do done case esac in
-       function return exit break continue local export readonly declare source
-       echo cd set unset trap eval`)})\\b`,
-    ),
-  },
-  NUMBER,
-  OPERATOR,
-  { type: "punctuation", re: rx("[{}()\\[\\];|&]") },
-];
-
-const GRAMMARS: Record<string, Grammar> = {
-  javascript: JS,
-  typescript: JS,
-  jsx: JS,
-  tsx: JS,
-  python: PY,
-  sql: SQL,
-  sparql: SPARQL,
-  json: JSON_G,
-  json5: JSON_G,
-  yaml: YAML_G,
-  css: CSS_G,
-  scss: CSS_G,
-  less: CSS_G,
-  html: MARKUP,
-  xml: MARKUP,
-  svg: MARKUP,
-  bash: BASH,
-  java: clike(
-    `public private protected class interface extends implements void int long
-     double float boolean char byte short new return if else for while do switch
-     case default break continue try catch finally throw throws this super static
-     final abstract synchronized volatile transient package import enum var
-     instanceof record sealed`,
-  ),
-  c: clike(
-    `int char float double void long short unsigned signed struct union enum
-     typedef const static extern return if else for while do switch case default
-     break continue goto sizeof volatile register inline`,
-    "true false NULL",
-  ),
-  cpp: clike(
-    `int char float double void long short unsigned signed struct union enum
-     typedef const static extern return if else for while do switch case default
-     break continue goto sizeof class public private protected virtual template
-     typename namespace using new delete this operator friend override final auto
-     inline constexpr noexcept nullptr bool mutable explicit`,
-    "true false nullptr NULL",
-  ),
-  csharp: clike(
-    `using namespace class struct interface enum public private protected internal
-     static readonly const void int string bool var new return if else for foreach
-     while do switch case default break continue try catch finally throw this base
-     async await get set override virtual abstract sealed partial record yield`,
-    "true false null",
-  ),
-  go: clike(
-    `func package import var const type struct interface map chan go defer return
-     if else for range switch case default break continue fallthrough select`,
-    "nil true false iota",
-  ),
-  rust: clike(
-    `fn let mut const static struct enum trait impl mod use pub crate self super
-     return if else for while loop match break continue ref move where as dyn
-     async await unsafe extern type`,
-    "true false Some None Ok Err",
-  ),
-  php: clike(
-    `function class interface trait extends implements public private protected
-     static const var return if else elseif for foreach while do switch case
-     default break continue try catch finally throw new echo print namespace use
-     instanceof abstract final global`,
-    "true false null TRUE FALSE NULL",
-  ),
-  ruby: clike(
-    `def class module end if elsif else unless case when then while until for in
-     do begin rescue ensure raise return yield next break self require include
-     attr_accessor attr_reader attr_writer lambda proc puts`,
-    "true false nil",
-  ),
-  kotlin: clike(
-    `fun val var class interface object return if else for while do when is in as
-     import package public private protected internal open abstract override
-     sealed data enum companion init constructor lateinit suspend`,
-    "true false null",
-  ),
-  swift: clike(
-    `func let var class struct enum protocol extension return if else for while
-     repeat switch case default break continue guard defer import public private
-     internal fileprivate static override init deinit self super throws try catch`,
-    "true false nil",
-  ),
+/** Canonical language id -> Lezer parser. Aliases are resolved through ALIASES
+ * before lookup, so only canonical names appear here.
+ */
+const PARSERS: Record<string, Parser> = {
+  javascript: javascriptLanguage.parser,
+  typescript: typescriptLanguage.parser,
+  jsx: jsxLanguage.parser,
+  tsx: tsxLanguage.parser,
+  python: pythonLanguage.parser,
+  sql: StandardSQL.language.parser,
+  json: jsonLanguage.parser,
+  html: htmlLanguage.parser,
+  css: cssLanguage.parser,
+  xml: xmlLanguage.parser,
+  java: javaLanguage.parser,
+  c: cppLanguage.parser,
+  cpp: cppLanguage.parser,
+  rust: rustLanguage.parser,
+  php: phpLanguage.parser,
+  yaml: yamlLanguage.parser,
+  go: goLanguage.parser,
+  csharp: stream(csharp),
+  kotlin: stream(kotlin),
+  scala: stream(scala),
+  objectivec: stream(objectiveC),
+  bash: stream(shell),
+  ruby: stream(ruby),
+  swift: stream(swift),
+  sparql: stream(sparql),
+  turtle: stream(turtle),
+  lua: stream(lua),
+  perl: stream(perl),
+  r: stream(r),
+  toml: stream(toml),
+  dockerfile: stream(dockerFile),
+  powershell: stream(powerShell),
+  groovy: stream(groovy),
+  haskell: stream(haskell),
+  clojure: stream(clojure),
+  julia: stream(julia),
+  diff: stream(diff),
+  ini: stream(properties),
 };
 
 const ALIASES: Record<string, string> = {
@@ -312,10 +180,22 @@ const ALIASES: Record<string, string> = {
   rs: "rust",
   "c++": "cpp",
   cs: "csharp",
+  "objective-c": "objectivec",
+  objc: "objectivec",
   htm: "html",
+  svg: "xml",
+  scss: "css",
+  less: "css",
+  json5: "json",
+  jsonc: "json",
   ttl: "turtle",
-  turtle: "sparql",
   rq: "sparql",
+  ps1: "powershell",
+  dockerfile: "dockerfile",
+  docker: "dockerfile",
+  kt: "kotlin",
+  pl: "perl",
+  properties: "ini",
 };
 
 /** Names offered by the language autocomplete, roughly by popularity. */
@@ -329,6 +209,7 @@ export const LANGUAGES: string[] = [
   "css",
   "sql",
   "sparql",
+  "turtle",
   "java",
   "go",
   "rust",
@@ -338,14 +219,26 @@ export const LANGUAGES: string[] = [
   "php",
   "ruby",
   "yaml",
+  "toml",
   "xml",
   "kotlin",
   "swift",
-  "scss",
+  "scala",
+  "lua",
+  "r",
+  "perl",
+  "haskell",
+  "clojure",
+  "julia",
+  "groovy",
+  "objectivec",
+  "dockerfile",
+  "powershell",
+  "diff",
+  "ini",
   "jsx",
   "tsx",
   "markdown",
-  "turtle",
   "graphql",
   "mermaid",
 ];
@@ -357,9 +250,9 @@ export const LANGUAGE_SUGGESTIONS: string[] = [
   ...Object.keys(ALIASES).filter((alias) => !LANGUAGES.includes(alias)),
 ];
 
-function getGrammar(lang: string): Grammar | null {
+function getParser(lang: string): Parser | null {
   const key = lang.toLowerCase();
-  return GRAMMARS[key] ?? GRAMMARS[ALIASES[key] ?? ""] ?? null;
+  return PARSERS[key] ?? PARSERS[ALIASES[key] ?? ""] ?? null;
 }
 
 /** Reverse map: canonical name → aliases that resolve to it. */
@@ -395,25 +288,34 @@ export function matchLanguages(query: string, limit = 8): string[] {
   return out.slice(0, limit);
 }
 
+// Decoration rebuilds re-tokenize every visible code block on each keystroke
+// and caret move, and a full Lezer parse is the expensive part. Memoize per
+// (lang, code); Map insertion order doubles as the LRU eviction order.
+const TOKEN_CACHE = new Map<string, Token[]>();
+const TOKEN_CACHE_MAX = 128;
+
 export function tokenize(code: string, lang: string): Token[] {
-  const grammar = getGrammar(lang);
-  if (!grammar) return [];
+  const parser = getParser(lang);
+  if (!parser) return [];
+  const canonical = ALIASES[lang.toLowerCase()] ?? lang.toLowerCase();
+  const key = `${canonical}\x00${code}`;
+  const hit = TOKEN_CACHE.get(key);
+  if (hit) {
+    TOKEN_CACHE.delete(key);
+    TOKEN_CACHE.set(key, hit);
+    return hit;
+  }
+  const tree = parser.parse(code);
   const tokens: Token[] = [];
-  let i = 0;
-  const len = code.length;
-  while (i < len) {
-    let matched = false;
-    for (const rule of grammar) {
-      rule.re.lastIndex = i;
-      const m = rule.re.exec(code);
-      if (m && m.index === i && m[0].length > 0) {
-        if (rule.type) tokens.push({ from: i, to: i + m[0].length, type: rule.type });
-        i += m[0].length;
-        matched = true;
-        break;
-      }
-    }
-    if (!matched) i++;
+  highlightTree(tree, HIGHLIGHTER, (from, to, classes) => {
+    // Each rule maps to a single class; if several tags matched, the most
+    // specific (last) one wins.
+    const type = classes.includes(" ") ? classes.slice(classes.lastIndexOf(" ") + 1) : classes;
+    tokens.push({ from, to, type });
+  });
+  TOKEN_CACHE.set(key, tokens);
+  if (TOKEN_CACHE.size > TOKEN_CACHE_MAX) {
+    TOKEN_CACHE.delete(TOKEN_CACHE.keys().next().value!);
   }
   return tokens;
 }

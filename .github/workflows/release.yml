@@ -145,11 +145,16 @@ jobs:
 
   # Build a signed universal Android APK.
   build-android:
-    name: 📱 Build signed Android APK
+    name: 📱 Build & publish Android
     needs: create-release
     # Run on tag pushes (release_id set) and on manual dry runs (create-release skipped).
     if: ${{ always() && needs.create-release.result != 'failure' && needs.create-release.result != 'cancelled' }}
     runs-on: ubuntu-latest
+    env:
+      # Publish to Play only when the service-account secret is configured, so
+      # the release still succeeds for forks / before Play is set up.
+      HAS_PLAY_CREDS: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
+      AAB_PATH: apps/typodown-app/src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.0
@@ -202,10 +207,21 @@ jobs:
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           EOF
 
-      - name: Build signed APK
+      # Play requires a unique, increasing versionCode per upload. Tauri derives
+      # it from tauri.conf.json `version` (major*1000000 + minor*1000 + patch),
+      # so sync that version to the release tag. `bumpp` only bumps package.json.
+      - name: Sync app version from tag
+        if: github.ref_type == 'tag'
+        working-directory: ${{ env.APP_PATH }}
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          node -e "const fs=require('fs'),f='src-tauri/tauri.conf.json',c=require('./'+f);c.version='$v';fs.writeFileSync(f,JSON.stringify(c,null,2)+'\n')"
+          echo "Set Android app version to $v"
+
+      - name: Build signed APK and AAB
         env:
           NDK_HOME: ${{ env.ANDROID_NDK_ROOT }}
-        run: npm run tauri android build -- --apk
+        run: npm run tauri android build -- --apk --aab
         working-directory: ${{ env.APP_PATH }}
 
       - name: Upload APK to release
@@ -217,13 +233,34 @@ jobs:
           tag_name: ${{ github.ref_name }}
           files: ${{ env.APP_PATH }}/src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk
 
-      - name: Upload APK to workflow run (dry run)
+      - name: Upload APK + AAB to workflow run (dry run)
         if: needs.create-release.outputs.release_id == ''
         uses: actions/upload-artifact@v4
         with:
-          name: android-apk
-          path: ${{ env.APP_PATH }}/src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk
+          name: android
+          path: |
+            ${{ env.APP_PATH }}/src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk
+            ${{ env.AAB_PATH }}
           if-no-files-found: error
+
+      # Publishes the AAB to the Play Console's "internal" testing track. The
+      # first upload of a package must be done manually in the Play Console
+      # (see CONTRIBUTING.md); the API cannot create the app listing. Promote
+      # from internal -> production in the Play Console when ready.
+      - name: Publish to Google Play (internal track)
+        if: ${{ needs.create-release.outputs.release_id != '' && env.HAS_PLAY_CREDS == 'true' }}
+        uses: r0adkll/upload-google-play@v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: io.github.vemonet.typodown
+          releaseFiles: ${{ env.AAB_PATH }}
+          track: internal
+          status: completed
+          mappingFile: ${{ env.APP_PATH }}/src-tauri/gen/android/app/build/outputs/mapping/universalRelease/mapping.txt
+
+      - name: Note when Play publish is skipped
+        if: ${{ needs.create-release.outputs.release_id != '' && env.HAS_PLAY_CREDS != 'true' }}
+        run: echo "::notice::PLAY_SERVICE_ACCOUNT_JSON not set · skipped Google Play upload. APK is on the GitHub release."
 
   # Publish the release once every artifact has been attached.
   publish-release:

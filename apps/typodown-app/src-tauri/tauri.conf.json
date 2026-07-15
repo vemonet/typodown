@@ -1,6 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Typodown",
+  "mainBinaryName": "Typodown",
   "version": "0.1.0",
   "identifier": "io.github.vemonet.typodown",
   "build": {
@@ -28,6 +29,12 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Vincent Emonet",
+    "category": "Productivity",
+    "shortDescription": "Markdown editor",
+    "longDescription": "Typodown blends reading and writing markdown into one continuous motion: markdown renders where you type, with the raw syntax revealed only under the cursor. No preview pane, no mode to toggle.",
+    "homepage": "https://github.com/vemonet/typodown",
+    "license": "MIT",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -37,10 +44,11 @@
     ],
     "fileAssociations": [
       {
-        "ext": ["md"],
+        "ext": ["md", "markdown", "mdown", "mkd", "mdx"],
         "name": "Markdown",
         "description": "Markdown Document",
         "mimeType": "text/markdown",
+        "role": "Editor",
         "androidIntentActionFilters": ["view"]
       }
     ]

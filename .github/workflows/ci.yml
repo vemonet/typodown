@@ -46,7 +46,7 @@ jobs:
         run: vp i
 
       - name: Build demo
-        run: vp run @vemonet/typodown#build:demo
+        run: vp run @vemonet/typodown#demo:build
 
       - uses: actions/upload-pages-artifact@v5.0.0
         with:

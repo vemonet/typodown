@@ -1,6 +1,6 @@
-import { createContext, onMount, Show, useContext, type JSX, type Component } from "solid-js";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { FolderOpen, List } from "lucide-solid";
+import { onMount, onCleanup, Show, type JSX, type Component } from "solid-js";
+import { invoke } from "@tauri-apps/api/core";
+import { FolderOpen } from "lucide-solid";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -12,87 +12,104 @@ import {
 } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import FileExplorer from "@/components/FileExplorer";
-import Outline from "@/components/Outline";
 import Editor from "@/components/Editor";
-import type { Typodown } from "@vemonet/typodown";
+import GraphView from "@/components/GraphView";
 import { useColorMode } from "@/components/color-mode";
-import { initOpenWith } from "@/lib/vault";
-
-/** Context to expose the left sidebar's toggle to deeply nested children.
- * The right sidebar's provider would shadow the left one's useSidebar()
- * context, so we capture the left toggle before entering the right provider
- * and pass it down via this context. */
-const LeftSidebarCtx = createContext<{ toggle: () => void }>({ toggle: () => {} });
+import {
+  initOpenWith,
+  openFolder,
+  save,
+  setAutoSave,
+  showEditor,
+  showGraph,
+  vault,
+} from "@/lib/vault";
 
 /** On mobile there is no window to drag, so the titlebar drag strip (which
  * costs a whole row) is dropped; on desktop it stays as the drag region for
  * the overlay titlebar. */
 const IS_MOBILE_OS = /android|iphone|ipad/i.test(navigator.userAgent);
 
+/** Android replaces the auto-save with an explicit Save button in the editor
+ * toolbar (cloud SAF writes on every keystroke churn conflict copies on the
+ * provider). */
+const IS_ANDROID = /android/i.test(navigator.userAgent);
+
 const App: Component = () => {
-  let editorRef: Typodown | undefined;
   const { resolvedColorMode } = useColorMode();
 
-  onMount(() => void initOpenWith());
-
-  const handleEditorReady = (editor: Typodown) => {
-    editorRef = editor;
-  };
-
-  const jumpToLine = (line: number) => {
-    editorRef?.scrollToLine(line);
-  };
+  onMount(() => {
+    void initOpenWith();
+    if (IS_ANDROID) setAutoSave(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const key = e.key.toLowerCase();
+      if (key === "o") {
+        e.preventDefault();
+        void openFolder();
+      } else if (key === "g") {
+        e.preventDefault();
+        if (vault.view() === "graph") showEditor();
+        else showGraph();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    onCleanup(() => window.removeEventListener("keydown", onKey));
+  });
 
   return (
-    <div class="flex h-dvh flex-col bg-background text-foreground">
+    <div class="app-root flex h-dvh flex-col bg-background text-foreground">
       <Show when={!IS_MOBILE_OS}>
-        {/* Blank drag strip for the macOS overlay titlebar. Tauri's injected
-         * drag handler claims the mousedown when it matches (and then stops
-         * propagation); this onMouseDown is a fallback that starts the drag
-         * explicitly when it didn't. */}
+        {/* Blank drag strip for the macOS overlay titlebar. The built-in
+         * data-tauri-drag-region handles double-click maximize; dragging goes
+         * through our start_native_drag command because tauri's start_dragging
+         * is a no-op on macOS 26 (it reuses a stale NSEvent that Tahoe
+         * rejects). Must be a native `on:` listener: the injected drag script
+         * stops propagation at the document, which silences Solid's delegated
+         * handlers. */}
         <div
           class="titlebar-drag"
           data-tauri-drag-region
-          onMouseDown={(e) => {
-            if (e.button === 0 && e.detail === 1) void getCurrentWindow().startDragging();
+          on:mousedown={(e) => {
+            if (e.button === 0 && e.detail === 1) void invoke("start_native_drag");
           }}
         />
       </Show>
 
-      <div class="flex flex-1 overflow-hidden pt-1">
-        {/* Left: floating file explorer */}
+      <div class="flex flex-1 overflow-hidden">
+        {/* Left: floating file explorer. Hidden on mobile, where opening a
+         * folder from the filesystem is not supported. The document outline
+         * lives in the editor itself (the Typodown library renders its own
+         * right-docked outline panel + toggle). */}
         <SidebarProvider style={{ "--sidebar-width": "17rem" } as JSX.CSSProperties}>
-          <Sidebar variant="floating" collapsible="offcanvas" class="pt-6">
-            <SidebarContent>
-              <FileExplorer />
-            </SidebarContent>
-          </Sidebar>
-          <SidebarInset class="flex flex-col overflow-hidden">
-            {/* Capture the left sidebar's toggle before the right provider
-             * shadows its context */}
-            <LeftSidebarBridge>
-              {/* Right: floating outline */}
-              <SidebarProvider style={{ "--sidebar-width": "16rem" } as JSX.CSSProperties}>
-                <SidebarInset class="relative flex flex-col overflow-hidden">
-                  {/* Sidebar toggles float in the editor margin instead of
-                   * taking a full row. */}
-                  <div class="absolute left-1.5 top-1.5 z-30 rounded-md bg-background/60 backdrop-blur-sm">
-                    <LeftToggle />
-                  </div>
-                  <div class="absolute right-1.5 top-1.5 z-30 rounded-md bg-background/60 backdrop-blur-sm">
-                    <RightToggle />
-                  </div>
-                  <div class="z-sidebar-inset flex-1 overflow-hidden">
-                    <Editor theme={resolvedColorMode()} onReady={handleEditorReady} />
-                  </div>
-                </SidebarInset>
-                <Sidebar variant="floating" collapsible="offcanvas" side="right" class="pt-6">
-                  <SidebarContent>
-                    <Outline onJumpToLine={jumpToLine} />
-                  </SidebarContent>
-                </Sidebar>
-              </SidebarProvider>
-            </LeftSidebarBridge>
+          <Show when={!IS_MOBILE_OS}>
+            <Sidebar variant="floating" collapsible="offcanvas" class="pt-6">
+              <SidebarContent>
+                <FileExplorer />
+              </SidebarContent>
+            </Sidebar>
+          </Show>
+          <SidebarInset class="relative flex flex-col overflow-hidden">
+            {/* The file-explorer toggle floats in the editor margin instead of
+             * taking a full row. */}
+            <Show when={!IS_MOBILE_OS}>
+              <div class="absolute left-1.5 top-1.5 z-30 rounded-md bg-background/60 backdrop-blur-sm">
+                <LeftToggle />
+              </div>
+            </Show>
+            <div class="z-sidebar-inset flex-1 overflow-hidden">
+              <Show
+                when={vault.view() === "graph"}
+                fallback={
+                  <Editor
+                    theme={resolvedColorMode()}
+                    save={IS_ANDROID ? { run: save, isDirty: vault.dirty } : undefined}
+                  />
+                }
+              >
+                <GraphView theme={resolvedColorMode()} />
+              </Show>
+            </div>
           </SidebarInset>
         </SidebarProvider>
       </div>
@@ -102,25 +119,9 @@ const App: Component = () => {
   );
 };
 
-/** Captures the left SidebarProvider's toggle and exposes it via context so
- * the LeftToggle button (nested inside the right provider) can still call it. */
-const LeftSidebarBridge: Component<{ children: JSX.Element }> = (props) => {
-  const { toggleSidebar } = useSidebar();
-  return (
-    <LeftSidebarCtx.Provider value={{ toggle: toggleSidebar }}>
-      {props.children}
-    </LeftSidebarCtx.Provider>
-  );
-};
-
 const LeftToggle: Component = () => {
-  const ctx = useContext(LeftSidebarCtx);
-  return <SidebarToggleButton icon={FolderOpen} label="Toggle files" onClick={ctx.toggle} />;
-};
-
-const RightToggle: Component = () => {
   const { toggleSidebar } = useSidebar();
-  return <SidebarToggleButton icon={List} label="Toggle outline" onClick={toggleSidebar} />;
+  return <SidebarToggleButton icon={FolderOpen} label="Toggle files" onClick={toggleSidebar} />;
 };
 
 interface SidebarToggleButtonProps {

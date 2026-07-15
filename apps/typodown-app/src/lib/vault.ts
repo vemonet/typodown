@@ -9,16 +9,19 @@ import {
   pickMarkdownFile,
   readMarkdownTree,
   readFileContent,
+  renamePath,
   writeFileContent,
   watchVault,
   type UnwatchFn,
 } from "./tauri";
-import { parseOutline, type OutlineHeading } from "./outline";
 
 export type VaultMode = "folder" | "file" | null;
+/** Which surface the main pane shows: the editor or the link graph. */
+export type ViewMode = "editor" | "graph";
 
 const [vaultRoot, setVaultRoot] = createSignal<string | null>(null);
 const [vaultMode, setVaultMode] = createSignal<VaultMode>(null);
+const [view, setView] = createSignal<ViewMode>("editor");
 const [tree, setTree] = createSignal<TreeNode[]>([]);
 const [currentPath, setCurrentPath] = createSignal<string | null>(null);
 const [currentContent, setCurrentContent] = createSignal<string>("");
@@ -29,6 +32,17 @@ const [error, setError] = createSignal<string | null>(null);
 let unwatch: UnwatchFn | null = null;
 let saveTimer: Debouncer | null = null;
 let maxSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** When false (e.g. on Android, where a manual Save button replaces
+ * auto-save), onContentChange updates the in-memory content and dirty flag
+ * but never schedules a write to disk; the user triggers saves explicitly via
+ * `save()`, which reuses the same code path the auto-save did. */
+let autoSave = true;
+
+export function setAutoSave(enabled: boolean): void {
+  autoSave = enabled;
+  if (!enabled) flushSave();
+}
 
 interface Debouncer {
   run: () => void;
@@ -53,24 +67,27 @@ function isContentUri(path: string): boolean {
   return path.startsWith("content://");
 }
 
-/** Outline of the current file. Computed on demand inside whatever reactive
- * context calls it (reads `currentContent()`), so no module-scope computation
- * is created. */
-export function outline(): OutlineHeading[] {
-  return parseOutline(currentContent());
-}
-
 export const vault = {
   vaultRoot,
   vaultMode,
+  view,
   tree,
   currentPath,
   currentContent,
   dirty,
   loading,
   error,
-  outline,
 };
+
+/** Show the link graph in the main pane. */
+export function showGraph(): void {
+  setView("graph");
+}
+
+/** Show the editor in the main pane. */
+export function showEditor(): void {
+  setView("editor");
+}
 
 export async function openFolder(): Promise<void> {
   try {
@@ -220,6 +237,7 @@ export function onContentChange(value: string): void {
   const path = currentPath();
   if (!path) return;
   setDirty(true);
+  if (!autoSave) return;
   const cloud = isContentUri(path);
   if (saveTimer) saveTimer.cancel();
   saveTimer = debounce(() => void saveCurrent(), cloud ? SAF_DEBOUNCE_MS : LOCAL_DEBOUNCE_MS);
@@ -230,6 +248,17 @@ export function onContentChange(value: string): void {
       void saveCurrent();
     }, SAF_MAX_PENDING_MS);
   }
+}
+
+/** Manual save entry point (used by the toolbar Save button on Android).
+ * Reuses the same `saveCurrent` write path as auto-save, forcing through the
+ * cloud write-gap so the user sees the save land immediately. Pops a short
+ * "Saved" toast so the tap has visible feedback (an error toast already fires
+ * from `saveCurrent` if the write fails). */
+export function save(): void {
+  if (!dirty() || !currentPath()) return;
+  flushSave();
+  toast.success("Saved");
 }
 
 // Writes are serialized: a save that lands while another is in flight doesn't
@@ -316,6 +345,50 @@ if (typeof document !== "undefined") {
     if (document.hidden) flushSave();
   });
   window.addEventListener("pagehide", () => flushSave());
+}
+
+/** Rename a file or folder (same parent). For files, if the new name has no
+ * extension the old one is kept, so typing "note" over note.md stays note.md.
+ * When the renamed entry holds the open file (the file itself, or a folder
+ * anywhere above it), its path is rewritten so the editor keeps tracking it. */
+export async function renameEntry(oldPath: string, newName: string, isDir = false): Promise<void> {
+  let name = newName.trim().replace(/[/\\]/g, "");
+  if (!name) return;
+  const oldName = baseName(oldPath);
+  if (!isDir) {
+    const oldExt = /\.[^./]+$/.exec(oldName)?.[0];
+    if (oldExt && !/\.[^./]+$/.test(name)) name += oldExt;
+  }
+  if (name === oldName) return;
+  const parent = parentDir(oldPath);
+  const newPath = parent ? `${parent}/${name}` : name;
+  const open = currentPath();
+  const openNorm = open?.replace(/\\/g, "/") ?? null;
+  const oldNorm = oldPath.replace(/\\/g, "/");
+  const openAffected = isDir ? !!openNorm && openNorm.startsWith(`${oldNorm}/`) : open === oldPath;
+  try {
+    // Persist pending edits before the path moves.
+    if (openAffected) flushSave();
+    await renamePath(oldPath, newPath);
+    if (openAffected) {
+      setCurrentPath(isDir ? newPath + openNorm!.slice(oldNorm.length) : newPath);
+      updateWindowTitle();
+    }
+    await refreshTree();
+  } catch (err) {
+    toast.error("Failed to rename", { description: String(err) });
+  }
+}
+
+/** Copy a file to the system clipboard as a file object, so it can be pasted
+ * into Finder / Explorer / the VS Code file tree. */
+export async function copyFileToClipboard(path: string): Promise<void> {
+  try {
+    await invoke("copy_file_to_clipboard", { path });
+    toast.success("File copied", { description: "Paste it in your file manager or editor." });
+  } catch (err) {
+    toast.error("Failed to copy file", { description: String(err) });
+  }
 }
 
 export function closeVault(): void {

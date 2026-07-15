@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+// renderCellHTML sanitizes via DOMPurify, which needs a DOM.
 import { expect, test } from "vite-plus/test";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
@@ -5,6 +7,7 @@ import {
   addTableColumn,
   addTableRow,
   cellsInRange,
+  cellWriteChange,
   deleteTable,
   escapeCellPipes,
   findLenientTables,
@@ -12,6 +15,42 @@ import {
   renderCellHTML,
   splitCells,
 } from "../src/live-preview.ts";
+
+// Apply a single-line change spec to a line string (offsets are absolute; the
+// line here starts at 0).
+function applyChange(line: string, change: { from: number; to: number; insert: string }): string {
+  return line.slice(0, change.from) + change.insert + line.slice(change.to);
+}
+
+// ---- cellWriteChange -------------------------------------------------------
+
+test("cellWriteChange replaces an existing cell in place", () => {
+  const line = "| a | b | c |";
+  const change = cellWriteChange(line, 0, 1, "X");
+  expect(applyChange(line, change)).toBe("| a |X| c |");
+});
+
+test("cellWriteChange pads a short row so a trailing edit persists", () => {
+  // A 2-cell row in a 3-column table: writing column 2 must extend the row
+  // rather than drop the edit (the README Android-row bug).
+  const line = "| **Android app** | Open `.md` files |";
+  const change = cellWriteChange(line, 0, 2, "[Download](https://example.com)");
+  expect(applyChange(line, change)).toBe(
+    "| **Android app** | Open `.md` files | [Download](https://example.com) |",
+  );
+});
+
+test("cellWriteChange pads multiple missing columns with empties", () => {
+  const line = "| a |";
+  const change = cellWriteChange(line, 0, 2, "z");
+  expect(applyChange(line, change)).toBe("| a |  | z |");
+});
+
+test("cellWriteChange escapes free pipes in the written value", () => {
+  const line = "| a | b |";
+  const change = cellWriteChange(line, 0, 2, "x | y");
+  expect(applyChange(line, change)).toBe("| a | b | x \\| y |");
+});
 
 // A minimal EditorView mock: the table helpers only need view.state and
 // view.dispatch. dispatch applies the transaction so successive reads see the

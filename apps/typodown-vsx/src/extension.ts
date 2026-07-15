@@ -9,11 +9,11 @@ export function activate(context: vscode.ExtensionContext): void {
       webviewOptions: { retainContextWhenHidden: true },
       supportsMultipleEditorsPerDocument: false,
     }),
-    vscode.commands.registerCommand("typodown-vsx.openWith", (uri?: vscode.Uri) => {
+    vscode.commands.registerCommand("typodown.openWith", (uri?: vscode.Uri) => {
       const target = uri ?? vscode.window.activeTextEditor?.document.uri;
       if (target) void vscode.commands.executeCommand("vscode.openWith", target, VIEW_TYPE);
     }),
-    vscode.commands.registerCommand("typodown-vsx.openToSide", (uri?: vscode.Uri) => {
+    vscode.commands.registerCommand("typodown.openToSide", (uri?: vscode.Uri) => {
       const target = uri ?? vscode.window.activeTextEditor?.document.uri;
       if (target) {
         void vscode.commands.executeCommand(

@@ -5,7 +5,7 @@
 [changelog]
 header = """
 # Changelog\n
-All notable changes to Typodown (the core editor and the VS Code extension).\n
+All notable changes to Typodown.\n
 """
 body = """
 {% if version %}\

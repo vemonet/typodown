@@ -25,4 +25,4 @@ export {
   openInsertTableDialog,
   closeInsertTableDialog,
 } from "./menu.ts";
-export type { ToolbarMode } from "./toolbar.ts";
+export type { ToolbarMode, ToolbarSave } from "./toolbar.ts";

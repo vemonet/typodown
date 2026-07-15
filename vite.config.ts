@@ -1,4 +1,5 @@
 import { defineConfig } from "vite-plus";
+import solid from "eslint-plugin-solid/configs/typescript";
 
 export default defineConfig({
   staged: {
@@ -6,9 +7,45 @@ export default defineConfig({
   },
   fmt: {},
   lint: {
-    jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
+    jsPlugins: [
+      { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },
+      "eslint-plugin-solid", // Only enabled for the app (see below)
+    ],
     rules: { "vite-plus/prefer-vite-plus-imports": "error" },
     options: { typeAware: true, typeCheck: true },
+    // Per-target rules
+    overrides: [
+      // Core library: browser runtime, published to npm
+      {
+        files: ["packages/typodown/**"],
+        env: { browser: true },
+        rules: {
+          // A published library should not ship stray console output
+          "no-console": ["error", { allow: ["warn", "error"] }],
+        },
+      },
+      // VSCode extension host: Node runtime with the `vscode` API
+      {
+        files: ["apps/typodown-vsx/**"],
+        env: { node: true },
+      },
+      // ...except the webview bundle, which runs in a browser context
+      {
+        files: ["apps/typodown-vsx/src/webview/**"],
+        env: { browser: true },
+      },
+      // Tauri v2 app: SolidJS frontend running in the system WebView
+      {
+        files: ["apps/typodown-app/**"],
+        env: { browser: true },
+        rules: {
+          // Solid binds `let el` refs via `ref={el}`; the compiler assigns
+          // them, so Oxlint's "declared but never assigned" is a false positive
+          "no-unassigned-vars": "off",
+          ...solid.rules,
+        },
+      },
+    ],
   },
   run: {
     cache: true,
@@ -20,38 +57,50 @@ export default defineConfig({
       build: {
         command: "vp run -r build",
       },
-      "build:demo": {
-        command: "vp run @vemonet/typodown#build:demo",
+      "demo:build": {
+        command: "vp run @vemonet/typodown#demo:build",
       },
 
       // VSCode extension (vsce runs vscode:prepublish, which bundles via build.mjs)
-      "build:vsx": {
+      "vsx:build": {
         command: "vsce package --no-dependencies --out typodown.vsix",
         cwd: "apps/typodown-vsx",
         dependsOn: ["@vemonet/typodown#build"],
-        cache: false,
       },
-      "install:vsx": {
+      "vsx:install": {
         command: "code --install-extension apps/typodown-vsx/typodown.vsix --force",
-        dependsOn: ["build:vsx"],
+        dependsOn: ["vsx:build"],
         cache: false,
       },
 
       // Tauri app
-      "dev:app": {
+      "app:dev": {
         command: "npm run tauri dev",
         cwd: "apps/typodown-app",
         dependsOn: ["@vemonet/typodown#build"],
+        cache: false,
       },
-      "build:app": {
+      "app:build": {
         command: "npm run tauri build --release",
         cwd: "apps/typodown-app",
         dependsOn: ["@vemonet/typodown#build"],
       },
-      "build:apk": {
+      "app:apk": {
         command: "npm run tauri android build -- --apk",
         cwd: "apps/typodown-app",
         dependsOn: ["@vemonet/typodown#build"],
+      },
+      // Android App Bundle (.aab) for the Play Store.
+      "app:aab": {
+        command: "npm run tauri android build -- --aab",
+        cwd: "apps/typodown-app",
+        dependsOn: ["@vemonet/typodown#build"],
+      },
+
+      "app:install": {
+        command:
+          "cp apps/typodown-app/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk ~/Dropbox/typodown.apk",
+        dependsOn: ["vsx:install", "app:apk"],
       },
 
       // Release process
@@ -62,7 +111,7 @@ export default defineConfig({
         command: [
           'bumpp -r --all --commit --tag --push --execute "vp run changelog"',
           "npm publish -w @vemonet/typodown",
-          "npm run publish:vsx -w typodown-vsx",
+          "npm run vsx:publish -w typodown",
         ],
       },
     },

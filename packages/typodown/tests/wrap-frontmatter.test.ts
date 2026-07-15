@@ -98,12 +98,20 @@ test("Cmd+I inside italic nested in bold removes only the italic", () => {
   expect(result).toBe("**a b c**");
 });
 
-test("Cmd+B outside bold inserts an empty marker pair (no toggle)", () => {
+test("Cmd+B with the caret on a plain word wraps the whole word", () => {
   const doc = "plain";
-  const caret = 2;
+  const caret = 2; // inside the word, no selection
   const { doc: result, head } = runWrap("**", doc, caret);
-  expect(result).toBe("pl****ain");
-  expect(head).toBe(4); // caret between the markers
+  expect(result).toBe("**plain**");
+  expect(head).toBe(7); // the wrapped word is selected (inside the markers)
+});
+
+test("Cmd+B with the caret not on a word inserts an empty marker pair", () => {
+  const doc = "hi ";
+  const caret = 3; // after the trailing space, not on a word char
+  const { doc: result, head } = runWrap("**", doc, caret);
+  expect(result).toBe("hi ****");
+  expect(head).toBe(5); // caret between the markers
 });
 
 test("backtick inside inline code removes the code markers", () => {

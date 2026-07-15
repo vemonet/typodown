@@ -9,11 +9,12 @@ class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
-    // Keep the WebView out of the status bar, navigation bar, display cutout
-    // and on-screen keyboard. Android WebView doesn't reliably expose these
-    // as CSS safe-area env() insets, and CSS padding wouldn't move
-    // fixed-position overlays (sidebars, dialogs) anyway, so pad the native
-    // content view instead.
+    // Pad the native content view for the navigation bar, keyboard and side
+    // cutouts, but NOT for the status bar (top): the WebView draws full-bleed
+    // to the top of the screen so the app background reaches the notification
+    // bar, and the web layer offsets its content below it with
+    // env(safe-area-inset-top). The insets are returned (not consumed) so the
+    // WebView still receives them and exposes env(safe-area-inset-*) to CSS.
     val content = findViewById<android.view.View>(android.R.id.content)
     ViewCompat.setOnApplyWindowInsetsListener(content) { view, insets ->
       val bars = insets.getInsets(
@@ -21,8 +22,8 @@ class MainActivity : TauriActivity() {
           or WindowInsetsCompat.Type.displayCutout()
           or WindowInsetsCompat.Type.ime()
       )
-      view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
-      WindowInsetsCompat.CONSUMED
+      view.setPadding(bars.left, 0, bars.right, bars.bottom)
+      insets
     }
   }
 }

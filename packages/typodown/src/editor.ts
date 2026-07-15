@@ -24,6 +24,7 @@ import {
   type CompletionContext,
   type CompletionResult,
 } from "@codemirror/autocomplete";
+import { search } from "@codemirror/search";
 import { syntaxTree } from "@codemirror/language";
 import {
   insertNewlineContinueMarkup,
@@ -33,8 +34,13 @@ import {
 } from "@codemirror/lang-markdown";
 import { GFM } from "@lezer/markdown";
 import { livePreview, ALERT_KINDS, markerEndOnLine } from "./live-preview.ts";
+import { openInsertTableDialog, insertTable } from "./menu.ts";
+import { createOutline, type OutlineHandle } from "./outline.ts";
+import { createPrefs } from "./prefs.ts";
 import { Math as MathExtension } from "./math.ts";
 import { matchLanguages } from "./highlight.ts";
+import { loadEmojiIndex, searchEmoji } from "./emoji.ts";
+import { createSearch, searchHighlighter, type SearchHandle } from "./search.ts";
 import { htmlToMarkdown } from "./clipboard.ts";
 import {
   createToolbar,
@@ -61,20 +67,56 @@ export interface TypodownOptions {
    * host instead.
    */
   getClipboardText?: () => string | Promise<string>;
+  /**
+   * Open a link's URL when it is Cmd/Ctrl-clicked. Defaults to
+   * `window.open(url, "_blank")`, which works in browsers but not in some
+   * embedders (e.g. a Tauri webview, where it must go through the host's opener
+   * plugin to reach the system browser); provide this to route it to the host.
+   */
+  openLink?: (url: string) => void;
   /** Called whenever the content changes. */
   onChange?: (value: string) => void;
   /** Render raw HTML blocks/tags as live widgets. Defaults to true. */
   html?: boolean;
   /**
+   * Show a Save action at the end of the formatting toolbar, invoked when the
+   * user taps it. Hosts that prefer an explicit save (e.g. a mobile app that
+   * disables auto-save to avoid churning cloud conflict copies) pass a callback
+   * here; hosts that auto-save on every change leave it unset and the button is
+   * omitted. The button does not refocus the editor, so a soft keyboard stays
+   * open on touch devices.
+   */
+  save?: {
+    /** Perform the save when the toolbar Save button is tapped. */
+    run: () => void;
+    /** Returns whether there are unsaved changes; the toolbar greys the
+     * button out while this is false. */
+    isDirty?: () => boolean;
+  };
+  /**
    * Visibility of the floating formatting toolbar (bold, italic, ..., add
    * table) pinned to the top of the editor.
-   * - "auto" (default): starts visible on small screens, hidden on large ones.
-   * - "shown": starts visible everywhere.
+   * - "shown" (default): starts visible everywhere.
+   * - "auto": starts visible on small screens, hidden on large ones.
    * - "hidden": starts hidden everywhere.
    * Whatever the mode, a small floating button in the top-left margin lets the
    * user show / hide it.
    */
   toolbar?: ToolbarMode;
+  /**
+   * Show the document outline: a right-docked panel listing the headings, with
+   * a toggle button in the top-right margin. The panel starts collapsed.
+   * Defaults to true; set to false to drop the button and panel entirely.
+   */
+  outline?: boolean;
+  /**
+   * Remember UI preferences across reloads: whether the formatting toolbar is
+   * expanded and whether the outline panel is open, saved to localStorage. Pass
+   * a string to use it as the storage key (namespacing several editors); `true`
+   * uses "typodown". Defaults to false (no persistence). The theme is host-owned
+   * and not persisted here.
+   */
+  persist?: boolean | string;
 }
 
 /** A Typora-style live-preview Markdown editor built on CodeMirror 6. */
@@ -82,10 +124,14 @@ export class Typodown {
   readonly wrapper: HTMLElement;
   private readonly view: EditorView;
   private readonly getClipboardText?: () => string | Promise<string>;
+  private readonly openLink?: (url: string) => void;
   private readonly toolbar: ToolbarHandle;
+  private readonly outline?: OutlineHandle;
+  private readonly search: SearchHandle;
 
   constructor(parent: HTMLElement, options: TypodownOptions = {}) {
     this.getClipboardText = options.getClipboardText;
+    this.openLink = options.openLink;
 
     this.wrapper = document.createElement("div");
     this.wrapper.className = "typodown";
@@ -97,9 +143,17 @@ export class Typodown {
       livePreview({ html: options.html ?? true }),
       clampCursorPastMarker,
       history(),
+      // Match highlighting + find/replace commands. The built-in bottom-docked
+      // panel is never opened; our floating panel (search.ts) drives this state
+      // and Mod-f (below) opens it, so the package's searchKeymap is left out.
+      // `search()` provides the query state + find/replace commands; its own
+      // match highlighter only paints when its built-in panel is open, so
+      // `searchHighlighter` (ours) does the highlighting for our floating panel.
+      search(),
+      searchHighlighter,
       EditorView.lineWrapping,
       autocompletion({
-        override: [languageCompletions, alertCompletions, frontMatterCompletions],
+        override: [languageCompletions, alertCompletions, frontMatterCompletions, emojiCompletions],
         icons: false,
       }),
       EditorView.contentAttributes.of({
@@ -115,6 +169,15 @@ export class Typodown {
         { key: "`", run: closeFenceOnThirdBacktick },
         { key: "`", run: wrapBacktick },
         { key: "Mod-k", run: (v) => this.insertLink(v) },
+        {
+          key: "Mod-f",
+          run: () => {
+            this.search.open();
+            return true;
+          },
+        },
+        { key: "Mod-Shift-x", run: toggleTaskList },
+        { key: "Mod-Shift-t", run: openTableDialog },
         { key: "Mod-Shift-v", run: (v) => this.plainPaste(v) },
         {
           key: "Tab",
@@ -143,6 +206,19 @@ export class Typodown {
         ...historyKeymap,
         ...defaultKeymap,
       ]),
+      // Mobile soft keyboards (notably Android's Gboard) route text input
+      // through "beforeinput" / composition events with inputType
+      // "insertText" rather than real keydown events, so the keymap binding
+      // for "`" above never fires there. Intercept a single-backtick insert
+      // here and reuse the same auto-close command: at beforeinput time the
+      // backtick hasn't been applied yet, so the command's "state is still
+      // ````" check still holds. Returning true suppresses the default
+      // insertion (the command inserted the backtick itself, plus the
+      // closing fence). Desktop keyboards keep using the keymap path.
+      EditorView.inputHandler.of((view, from, to, text) => {
+        if (text !== "`" || from !== to) return false;
+        return closeFenceOnThirdBacktick(view);
+      }),
       EditorView.domEventHandlers({
         paste: (event, view) => this.handlePaste(event, view),
         mousedown: (event, view) => this.handleMouseDown(event, view),
@@ -167,12 +243,32 @@ export class Typodown {
                 return true;
               }
             }
+            // The shortcuts the editor owns (Cmd/Ctrl+B, +I, +K, +Shift+X/T/V)
+            // must not also fire the host's command for the same chord -- in the
+            // VS Code webview, Cmd+B would otherwise toggle the side bar. The
+            // keymap below still runs our command; stopping propagation here
+            // keeps the event from bubbling out of the editor to the host's
+            // keybinding listener (same trick as the Cmd+A case above). We only
+            // swallow chords we actually bind, so other host shortcuts are left
+            // alone. Returns false so the keymap handler still gets the event.
+            if (isOwnedModShortcut(event)) event.stopPropagation();
             return false;
           },
         }),
       ),
     ];
     if (options.placeholder) extensions.push(placeholderExt(options.placeholder));
+    const outlineEnabled = options.outline !== false;
+    if (outlineEnabled) {
+      // Keep the outline list in sync with the document. `this.outline` is
+      // assigned right after the view is created, before any transaction can
+      // fire this listener.
+      extensions.push(
+        EditorView.updateListener.of((u) => {
+          if (u.docChanged) this.outline?.refresh();
+        }),
+      );
+    }
     if (options.onChange) {
       const onChange = options.onChange;
       extensions.push(
@@ -181,20 +277,49 @@ export class Typodown {
         }),
       );
     }
+    // Refresh the toolbar Save button after the onChange listener (so the
+    // host's dirty state has been updated first). Runs on every doc-changed
+    // transaction to re-enable the button as soon as the user edits again.
+    if (options.save) {
+      extensions.push(
+        EditorView.updateListener.of((u) => {
+          if (u.docChanged) this.toolbar?.refreshSave();
+        }),
+      );
+    }
+    // Keep the search panel's match counter accurate while it is open: the doc
+    // changes on every edit (including its own Replace / Replace all).
+    extensions.push(
+      EditorView.updateListener.of((u) => {
+        if (u.docChanged) this.search?.refresh();
+      }),
+    );
 
     this.view = new EditorView({
       state: EditorState.create({ doc: options.value ?? "", extensions }),
       parent: this.wrapper,
     });
+    const prefs = options.persist
+      ? createPrefs(options.persist === true ? "typodown" : options.persist)
+      : undefined;
+    this.search = createSearch(this.wrapper, this.view);
     this.toolbar = createToolbar(
       this.wrapper,
       this.view,
-      options.toolbar ?? "auto",
+      options.toolbar ?? "shown",
       defaultToolbarActions({
         wrapMarker: (marker) => (view) => void wrap(marker)(view),
         insertLink: (view) => void this.insertLink(view),
+        toggleTask: (view) => void toggleTaskList(view),
+        openTable: (view) => void openTableDialog(view),
       }),
+      prefs,
+      options.save,
+      // `this.outline` is created just below; resolved lazily at click time.
+      outlineEnabled ? () => this.outline?.toggle() : undefined,
+      () => this.search.toggle(),
     );
+    if (outlineEnabled) this.outline = createOutline(this.wrapper, this.view, prefs);
     // The transaction filter only runs on transactions, not on the initial
     // state, so if the document opens on a marker line with the caret at the
     // very start (before the bullet), clamp it to the content start now.
@@ -263,6 +388,8 @@ export class Typodown {
 
   destroy(): void {
     this.toolbar.destroy();
+    this.outline?.destroy();
+    this.search.destroy();
     this.view.destroy();
     this.wrapper.remove();
   }
@@ -321,7 +448,8 @@ export class Typodown {
     const url = linkUrlAt(view.state, pos);
     if (url) {
       event.preventDefault();
-      window.open(url, "_blank", "noopener,noreferrer");
+      if (this.openLink) this.openLink(url);
+      else window.open(url, "_blank", "noopener,noreferrer");
     }
   }
 
@@ -375,8 +503,20 @@ export class Typodown {
   }
 }
 
+/** Create a new `Typodown` instance at given element. */
 export function createTypodown(parent: HTMLElement, options?: TypodownOptions): Typodown {
   return new Typodown(parent, options);
+}
+
+/** Whether a keydown matches one of the Mod-based shortcuts the editor binds
+ * (Bold, Italic, Link, Find, Checkbox, Add table, plain paste). Used to stop those
+ * chords from also triggering the host's own command (e.g. Cmd+B toggling the
+ * VS Code side bar). Keep in sync with the keymap above. */
+function isOwnedModShortcut(event: KeyboardEvent): boolean {
+  if (!(event.metaKey || event.ctrlKey) || event.altKey) return false;
+  const key = event.key.toLowerCase();
+  if (!event.shiftKey) return key === "b" || key === "i" || key === "k" || key === "f";
+  return key === "x" || key === "t" || key === "v";
 }
 
 // ---- commands -------------------------------------------------------------
@@ -579,12 +719,19 @@ export function wrap(marker: string): Command {
             range: EditorSelection.range(range.from - m, range.to - m),
           };
         }
-        const text = state.sliceDoc(range.from, range.to);
+        // With an active selection, wrap it. With an empty selection, expand to
+        // the word under the caret and wrap that whole word (Typora-style,
+        // mirroring the Cmd+K link behavior) rather than splitting it; if the
+        // caret is not on a word, fall back to an empty pair with the caret
+        // between the markers.
+        const target = range.empty ? wordRangeAt(state, range.head) : range;
+        const text = state.sliceDoc(target.from, target.to);
         return {
-          changes: { from: range.from, to: range.to, insert: marker + text + marker },
-          range: range.empty
-            ? EditorSelection.cursor(range.from + m)
-            : EditorSelection.range(range.from + m, range.to + m),
+          changes: { from: target.from, to: target.to, insert: marker + text + marker },
+          range:
+            text.length === 0
+              ? EditorSelection.cursor(target.from + m)
+              : EditorSelection.range(target.from + m, target.to + m),
         };
       }),
       { userEvent: "input" },
@@ -616,10 +763,78 @@ function changeIndent(outdent: boolean): Command {
       }
     }
     if (changes.length === 0) return false;
-    view.dispatch({ changes, userEvent: "input.indent" });
+    // Map the selection through the changes with forward association (+1), so
+    // the caret rides along after the freshly inserted spaces instead of being
+    // reported at the pre-insertion column (CodeMirror's default Simple
+    // mapping returns the original position when text is inserted exactly at
+    // the caret, so the text would slide right while the caret stayed put).
+    // For outdent (a pure deletion before the caret) the assoc is ignored --
+    // `mapPos` resolves to the new line start either way.
+    const changeSet = state.changes(changes);
+    view.dispatch({
+      changes,
+      selection: EditorSelection.create(
+        state.selection.ranges.map((r) => r.map(changeSet, 1)),
+        state.selection.mainIndex,
+      ),
+      userEvent: "input.indent",
+    });
     return true;
   };
 }
+
+// Any list prefix (bullet or ordered marker, plus an optional task checkbox)
+// after the leading indent, e.g. `- `, `* `, `1. `, `- [ ] `, `- [x] `.
+const LIST_MARKER = /^\s*(?:[-+*]|\d+[.)]) +(?:\[[ xX]\] +)?/;
+// A GFM task-list item: a bullet marker followed by a `[ ]` / `[x]` checkbox.
+const TASK_ITEM = /^\s*[-+*] +\[[ xX]\] +/;
+
+/** The single prefix edit (offsets relative to the line start) that toggles one
+ * line's task-list state. `off` strips an existing checkbox line back to plain
+ * text; otherwise the line becomes a `- [ ] ` task item, replacing any existing
+ * bullet / ordered marker while keeping the leading indent and the content. */
+export function taskListLineEdit(
+  text: string,
+  off: boolean,
+): { from: number; to: number; insert: string } {
+  const indent = /^\s*/.exec(text)![0].length;
+  const marker = LIST_MARKER.exec(text);
+  const to = marker ? marker[0].length : indent;
+  return { from: indent, to, insert: off ? "" : "- [ ] " };
+}
+
+/** Toggle every line the selection touches into a GFM task-list item (`- [ ] `),
+ * or, when they are all already checkbox lines, back to plain text. Bound to the
+ * toolbar's checkbox button and Cmd/Ctrl+Shift+X (the X of `[x]`). */
+export const toggleTaskList: Command = (view) => {
+  const { state } = view;
+  const nums = new Set<number>();
+  for (const r of state.selection.ranges) {
+    const first = state.doc.lineAt(r.from).number;
+    const last = state.doc.lineAt(r.to).number;
+    for (let n = first; n <= last; n++) nums.add(n);
+  }
+  const lines = [...nums].sort((a, b) => a - b).map((n) => state.doc.line(n));
+  // Toggle off only when every touched line is already a checkbox line.
+  const off = lines.every((l) => TASK_ITEM.test(l.text));
+  const changes = lines.map((line) => {
+    const edit = taskListLineEdit(line.text, off);
+    return { from: line.from + edit.from, to: line.from + edit.to, insert: edit.insert };
+  });
+  view.dispatch({ changes, userEvent: "input" });
+  return true;
+};
+
+/** Open the insert-table dialog anchored at the caret. Bound to the toolbar's
+ * table button and Cmd/Ctrl+Shift+T. */
+export const openTableDialog: Command = (view) => {
+  const head = view.state.selection.main.head;
+  const coords = view.coordsAtPos(head);
+  const x = coords ? coords.left : window.innerWidth / 2;
+  const y = coords ? coords.bottom + 4 : window.innerHeight / 3;
+  openInsertTableDialog({ x, y }, view, (rows, cols) => insertTable(view, rows, cols));
+  return true;
+};
 
 // Cmd/Ctrl+A inside a fenced code block selects only that block's code content;
 // outside a code block it returns false so the browser's select-all runs.
@@ -637,14 +852,15 @@ const selectCodeContent: Command = (view) => {
   return false;
 };
 
-// Backspace on the blank paragraph left by Enter (see insertParagraph) undoes
-// it in a single press -- Enter always adds exactly one "\n\n", so Backspace
-// always removes exactly that much (the two newlines ending the two lines
-// right before the caret), regardless of how many blank lines already
-// surrounded it. Splitting between two already-separated paragraphs, for
-// instance, leaves a 3-line blank run; this drops it back to the 1 blank line
-// that was there before, not down to zero. A lone blank line (no blank
-// neighbor) is left for plain Backspace to remove normally.
+/** Backspace on the blank paragraph left by Enter (see insertParagraph) undoes
+ * it in a single press. Enter always adds exactly one "\n\n", so Backspace
+ * always removes exactly that much (the two newlines ending the two lines
+ * right before the caret), regardless of how many blank lines already
+ * surrounded it. Splitting between two already-separated paragraphs, for
+ * instance, leaves a 3-line blank run; this drops it back to the 1 blank line
+ * that was there before, not down to zero. A lone blank line (no blank
+ * neighbor) is left for plain Backspace to remove normally.
+ */
 const deleteParagraphGapBackward: Command = (view) => {
   const { state } = view;
   const range = state.selection.main;
@@ -689,12 +905,13 @@ const deleteCodeBlockAtStart: Command = (view) => {
   return true;
 };
 
-// When the caret sits inside a blockquote or callout, a multi-line paste must
-// repeat the leading `>` prefix on every new line, otherwise only the first
-// pasted line stays in the block (it lands on the already-prefixed line) and
-// the rest break out of the quote. Empty lines keep the bare `>` marker so the
-// markdown stays canonical. Returns the text unchanged when there is nothing to
-// continue (single line, or caret not in a quote).
+/** When the caret sits inside a blockquote or callout, a multi-line paste must
+ * repeat the leading `>` prefix on every new line, otherwise only the first
+ * pasted line stays in the block (it lands on the already-prefixed line) and
+ * the rest break out of the quote. Empty lines keep the bare `>` marker so the
+ * markdown stays canonical. Returns the text unchanged when there is nothing to
+ * continue (single line, or caret not in a quote).
+ */
 export function quoteMultilinePaste(state: EditorState, text: string): string {
   if (!text.includes("\n")) return text;
   const line = state.doc.lineAt(state.selection.main.from);
@@ -706,11 +923,12 @@ export function quoteMultilinePaste(state: EditorState, text: string): string {
     .join("\n");
 }
 
-// Enter after a `> [!NOTE/TIP/...]` alert marker inserts an empty `>` separator
-// line (paragraph break inside the blockquote) and a `> ` content line, landing
-// the caret on the content line. The empty `>` line is visually collapsed by
-// the live-preview layer, so the result reads as the alert label directly
-// followed by the cursor, ready to type -- while the markdown stays canonical.
+/** Enter after a `> [!NOTE/TIP/...]` alert marker inserts an empty `>` separator
+ * line (paragraph break inside the blockquote) and a `> ` content line, landing
+ * the caret on the content line. The empty `>` line is visually collapsed by
+ * the live-preview layer, so the result reads as the alert label directly
+ * followed by the cursor, ready to type -- while the markdown stays canonical.
+ */
 const continueAlert: Command = (view) => {
   const { state } = view;
   const range = state.selection.main;
@@ -726,14 +944,15 @@ const continueAlert: Command = (view) => {
   return true;
 };
 
-// Enter on an empty list-item / checkbox / blockquote line exits the construct
-// (or dedents one level when nested) in a single press. The raw markers are
-// always hidden by the live-preview layer, so on an empty marker line the
-// caret sits at "the start of the line" (right after the hidden marker) which
-// is the end of the line -- that's the signal to leave. CodeMirror's
-// insertNewlineContinueMarkup instead continues the markup first (a second
-// empty `>` line, or making a tight list non-tight) before exiting, so this
-// runs before it to match Typora's one-press exit.
+/** Enter on an empty list-item / checkbox / blockquote line exits the construct
+ * (or dedents one level when nested) in a single press. The raw markers are
+ * always hidden by the live-preview layer, so on an empty marker line the
+ * caret sits at "the start of the line" (right after the hidden marker) which
+ * is the end of the line -- that's the signal to leave. CodeMirror's
+ * insertNewlineContinueMarkup instead continues the markup first (a second
+ * empty `>` line, or making a tight list non-tight) before exiting, so this
+ * runs before it to match Typora's one-press exit.
+ */
 export const exitMarkupOnEmptyEnter: Command = (view) => {
   const { state } = view;
   const range = state.selection.main;
@@ -811,15 +1030,16 @@ export const exitMarkupOnEmptyEnter: Command = (view) => {
   return false;
 };
 
-// The atomic ranges from live-preview skip the caret over the *interior* of
-// hidden markers, but the line-start boundary (position 0 of a marker line, or
-// the first line which has no preceding newline to extend the range into) can
-// still be reached -- by Home, a click on the bullet, or arrow motion. This
-// filter clamps any empty caret that lands before the marker end to the content
-// start, so it is impossible for the caret to sit left of (or inside) the
-// hidden bullet / checkbox / quote marker. Selections (non-empty ranges) are
-// left untouched, and doc-changing transactions are skipped (the dedicated
-// commands already land the caret past the marker).
+/** The atomic ranges from live-preview skip the caret over the *interior* of
+ * hidden markers, but the line-start boundary (position 0 of a marker line, or
+ * the first line which has no preceding newline to extend the range into) can
+ * still be reached -- by Home, a click on the bullet, or arrow motion. This
+ * filter clamps any empty caret that lands before the marker end to the content
+ * start, so it is impossible for the caret to sit left of (or inside) the
+ * hidden bullet / checkbox / quote marker. Selections (non-empty ranges) are
+ * left untouched, and doc-changing transactions are skipped (the dedicated
+ * commands already land the caret past the marker).
+ */
 export const clampCursorPastMarker = EditorState.transactionFilter.of(
   (tr: Transaction): TransactionSpec | Transaction => {
     const sel = tr.selection;
@@ -839,13 +1059,14 @@ export const clampCursorPastMarker = EditorState.transactionFilter.of(
   },
 );
 
-// Left from the content start of a bullet / checkbox / quote line exits to the
-// previous line's end. Without this, the transaction filter would clamp the
-// caret back to the content start (Left into the hidden marker is a no-op),
-// so there'd be no way to leave a marker line to the left. This gives a
-// single predictable exit: at the content start, one Left jumps to the
-// previous line (mirroring how Right from the previous line's end is clamped
-// straight to the content start). At any other position the default Left runs.
+/** Left from the content start of a bullet / checkbox / quote line exits to the
+ * previous line's end. Without this, the transaction filter would clamp the
+ * caret back to the content start (Left into the hidden marker is a no-op),
+ * so there'd be no way to leave a marker line to the left. This gives a
+ * single predictable exit: at the content start, one Left jumps to the
+ * previous line (mirroring how Right from the previous line's end is clamped
+ * straight to the content start). At any other position the default Left runs.
+ */
 export const arrowLeftPastMarker: Command = (view) => {
   const { state } = view;
   const range = state.selection.main;
@@ -1072,6 +1293,42 @@ function alertCompletions(context: CompletionContext): CompletionResult | null {
   return { from, to: context.pos, options, filter: false };
 }
 
+/** Emoji picker on a `:shortcode` typed anywhere in the text, e.g. `:smi`
+ * suggests `:smile:` and inserts the actual emoji character. A lightweight,
+ * self-hosted alternative to the OS emoji picker, which a VS Code webview
+ * blocks.
+ *
+ * The trigger is deliberately narrow so it never fights plain typing: the `:`
+ * must open a word (start of line or preceded by a non-word char, so times
+ * like `10:30` and URLs like `https:` are left alone). One query character is
+ * enough (`:t`), and the charset is lowercase letters/digits/`_+-` only, so
+ * the punctuation emoticons `:)` and `:(` never match. Typing a space (or
+ * anything outside the shortcode charset) breaks the match, so the popup
+ * closes on its own.
+ *
+ * Async because the emoji dataset is dynamically imported on first use; the
+ * regex guard returns synchronously so plain typing never awaits, and the
+ * loaded index is cached so every later keystroke resolves immediately. */
+export async function emojiCompletions(
+  context: CompletionContext,
+): Promise<CompletionResult | null> {
+  const line = context.state.doc.lineAt(context.pos);
+  const before = line.text.slice(0, context.pos - line.from);
+  const m = /(?:^|[^\w])(:([a-z0-9_+-]+))$/.exec(before);
+  if (!m) return null;
+  const query = m[2]!;
+  const from = context.pos - (query.length + 1); // land on the ":"
+  const index = await loadEmojiIndex();
+  const options = searchEmoji(index, query).map(([name, emoji], i) => ({
+    label: `${emoji} :${name}:`,
+    apply: emoji,
+    type: "text" as const,
+    boost: -i, // preserve searchEmoji's ranking (best match first)
+  }));
+  if (options.length === 0) return null;
+  return { from, to: context.pos, options, filter: false };
+}
+
 // ---- YAML front matter completions ----------------------------------------
 
 // OKF / Open Knowledge Foundation Open Data Handbook resource `MediaType`
@@ -1085,6 +1342,21 @@ const OKF_RESOURCE_TYPES = [
   "Video",
   "Website",
   "Podcast",
+];
+
+// Common front matter keys, suggested when typing a field name at the start of
+// a line inside the block. Free text is always allowed; `type` additionally
+// drives node colours in the graph view.
+const FRONT_MATTER_KEYS = [
+  "title",
+  "type",
+  "description",
+  "tags",
+  "author",
+  "date",
+  "url",
+  "source",
+  "status",
 ];
 
 /** Returns the 1-based {openLine, closeLine} of the YAML front matter block
@@ -1101,10 +1373,10 @@ function frontMatterBounds(state: EditorState): { openLine: number; closeLine: n
   return null;
 }
 
-/** Autocomplete for the YAML front matter `type:` field (OKF convention):
- * suggests the OKF Open Data Handbook resource `MediaType` values. The value
- * can be anything, these are only suggestions. */
-function frontMatterCompletions(context: CompletionContext): CompletionResult | null {
+/** Autocomplete inside the YAML front matter block: field names when typing at
+ * the start of a line, and OKF Open Data Handbook resource `MediaType` values
+ * for the `type:` field. Everything stays free text; these are suggestions. */
+export function frontMatterCompletions(context: CompletionContext): CompletionResult | null {
   const bounds = frontMatterBounds(context.state);
   if (!bounds) return null;
 
@@ -1126,6 +1398,28 @@ function frontMatterCompletions(context: CompletionContext): CompletionResult | 
     const valueFrom = pos - typed.length;
     const options = OKF_RESOURCE_TYPES.map((v) => ({ label: v, type: "text" as const }));
     return { from: valueFrom, to: line.to, options };
+  }
+
+  // Field-name completions while typing a top-level key at the start of a
+  // line (no `:` yet). Keys already present in the block are not re-suggested.
+  const keyMatch = /^([A-Za-z0-9_-]*)$/.exec(textBefore);
+  if (keyMatch) {
+    const typed = keyMatch[1]!;
+    // Don't pop up spontaneously on a blank line; Ctrl-Space still works.
+    if (!typed && !context.explicit) return null;
+    const existing = new Set<string>();
+    for (let n = bounds.openLine + 1; n < bounds.closeLine; n++) {
+      if (n === line.number) continue;
+      const m = /^([A-Za-z0-9_-]+):/.exec(doc.line(n).text);
+      if (m) existing.add(m[1]!);
+    }
+    const options = FRONT_MATTER_KEYS.filter((k) => !existing.has(k)).map((k) => ({
+      label: k,
+      apply: `${k}: `,
+      type: "property" as const,
+    }));
+    if (options.length === 0) return null;
+    return { from: line.from, options, validFor: /^[A-Za-z0-9_-]*$/ };
   }
 
   return null;

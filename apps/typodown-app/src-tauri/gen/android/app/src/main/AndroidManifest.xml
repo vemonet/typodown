@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- INTERNET: dev-server connection in development, remote images in
+         markdown in production. File access goes through the Storage Access
+         Framework (system picker / VIEW intents), which needs no storage
+         permission. -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.READ_MEDIA_DOCUMENTS" />
 
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
@@ -32,6 +33,10 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:mimeType="text/markdown" />
                 <data android:pathPattern=".*\\.md" />
+                <data android:pathPattern=".*\\.markdown" />
+                <data android:pathPattern=".*\\.mdown" />
+                <data android:pathPattern=".*\\.mkd" />
+                <data android:pathPattern=".*\\.mdx" />
             </intent-filter>
             
             <!-- tauri-file-associations. AUTO-GENERATED. DO NOT REMOVE. -->

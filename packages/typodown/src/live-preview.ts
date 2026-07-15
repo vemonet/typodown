@@ -32,6 +32,7 @@ import { syntaxTree } from "@codemirror/language";
 import type { SyntaxNode, SyntaxNodeRef } from "@lezer/common";
 import { GFM, parser } from "@lezer/markdown";
 import { LANGUAGE_SUGGESTIONS, tokenize } from "./highlight.ts";
+import { sanitizeHtml } from "./sanitize.ts";
 
 export interface LivePreviewConfig {
   /** Render raw HTML blocks/tags as live widgets while idle. */
@@ -187,12 +188,9 @@ class HtmlWidget extends WidgetType {
   toDOM(): HTMLElement {
     const host = document.createElement(this.block ? "div" : "span");
     host.className = "cm-td-html";
-    const tpl = document.createElement("template");
-    tpl.innerHTML = this.html;
-    for (const a of tpl.content.querySelectorAll("a[href]")) {
-      a.setAttribute("href", sanitizeUrl(a.getAttribute("href") ?? ""));
-    }
-    host.appendChild(tpl.content);
+    // Sanitized: raw HTML can come from an untrusted file, so strip scripts,
+    // event handlers, and dangerous URIs before it reaches the DOM.
+    host.innerHTML = sanitizeHtml(this.html);
     return host;
   }
   // Let a click on <summary> toggle its <details> natively instead of moving
@@ -606,11 +604,12 @@ function emitNodeHTML(node: SyntaxNode, src: string): string {
 }
 
 /** Render a table cell's inline markdown (and raw HTML) to an HTML string,
- * suitable for `cell.innerHTML`. Falls back to escaped text on parse error. */
+ * suitable for `cell.innerHTML`. The result is sanitized (cells may contain
+ * raw HTML from an untrusted file). Falls back to escaped text on parse error. */
 export function renderCellHTML(text: string): string {
   if (text === "") return "";
   try {
-    return emitChildrenHTML(inlineParser.parse(text).topNode, text);
+    return sanitizeHtml(emitChildrenHTML(inlineParser.parse(text).topNode, text));
   } catch {
     return esc(text);
   }
@@ -656,10 +655,11 @@ export function escapeCellPipes(text: string): string {
   return out;
 }
 
-// Split a single table row line into cells, each with its document offsets.
-// `lineFrom` is the offset of the line's first character. A cell's [from, to]
-// spans the text between two delimiting pipes (exclusive of the pipes); the
-// surrounding padding spaces are part of the range and get replaced on edit.
+/** Split a single table row line into cells, each with its document offsets.
+ * `lineFrom` is the offset of the line's first character. A cell's [from, to]
+ * spans the text between two delimiting pipes (exclusive of the pipes); the
+ * surrounding padding spaces are part of the range and get replaced on edit.
+ */
 export function cellsInRange(
   line: string,
   lineFrom: number,
@@ -756,9 +756,39 @@ function getCellRange(
   return cells[colIdx] ?? null;
 }
 
-// Write a cell's new text back into the document. Escapes free pipes so the
-// row stays a single row. The widget's DOM is preserved across this text-only
-// change (eq compares structure), so the cell element stays alive for the
+/** The document change that writes `newText` into column `colIdx` of the table
+ * row `lineText` (which starts at `lineFrom`). Free pipes are escaped so the row
+ * stays one row. When the row has fewer columns than `colIdx` (a short body row
+ * padded with virtual cells in the rendered table), the row is extended with
+ * empty cells up to `colIdx` so the edit actually lands in the document instead
+ * of being dropped. */
+export function cellWriteChange(
+  lineText: string,
+  lineFrom: number,
+  colIdx: number,
+  newText: string,
+): { from: number; to: number; insert: string } {
+  const cells = cellsInRange(lineText, lineFrom);
+  const value = escapeCellPipes(newText);
+  if (colIdx < cells.length) {
+    const c = cells[colIdx]!;
+    return { from: c.from, to: c.to, insert: value };
+  }
+  // Short row: append empty cells up to colIdx, then the new value. Appended
+  // after the row's trailing pipe (or with a fresh leading pipe if the row has
+  // none), keeping it a valid GFM row.
+  let insert = "";
+  for (let j = cells.length; j <= colIdx; j++) {
+    insert += ` ${j === colIdx ? value.trim() : ""} |`;
+  }
+  const lineEnd = lineFrom + lineText.length;
+  const hasTrailingPipe = /\|[ \t]*$/.test(lineText);
+  return { from: lineEnd, to: lineEnd, insert: hasTrailingPipe ? insert : ` |${insert}` };
+}
+
+// Write a cell's new text back into the document. The widget's DOM is preserved
+// across this change (eq compares structure: padding a short row doesn't change
+// the header-derived column count), so the cell element stays alive for the
 // caller to re-render.
 function syncCellText(
   view: EditorView,
@@ -767,9 +797,11 @@ function syncCellText(
   colIdx: number,
   newText: string,
 ): void {
-  const cell = getCellRange(view, from, docLineIdx, colIdx);
-  if (!cell) return;
-  view.dispatch({ changes: { from: cell.from, to: cell.to, insert: escapeCellPipes(newText) } });
+  const doc = view.state.doc;
+  const start = doc.lineAt(from);
+  if (start.number + docLineIdx > doc.lines) return;
+  const line = doc.line(start.number + docLineIdx);
+  view.dispatch({ changes: cellWriteChange(line.text, line.from, colIdx, newText) });
 }
 
 /** Append a new empty body row after the table's last row. */
@@ -1720,8 +1752,22 @@ function inlinePlugin(
 // which CodeMirror only accepts from a state field, not a view plugin. There
 // are few of these per document, so scanning the whole tree is cheap.
 
-function buildBlocks(state: EditorState, config: LivePreviewConfig): DecorationSet {
+/** A block range whose widget visibility depends on the selection (the widget
+ * is suppressed while the caret is inside it), plus the touched state it was
+ * built with. Lets `blockField` skip whole-document rebuilds on caret moves
+ * that don't cross any such boundary. */
+interface SensitiveRange {
+  from: number;
+  to: number;
+  touched: boolean;
+}
+
+function buildBlocks(
+  state: EditorState,
+  config: LivePreviewConfig,
+): { deco: DecorationSet; sensitive: SensitiveRange[] } {
   const out: Range<Decoration>[] = [];
+  const sensitive: SensitiveRange[] = [];
   const doc = state.doc;
   // Ranges already claimed by a Lezer block construct (a recognised table,
   // code block, HTML block or math block). The lenient table scan skips these
@@ -1748,7 +1794,9 @@ function buildBlocks(state: EditorState, config: LivePreviewConfig): DecorationS
       } else if (node.name === "HTMLBlock") {
         claim(node.from, node.to);
         if (!config.html) return;
-        if (touches(state, node.from, node.to)) return;
+        const touched = touches(state, node.from, node.to);
+        sensitive.push({ from: node.from, to: node.to, touched });
+        if (touched) return;
         const first = doc.lineAt(node.from);
         const last = doc.lineAt(node.to > node.from ? node.to - 1 : node.to);
         out.push(
@@ -1762,7 +1810,9 @@ function buildBlocks(state: EditorState, config: LivePreviewConfig): DecorationS
         const info = node.node.getChild("CodeInfo");
         const lang = info ? doc.sliceString(info.from, info.to).trim().toLowerCase() : "";
         if (lang !== "mermaid") return;
-        if (touches(state, node.from, node.to)) return;
+        const touched = touches(state, node.from, node.to);
+        sensitive.push({ from: node.from, to: node.to, touched });
+        if (touched) return;
         const codeText = node.node.getChild("CodeText");
         const source = codeText ? doc.sliceString(codeText.from, codeText.to) : "";
         const first = doc.lineAt(node.from);
@@ -1775,7 +1825,9 @@ function buildBlocks(state: EditorState, config: LivePreviewConfig): DecorationS
         );
       } else if (node.name === "MathBlock") {
         claim(node.from, node.to);
-        if (touches(state, node.from, node.to)) return;
+        const touched = touches(state, node.from, node.to);
+        sensitive.push({ from: node.from, to: node.to, touched });
+        if (touched) return;
         const marks = node.node.getChildren("MathMark");
         const source =
           marks.length >= 2
@@ -1795,7 +1847,7 @@ function buildBlocks(state: EditorState, config: LivePreviewConfig): DecorationS
     },
   });
   findLenientTables(state, occupied, out);
-  return RangeSet.of(out, true);
+  return { deco: RangeSet.of(out, true), sensitive };
 }
 
 /** A second pass that catches tables the Lezer GFM grammar rejects -- e.g.
@@ -1853,12 +1905,16 @@ export function findLenientTables(
   }
 }
 
-function blockField(
-  config: LivePreviewConfig,
-): StateField<{ deco: DecorationSet; treeLen: number }> {
-  return StateField.define<{ deco: DecorationSet; treeLen: number }>({
+interface BlockFieldValue {
+  deco: DecorationSet;
+  treeLen: number;
+  sensitive: SensitiveRange[];
+}
+
+export function blockField(config: LivePreviewConfig): StateField<BlockFieldValue> {
+  return StateField.define<BlockFieldValue>({
     create: (state) => ({
-      deco: buildBlocks(state, config),
+      ...buildBlocks(state, config),
       // The Lezer tree parses lazily: on initial load it is often partial, so
       // HTML blocks are missed at create time. Track how far the tree has
       // parsed and rebuild when it advances (CodeMirror dispatches a
@@ -1867,10 +1923,18 @@ function blockField(
     }),
     update(value, tr) {
       const treeLen = syntaxTree(tr.state).length;
-      if (tr.docChanged || tr.selection || treeLen !== value.treeLen) {
-        return { deco: buildBlocks(tr.state, config), treeLen };
+      if (!tr.docChanged && treeLen === value.treeLen) {
+        // Selection-only transaction (positions are unchanged): the widgets
+        // only differ when the caret entered or left a selection-sensitive
+        // block, so skip the whole-document rebuild when it did neither.
+        if (
+          !tr.selection ||
+          value.sensitive.every((s) => touches(tr.state, s.from, s.to) === s.touched)
+        ) {
+          return value;
+        }
       }
-      return { deco: value.deco.map(tr.changes), treeLen };
+      return { ...buildBlocks(tr.state, config), treeLen };
     },
     provide: (f) => EditorView.decorations.from(f, (v) => v.deco),
   });

@@ -12,6 +12,148 @@ fn take_pending_open_file(state: tauri::State<'_, PendingOpenFile>) -> Option<St
     state.0.lock().unwrap().take()
 }
 
+/// Start a native window drag from a mousedown in the webview.
+///
+/// Tauri's built-in `start_dragging` hands `NSApp.currentEvent` to
+/// `performWindowDragWithEvent:`, but the IPC arrives asynchronously so the
+/// "current" event is usually a later mouse-dragged / system event by then —
+/// which macOS 26 (Tahoe) silently rejects. This command synthesizes a proper
+/// left-mouse-down event at the cursor position instead, which the drag API
+/// accepts on every macOS version.
+#[cfg(target_os = "macos")]
+#[tauri::command]
+fn start_native_drag(window: tauri::WebviewWindow) -> Result<(), String> {
+    let w = window.clone();
+    window
+        .run_on_main_thread(move || unsafe {
+            use objc2::runtime::AnyObject;
+            use objc2::{class, msg_send};
+            use objc2_foundation::NSPoint;
+
+            let Ok(ns_window_ptr) = w.ns_window() else {
+                return;
+            };
+            let ns_window = ns_window_ptr as *mut AnyObject;
+            let app: *mut AnyObject = msg_send![class!(NSApplication), sharedApplication];
+            let mut event: *mut AnyObject = msg_send![app, currentEvent];
+            let ev_type: usize = if event.is_null() {
+                0
+            } else {
+                msg_send![event, type]
+            };
+            // 1 = NSEventTypeLeftMouseDown; anything else gets replaced by a
+            // synthesized left-mouse-down at the current cursor position.
+            if ev_type != 1 {
+                let screen_point: NSPoint = msg_send![class!(NSEvent), mouseLocation];
+                let win_point: NSPoint =
+                    msg_send![ns_window, convertPointFromScreen: screen_point];
+                let win_num: isize = msg_send![ns_window, windowNumber];
+                let ts: f64 = if event.is_null() {
+                    0.0
+                } else {
+                    msg_send![event, timestamp]
+                };
+                event = msg_send![class!(NSEvent),
+                    mouseEventWithType: 1usize,
+                    location: win_point,
+                    modifierFlags: 0usize,
+                    timestamp: ts,
+                    windowNumber: win_num,
+                    context: std::ptr::null_mut::<AnyObject>(),
+                    eventNumber: 0isize,
+                    clickCount: 1isize,
+                    pressure: 1.0f32,
+                ];
+            }
+            if !event.is_null() {
+                let _: () = msg_send![ns_window, performWindowDragWithEvent: event];
+            }
+        })
+        .map_err(|e| e.to_string())
+}
+
+/// Non-macOS platforms use tauri's built-in dragging (data-tauri-drag-region),
+/// which works there; this stub only exists so the command is always defined.
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+fn start_native_drag(_window: tauri::WebviewWindow) -> Result<(), String> {
+    Ok(())
+}
+
+/// Put a *file* (not its path as text) on the system clipboard, so it can be
+/// pasted into Finder / Explorer / the VS Code file tree. There is no
+/// cross-platform API for file clipboards, so each desktop OS gets its native
+/// mechanism.
+#[tauri::command]
+fn copy_file_to_clipboard(path: String) -> Result<(), String> {
+    copy_file_impl(&path)
+}
+
+#[cfg(target_os = "macos")]
+fn copy_file_impl(path: &str) -> Result<(), String> {
+    let script = format!(
+        "set the clipboard to (POSIX file \"{}\")",
+        path.replace('\\', "\\\\").replace('"', "\\\"")
+    );
+    run_ok(std::process::Command::new("osascript").args(["-e", &script]))
+}
+
+#[cfg(target_os = "windows")]
+fn copy_file_impl(path: &str) -> Result<(), String> {
+    // The path travels via an env var to avoid quoting pitfalls.
+    run_ok(
+        std::process::Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                "Set-Clipboard -LiteralPath $env:TD_COPY_PATH",
+            ])
+            .env("TD_COPY_PATH", path),
+    )
+}
+
+#[cfg(target_os = "linux")]
+fn copy_file_impl(path: &str) -> Result<(), String> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    let uri = tauri::Url::from_file_path(path)
+        .map_err(|_| format!("not an absolute path: {path}"))?
+        .to_string();
+    // text/uri-list is what file managers read on paste. Try the Wayland
+    // clipboard tool first, then the X11 one.
+    let attempts: [(&str, &[&str]); 2] = [
+        ("wl-copy", &["--type", "text/uri-list"]),
+        ("xclip", &["-selection", "clipboard", "-t", "text/uri-list"]),
+    ];
+    for (cmd, args) in attempts {
+        let child = Command::new(cmd).args(args).stdin(Stdio::piped()).spawn();
+        if let Ok(mut child) = child {
+            if let Some(stdin) = child.stdin.as_mut() {
+                let _ = stdin.write_all(uri.as_bytes());
+            }
+            if child.wait().map(|s| s.success()).unwrap_or(false) {
+                return Ok(());
+            }
+        }
+    }
+    Err("copying files to the clipboard needs wl-copy or xclip installed".into())
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+fn copy_file_impl(_path: &str) -> Result<(), String> {
+    Err("copying files to the clipboard is not supported on this platform".into())
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn run_ok(cmd: &mut std::process::Command) -> Result<(), String> {
+    let output = cmd.output().map_err(|e| e.to_string())?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+    }
+}
+
 #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 fn handle_opened(app: &tauri::AppHandle, urls: &[tauri::Url]) {
     use tauri::Emitter;
@@ -40,7 +182,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(PendingOpenFile(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![take_pending_open_file])
+        .invoke_handler(tauri::generate_handler![
+            take_pending_open_file,
+            copy_file_to_clipboard,
+            start_native_drag
+        ])
         .setup(|_app| {
             // On Windows and Linux, file associations pass the file as a CLI
             // argument instead of an Opened event.

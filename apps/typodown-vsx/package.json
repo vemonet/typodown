@@ -1,8 +1,8 @@
 {
-  "name": "typodown-vsx",
+  "name": "typodown",
   "displayName": "Typodown",
   "version": "0.0.0",
-  "description": "View and edit Markdown with a WYSIWYG editor inspired by Typora.",
+  "description": "View and edit Markdown with a seamless editor inspired by Typora.",
   "categories": [
     "Other"
   ],
@@ -30,7 +30,7 @@
     "watch": "node build.mjs --watch",
     "check": "vp check",
     "vscode:prepublish": "node build.mjs --production",
-    "publish:vsx": "vsce package && vsce publish && ovsx publish"
+    "vsx:publish": "vsce package && vsce publish && ovsx publish"
   },
   "devDependencies": {
     "@types/node": "^25.6.2",
@@ -59,13 +59,13 @@
     ],
     "commands": [
       {
-        "command": "typodown-vsx.openWith",
+        "command": "typodown.openWith",
         "title": "Open with Typodown",
         "category": "Typodown",
         "icon": "logo.png"
       },
       {
-        "command": "typodown-vsx.openToSide",
+        "command": "typodown.openToSide",
         "title": "Open with Typodown to the Side",
         "category": "Typodown"
       }
@@ -73,14 +73,14 @@
     "menus": {
       "editor/title": [
         {
-          "command": "typodown-vsx.openWith",
+          "command": "typodown.openWith",
           "when": "resourceExtname == .md || resourceExtname == .markdown",
           "group": "navigation"
         }
       ],
       "explorer/context": [
         {
-          "command": "typodown-vsx.openWith",
+          "command": "typodown.openWith",
           "when": "resourceExtname == .md || resourceExtname == .markdown",
           "group": "navigation"
         }

@@ -1,14 +1,15 @@
 # Typodown
 
-Edit markdown in VSCode the way [Typora](https://typora.io) does: a WYSIWYG editor where the styled text is the document.
+Seamless open-source markdown editing, inspired by [Typora](https://typora.io).
 
-Typodown renders [GitHub Flavored Markdown](https://github.github.com/gfm/) inline as you type — no split preview to keep in sync. Put your caret on a heading, bold run, link or code span and its raw markdown syntax (`#`, `**`, `` ` ``) reveals for just that construct, exactly like Typora.
+Typodown renders markdown inline as you type, no split preview to keep in sync. Put your caret on a heading, bold run, link or code span and its raw markdown syntax (`#`, `**`, `` ` ``) reveals for just that construct.
+
+**[⚡️ Live demo →](https://vemonet.github.io/typodown)**
 
 ## Features
 
-- **WYSIWYG markdown editing** backed by the plain text file, no separate preview.
-- **GitHub Flavored Markdown**: headings, emphasis, strikethrough, code spans and fenced code, blockquotes, GFM alerts (`> [!NOTE]`), task lists, editable tables, links and images.
-- **Syntax highlighting** in fenced code blocks for many languages.
+- **Seamless markdown editing.** WYSIWYG, edit rendered markdown directly. No preview to keep in sync.
+- **GitHub Flavored Markdown**. GFM alerts (`> [!NOTE]`), checkboxes lists, editable tables, images, links, YAML front matter and arbitrary HTML.
 - **LaTeX maths and Mermaid diagram visualization**. Inline `$...$` and block `$$...$$` math rendered with KaTeX.
 - **Editor shortcuts**: <kbd>Cmd/Ctrl</kbd>+<kbd>B</kbd> bold, <kbd>Cmd/Ctrl</kbd>+<kbd>I</kbd> italic, <kbd>Cmd/Ctrl</kbd>+<kbd>K</kbd> link, <kbd>Tab</kbd> / <kbd>Shift+Tab</kbd> indent, <kbd>Cmd/Ctrl</kbd>+<kbd>Z</kbd> undo / redo.
 - **Theme aware**: follows your VSCode color theme by default, or pin it to a GitHub-like light/dark theme.

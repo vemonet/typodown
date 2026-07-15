@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/logo.png" />
 
-    <title>Typodown · WYSIWYG Markdown editor for the web</title>
+    <title>Typodown · Markdown editor</title>
     <meta
       name="description"
-      content="Typodown is an open source WYSIWYG Markdown editor for the web inspired by Typora. It renders GitHub Flavored Markdown inline and reveals the raw syntax on the block under your cursor."
+      content="Typodown is an open source Markdown editor inspired by Typora. It renders GitHub Flavored Markdown inline and reveals the raw syntax on the block under your cursor."
     />
     <meta
       name="keywords"
@@ -22,10 +22,10 @@
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Typodown" />
-    <meta property="og:title" content="Typodown · WYSIWYG Markdown editor for the web" />
+    <meta property="og:title" content="Typodown · Markdown editor" />
     <meta
       property="og:description"
-      content="Typodown is an open source WYSIWYG Markdown editor for the web inspired by Typora. It renders GitHub Flavored Markdown inline and reveals the raw syntax on the block under your cursor."
+      content="Typodown is an open source Markdown editor inspired by Typora. It renders GitHub Flavored Markdown inline and reveals the raw syntax on the block under your cursor."
     />
     <meta property="og:url" content="https://vemonet.github.io/typodown/" />
     <meta property="og:image" content="https://vemonet.github.io/typodown/logo.png" />
@@ -33,10 +33,10 @@
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="Typodown · WYSIWYG Markdown editor for the web" />
+    <meta name="twitter:title" content="Typodown · Markdown editor" />
     <meta
       name="twitter:description"
-      content="Typodown is an open source WYSIWYG Markdown editor for the web inspired by Typora. It renders GitHub Flavored Markdown inline and reveals the raw syntax on the block under your cursor."
+      content="Typodown is an open source Markdown editor inspired by Typora. It renders GitHub Flavored Markdown inline and reveals the raw syntax on the block under your cursor."
     />
     <meta name="twitter:image" content="https://vemonet.github.io/typodown/logo.png" />
 
@@ -48,7 +48,7 @@
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "Web",
         "url": "https://vemonet.github.io/typodown/",
-        "description": "Typodown is an open source WYSIWYG Markdown editor for the web inspired by Typora. It renders GitHub Flavored Markdown inline and reveals the raw syntax on the block under your cursor.",
+        "description": "Typodown is an open source Markdown editor inspired by Typora. It renders GitHub Flavored Markdown inline and reveals the raw syntax on the block under your cursor.",
         "author": { "@type": "Person", "name": "Vincent Emonet" },
         "license": "https://opensource.org/licenses/MIT",
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
@@ -69,17 +69,23 @@
         --page-bg: #f6f8fa;
         --page-fg: #1f2328;
         --page-border: #d1d9e0;
+        --page-block-bg: #eaeef2;
+        --page-link: #0969da;
       }
       :root[data-theme="dark"] {
         --page-bg: #212830;
         --page-fg: #e6edf3;
         --page-border: #3d444d;
+        --page-block-bg: #1c1f26;
+        --page-link: #4493f8;
       }
       @media (prefers-color-scheme: dark) {
         :root[data-theme="auto"] {
           --page-bg: #212830;
           --page-fg: #e6edf3;
           --page-border: #3d444d;
+          --page-block-bg: #1c1f26;
+          --page-link: #4493f8;
         }
       }
 
@@ -109,7 +115,6 @@
         justify-content: space-between;
         gap: 1rem;
         padding: 0.75rem 1.25rem;
-        border-bottom: 1px solid var(--page-border);
         flex-wrap: wrap;
       }
       .brand {
@@ -121,16 +126,74 @@
         font-size: 0.85rem;
         opacity: 0.7;
       }
-      .theme {
-        font-size: 0.85rem;
-        display: flex;
+      .theme-toggle {
+        display: inline-flex;
         align-items: center;
-        gap: 0.4rem;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border: 1px solid transparent;
+        border-radius: 50%;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+        opacity: 0.7;
+        transition:
+          background 0.12s,
+          opacity 0.12s;
+      }
+      .theme-toggle:hover {
+        opacity: 1;
+        background: var(--page-block-bg);
+      }
+      .theme-toggle:focus-visible {
+        outline: 2px solid var(--page-link);
+        outline-offset: 1px;
+      }
+      .theme-toggle svg {
+        width: 20px;
+        height: 20px;
+      }
+      .theme-toggle .theme-icon {
+        display: none;
+      }
+      .theme-toggle[data-theme="auto"] .theme-icon-auto,
+      .theme-toggle[data-theme="light"] .theme-icon-light,
+      .theme-toggle[data-theme="dark"] .theme-icon-dark {
+        display: block;
       }
       .actions {
         display: flex;
         align-items: center;
         gap: 1rem;
+        flex-wrap: wrap;
+        margin-left: auto;
+      }
+      .links {
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+        font-size: 0.85rem;
+        flex-wrap: wrap;
+      }
+      .links a {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        color: inherit;
+        text-decoration: none;
+        opacity: 0.75;
+        white-space: nowrap;
+      }
+      .links a:hover {
+        opacity: 1;
+        text-decoration: underline;
+      }
+      .links svg {
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
       }
       .github {
         display: inline-flex;
@@ -141,28 +204,274 @@
       .github:hover {
         opacity: 1;
       }
+
+      /* ---- hero ---------------------------------------------------------- */
+      .hero {
+        text-align: center;
+        width: 100%;
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 3rem 1rem 2rem;
+      }
+      .hero-logo {
+        width: 88px;
+        height: 88px;
+        margin-bottom: 1rem;
+      }
+      .hero h1 {
+        font-size: clamp(1.8rem, 5vw, 2.6rem);
+        line-height: 1.15;
+        margin: 0 0 0.75rem;
+        letter-spacing: -0.01em;
+      }
+      .hero-sub {
+        font-size: 1.05rem;
+        opacity: 0.8;
+        max-width: 38rem;
+        margin: 0 auto 1.5rem;
+      }
+      .hero-sub a {
+        color: var(--page-link, #0969da);
+        text-decoration: none;
+      }
+      .hero-sub a:hover {
+        text-decoration: underline;
+      }
+      .hero-sub a:visited {
+        color: var(--page-link, #0969da);
+      }
+      .hero-cta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.7rem;
+        justify-content: center;
+        margin-bottom: 1.4rem;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        min-height: 42px;
+        padding: 0.55rem 1rem;
+        border: 1px solid var(--page-border);
+        border-radius: 10px;
+        color: inherit;
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 550;
+        letter-spacing: -0.005em;
+        background: linear-gradient(
+          180deg,
+          color-mix(in srgb, var(--page-bg) 94%, var(--page-fg)) 0%,
+          var(--page-bg) 100%
+        );
+        box-shadow:
+          0 1px 2px color-mix(in srgb, var(--page-fg) 9%, transparent),
+          inset 0 1px color-mix(in srgb, white 45%, transparent);
+        transition:
+          transform 0.16s ease,
+          border-color 0.16s ease,
+          box-shadow 0.16s ease,
+          background 0.16s ease;
+      }
+      .btn:hover {
+        transform: translateY(-1px);
+        border-color: color-mix(in srgb, var(--page-border) 55%, var(--page-fg));
+        background: linear-gradient(
+          180deg,
+          color-mix(in srgb, var(--page-bg) 90%, var(--page-fg)) 0%,
+          var(--page-bg) 100%
+        );
+        box-shadow:
+          0 4px 10px color-mix(in srgb, var(--page-fg) 10%, transparent),
+          inset 0 1px color-mix(in srgb, white 45%, transparent);
+      }
+      .btn:active {
+        transform: translateY(0);
+        box-shadow: 0 1px 2px color-mix(in srgb, var(--page-fg) 8%, transparent);
+      }
+      .btn:focus-visible,
+      .copy:focus-visible {
+        outline: 2px solid var(--page-link);
+        outline-offset: 2px;
+      }
+      .btn svg {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+      }
+      .hero-install {
+        display: inline-flex;
+        align-items: center;
+        gap: 0;
+        max-width: 100%;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.84rem;
+        padding: 0.3rem;
+        border: 1px solid color-mix(in srgb, var(--page-border) 82%, var(--page-fg));
+        border-radius: 11px;
+        background: var(--page-block-bg);
+        box-shadow:
+          0 5px 18px color-mix(in srgb, var(--page-fg) 8%, transparent),
+          inset 0 1px color-mix(in srgb, white 30%, transparent);
+      }
+      .hero-install code {
+        min-width: 0;
+        font-size: inherit;
+        padding: 0.45rem 0.7rem;
+        overflow-x: auto;
+        scrollbar-width: thin;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+      }
+      .install-command {
+        color: var(--page-fg);
+        opacity: 0.55;
+      }
+      .install-package {
+        color: var(--page-fg);
+        font-weight: 600;
+      }
+      /* <kbd> styled like a keyboard key: centered, with a drop + inset
+         bevel shadow so it reads as a raised key, not a code pill. Mirrors the
+         editor's .cm-td-html kbd rule. */
+      .hero kbd,
+      .features kbd,
+      .demo-head kbd {
+        display: inline-block;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.85em;
+        line-height: 1.2;
+        padding: 0.15em 0.5em;
+        min-width: 1em;
+        text-align: center;
+        color: var(--page-fg);
+        background: var(--page-block-bg);
+        border: 1px solid var(--page-border);
+        border-radius: 6px;
+        /* 1px drop shadow + inset bottom bevel (muted toward bg) => key depth. */
+        box-shadow:
+          0 1px 0 var(--page-border),
+          inset 0 -1px 0 color-mix(in srgb, var(--page-border) 45%, var(--page-bg));
+        vertical-align: middle;
+        white-space: nowrap;
+      }
+      .copy {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        border: 0;
+        border-left: 1px solid var(--page-border);
+        border-radius: 7px;
+        background: transparent;
+        color: var(--page-fg);
+        cursor: pointer;
+        opacity: 0.7;
+        transition:
+          opacity 0.15s ease,
+          background 0.15s ease;
+      }
+      .copy:hover {
+        opacity: 1;
+        background: color-mix(in srgb, var(--page-fg) 8%, transparent);
+      }
+      .copy svg {
+        width: 15px;
+        height: 15px;
+      }
+      .copy .check-icon {
+        display: none;
+        color: #2da44e;
+      }
+      .copy.copied .copy-icon {
+        display: none;
+      }
+      .copy.copied .check-icon {
+        display: inline;
+      }
+      .copy.copied {
+        opacity: 1;
+      }
+      @media (max-width: 520px) {
+        .hero-cta {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .btn {
+          justify-content: center;
+          padding-inline: 0.7rem;
+        }
+        .hero-install {
+          display: flex;
+          width: 100%;
+          max-width: 100%;
+        }
+        .hero-install code {
+          flex: 1;
+        }
+      }
+
+      /* ---- features ------------------------------------------------------ */
+      .features {
+        width: calc(100% - 2rem);
+        max-width: 960px;
+        margin: 1rem auto 2.5rem;
+        padding: 1px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1px;
+        background: var(--page-border);
+        border: 1px solid var(--page-border);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .feature {
+        background: var(--page-bg);
+        padding: 1.1rem 1.2rem;
+      }
+      .feature h3 {
+        margin: 0 0 0.3rem;
+        font-size: 0.95rem;
+      }
+      .feature p {
+        margin: 0;
+        font-size: 0.85rem;
+        opacity: 0.75;
+        line-height: 1.5;
+      }
+
+      /* ---- demo ---------------------------------------------------------- */
+      .demo-head {
+        max-width: 860px;
+        margin: 1.5rem auto 0;
+        padding: 0 1rem;
+      }
+      .demo-head h2 {
+        font-size: 1.3rem;
+        margin: 0 0 0.25rem;
+      }
+      .demo-head p {
+        margin: 0;
+        font-size: 0.88rem;
+        opacity: 0.75;
+      }
+      main {
+        margin: 0.75rem auto 3rem;
+      }
+      /* Inline icons reused from the navbar inside the forms table. */
+      #editor .cm-td-table td svg {
+        vertical-align: middle;
+        margin-right: 0.35em;
+      }
     </style>
   </head>
 
   <body>
     <header class="bar">
-      <div class="brand">
-        <img src="/logo.png" width="28" height="28" alt="" aria-hidden="true" />
-        <strong>Typodown</strong>
-        <span
-          >Open source WYSIWYG markdown editor &middot; syntax reveals on the construct under the
-          cursor</span
-        >
-      </div>
       <div class="actions">
-        <label class="theme">
-          Theme
-          <select id="theme">
-            <option value="auto">Auto</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </label>
         <a
           class="github"
           href="https://github.com/vemonet/typodown"
@@ -177,8 +486,231 @@
             />
           </svg>
         </a>
+        <button
+          class="theme-toggle"
+          id="theme"
+          type="button"
+          data-theme="auto"
+          aria-label="Switch theme"
+          title="Theme: auto"
+        >
+          <svg
+            class="theme-icon theme-icon-auto"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 3v18" />
+            <path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none" />
+          </svg>
+          <svg
+            class="theme-icon theme-icon-light"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="4" />
+            <path
+              d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
+            />
+          </svg>
+          <svg
+            class="theme-icon theme-icon-dark"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+          </svg>
+        </button>
       </div>
     </header>
+
+    <section class="hero">
+      <img src="/logo.png" width="88" height="88" alt="Typodown" class="hero-logo" />
+      <h1>Seamless markdown editing,<br />everywhere you write.</h1>
+      <p class="hero-sub">
+        Typodown blends reading and writing into one continuous motion. Markdown renders where you
+        type: no preview pane, no markup cluttering the page.
+      </p>
+      <p class="hero-sub">
+        Open-source & cross-platform, inspired by
+        <a href="https://typora.io/" target="_blank" rel="noopener">Typora</a>.
+      </p>
+      <div class="hero-cta">
+        <a
+          class="btn"
+          href="https://marketplace.visualstudio.com/items?itemName=vemonet.typodown"
+          target="_blank"
+          rel="noopener"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              fill="#0098FF"
+              d="M23.15 2.587L18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448z"
+            />
+          </svg>
+          VSCode extension
+        </a>
+        <a
+          class="btn"
+          href="https://github.com/vemonet/typodown/releases"
+          target="_blank"
+          rel="noopener"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <rect width="20" height="14" x="2" y="3" rx="2" />
+            <line x1="8" x2="16" y1="21" y2="21" />
+            <line x1="12" x2="12" y1="17" y2="21" />
+            <path d="m9 10 3 3 3-3" />
+            <path d="M12 13V7" />
+          </svg>
+          Desktop app
+        </a>
+        <a
+          class="btn"
+          href="https://play.google.com/store/apps/details?id=io.github.vemonet.typodown"
+          target="_blank"
+          rel="noopener"
+        >
+          <svg viewBox="0 0 28.99 31.99" aria-hidden="true">
+            <path d="M13.54 15.28.12 29.34a3.66 3.66 0 0 0 5.33 2.16l15.1-8.6Z" fill="#ea4335" />
+            <path
+              d="m27.11 12.89-6.53-3.74-7.35 6.45 7.38 7.28 6.48-3.7a3.54 3.54 0 0 0 1.5-4.79 3.62 3.62 0 0 0-1.5-1.5z"
+              fill="#fbbc04"
+            />
+            <path
+              d="M.12 2.66a3.57 3.57 0 0 0-.12.92v24.84a3.57 3.57 0 0 0 .12.92L14 15.64Z"
+              fill="#4285f4"
+            />
+            <path
+              d="m13.64 16 6.94-6.85L5.5.51A3.73 3.73 0 0 0 3.63 0 3.64 3.64 0 0 0 .12 2.65Z"
+              fill="#34a853"
+            />
+          </svg>
+          Android app
+        </a>
+        <a
+          class="btn"
+          href="https://www.npmjs.com/package/@vemonet/typodown"
+          target="_blank"
+          rel="noopener"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              fill="#CB3837"
+              d="M1.763 0C.786 0 0 .786 0 1.763v20.474C0 23.214.786 24 1.763 24h20.474c.977 0 1.763-.786 1.763-1.763V1.763C24 .786 23.214 0 22.237 0zM5.13 5.323l13.837.019-.009 13.836h-3.464l.01-10.382h-3.456L12.08 19.17H5.113z"
+            />
+          </svg>
+          npm package
+        </a>
+      </div>
+      <div class="hero-install">
+        <code
+          ><span class="install-command">npm i --save</span>
+          <span class="install-package">@vemonet/typodown</span></code
+        >
+        <button class="copy" type="button" aria-label="Copy install command" title="Copy">
+          <svg
+            class="copy-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          <svg
+            class="check-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </button>
+      </div>
+    </section>
+
+    <section class="features" aria-label="Features">
+      <div class="feature">
+        <h3>👀 WYSIWYG editing</h3>
+        <p>Edit rendered markdown directly. Raw markers surface only on the block you edit.</p>
+      </div>
+      <!-- <div class="feature">
+        <h3>Syntax under the cursor</h3>
+        <p>
+          Raw markers surface only on the block you edit, then settle back into place as you move
+          on.
+        </p>
+      </div> -->
+      <div class="feature">
+        <h3>🐙 GitHub Flavored Markdown</h3>
+        <p>Alerts, checkboxes lists, editable tables, YAML front matter and raw HTML.</p>
+      </div>
+      <div class="feature">
+        <h3>📈 Math &amp; diagrams</h3>
+        <p>Inline and block LaTeX, plus live Mermaid diagrams that reveal their source on focus.</p>
+      </div>
+      <div class="feature">
+        <h3>⌨️ Familiar shortcuts</h3>
+        <p>
+          <kbd>Cmd/Ctrl</kbd>+<kbd>B</kbd> <kbd>I</kbd> <kbd>K</kbd> <kbd>F</kbd> <kbd>Z</kbd>,
+          <kbd>Tab</kbd> indent.
+        </p>
+      </div>
+      <div class="feature">
+        <h3>⚔️ Cross-platform</h3>
+        <p>
+          Available as a VSCode extension, desktop app (Linux, macOS, windows), android app, and npm
+          package.
+        </p>
+      </div>
+      <div class="feature">
+        <h3>🏡 Fully local</h3>
+        <p>
+          No telemetry, no remote server. Bring your own cloud. Your notes stay on your machine,
+          where they belong.
+        </p>
+      </div>
+    </section>
+
+    <div class="demo-head">
+      <h2>Try it live</h2>
+      <p>
+        Everything below is one markdown string rendered by Typodown.
+        <!-- Click into any block to reveal its raw syntax, then click away to render it again. -->
+      </p>
+    </div>
 
     <main id="editor"></main>
 
@@ -187,29 +719,92 @@
       import "/src/theme.css";
 
       const SAMPLE = `---
-type: Articles
+type: software
+description: Seamless open-source markdown editing
 ---
 
 # Typodown
 
-A **Typora-like** WYSIWYG editor for **GitHub Flavored Markdown**, built on _CodeMirror 6_. Put your cursor on any styled text and its raw \`markdown\` syntax appears, just like Typora. Write each paragraph on one line and let it wrap: a single newline stays on the same paragraph, a blank line starts a new one.
+Markdown renders where you type. Move your caret into a heading, bold, code span or link and its raw markers surface while you edit, then settle back into place.
 
-## Inline formatting
+## Install
 
-Write **bold**, _italic_, ***bold italic***, ~~strikethrough~~ and \`inline code\`. Backslash escapes work too: \\*not emphasized\\*. Links can be [inline](https://github.com/vemonet/typodown), autolinks like <https://viteplus.dev>, or an email such as <hello@example.com>.
+Typodown ships in several forms, and table columns can be left, center, or right aligned:
 
-Select some text and press <kbd>cmd/ctrl</kbd> + <kbd>B</kbd>, <kbd>cmd/ctrl</kbd> + <kbd>I</kbd>, or <kbd>cmd/ctrl</kbd> + <kbd>K</kbd> (copy a URL first) to format it.
+| Form                 | Description                                           |                                                                                  Get it |
+| :------------------- | :----------------------------------------------------: | --------------------------------------------------------------------------------------: |
+| <svg viewBox="0 0 24 24" width="16" height="16"><path fill="#0098FF" d="M23.15 2.587L18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448z"/></svg> **VSCode extension** | Edit \`.md\` files with Typodown inside VSCode        | [Marketplace](https://marketplace.visualstudio.com/items?itemName=vemonet.typodown) |
+| <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> **Desktop app** | Open a folder of \`.md\` files, with file explorer and graph view (Linux, macOS, Windows) | [Releases](https://github.com/vemonet/typodown/releases) |
+| <svg viewBox="0 0 28.99 31.99" width="16" height="16" aria-hidden="true"><path d="M13.54 15.28.12 29.34a3.66 3.66 0 0 0 5.33 2.16l15.1-8.6Z" fill="#ea4335"/><path d="m27.11 12.89-6.53-3.74-7.35 6.45 7.38 7.28 6.48-3.7a3.54 3.54 0 0 0 1.5-4.79 3.62 3.62 0 0 0-1.5-1.5z" fill="#fbbc04"/><path d="M.12 2.66a3.57 3.57 0 0 0-.12.92v24.84a3.57 3.57 0 0 0 .12.92L14 15.64Z" fill="#4285f4"/><path d="m13.64 16 6.94-6.85L5.5.51A3.73 3.73 0 0 0 3.63 0 3.64 3.64 0 0 0 .12 2.65Z" fill="#34a853"/></svg> **Android app** | Open \`.md\` files straight from your file storage app     | [Releases](https://github.com/vemonet/typodown/releases) |
+| <svg viewBox="0 0 24 24" width="16" height="16"><path fill="#CB3837" d="M1.763 0C.786 0 0 .786 0 1.763v20.474C0 23.214.786 24 1.763 24h20.474c.977 0 1.763-.786 1.763-1.763V1.763C24 .786 23.214 0 22.237 0zM5.13 5.323l13.837.019-.009 13.836h-3.464l.01-10.382h-3.456L12.08 19.17H5.113z"/></svg> **npm package** | Embed the editor in any web app, framework-agnostic   | [\`@vemonet/typodown\`](https://www.npmjs.com/package/@vemonet/typodown) |
 
-## Headings
+### 🧩 VSCode extension
 
-# Heading level 1
-## Heading level 2
-### Heading level 3
-#### Heading level 4
-##### Heading level 5
-###### Heading level 6
+Install **Typodown** from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=vemonet.typodown), then open any \`.md\` file and launch the editor from:
 
-## Lists
+- the **Open with Typodown** button in the editor title bar,
+- the explorer **right-click** context menu, or
+- the command palette: **Typodown: Open with Typodown** / **Open with Typodown to the Side**.
+
+The text file stays the single source of truth, so Typodown works alongside VSCode's text editor, source control and undo/redo.
+
+> [!TIP]
+> To make it the default editor for Markdown, run **View: Reopen Editor With... → Configure default editor for \`*.md\`**.
+
+By default the editor follows your VSCode color theme. Pin it to a GitHub-like light or dark theme with the \`typodown.theme\` setting (\`editor\` | \`light\` | \`dark\`).
+
+### 🖥️ Desktop app
+
+Open a folder of markdown files, with a file explorer tree on the left. You can also open a single \`.md\` file, or just double-click a \`.md\` file in your file manager.
+
+The desktop app (Linux, macOS, Windows) enables a **graph view** built from files using the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf): see how your notes link to each other, and jump to any node.
+
+### 📱 Android app
+
+Open a \`.md\` file with Typodown straight from your file or storage app: Dropbox, Google Drive, Nextcloud, anything exposing a writable Android documents provider works; there is no per-provider integration.
+
+Edits auto-save about a second after you stop typing, paced to avoid cloud sync conflicts. A floating toolbar brings formatting actions to touch screens where keyboard shortcuts are out of reach.
+
+### 📦 npm package
+
+Embed the editor in any web app, framework-agnostic. Built with [CodeMirror 6](https://codemirror.net/). Install it from npm:
+
+\`\`\`bash
+npm i --save @vemonet/typodown
+\`\`\`
+
+Then mount it on any element:
+
+\`\`\`ts
+import { createTypodown } from "@vemonet/typodown";
+import "@vemonet/typodown/style.css";
+
+const editor = createTypodown(document.getElementById("editor")!, {
+  value: "# Hello",
+  theme: "auto", // "light" | "dark" | "auto"
+  placeholder: "Write some markdown...",
+  onChange: (markdown) => console.log(markdown),
+});
+
+editor.getValue(); // read the current markdown
+editor.setValue("new **content**");
+editor.setTheme("dark");
+editor.focus();
+editor.destroy();
+\`\`\`
+
+> [!TIP]
+> A standalone UMD build (CodeMirror and Lezer bundled in) is also available on [unpkg](https://unpkg.com) / [jsDelivr](https://www.jsdelivr.com), exposing a \`Typodown\` global for use from plain HTML with no bundler. It is larger than the npm package since it cannot dedupe CodeMirror against the rest of your bundle.
+
+## Features
+
+### Inline formatting
+
+Write **bold**, _italic_, ***bold italic***, ~~strikethrough~~ and \`inline code\`. Links can be [inline](https://github.com/vemonet/typodown), autolinks like https://vemonet.github.io/typodown.
+
+Select some text and press <kbd>cmd/ctrl</kbd> + <kbd>B</kbd>, <kbd>cmd/ctrl</kbd> + <kbd>I</kbd>, or <kbd>cmd/ctrl</kbd> + <kbd>K</kbd> to format it.
+
+### Lists
 
 Unordered lists nest with different bullets per level (Tab / Shift+Tab):
 
@@ -231,16 +826,13 @@ Task lists stay interactive:
 - [x] Reveal the syntax under the cursor
 - [ ] Create new JS framework
 
-## Blockquotes and alerts
+### Blockquotes and alerts
 
 > A plain blockquote.
 > It can span several lines.
 
 > [!NOTE]
 > Useful information that users should know, even when skimming.
-
-> [!TIP]
-> Helpful advice for doing things better or more easily.
 
 > [!IMPORTANT]
 > Key information users need to know to achieve their goal.
@@ -251,32 +843,7 @@ Task lists stay interactive:
 > [!CAUTION]
 > Advises about risks or negative outcomes of certain actions.
 
-## Table
-
-Columns can be left, center, or right aligned:
-
-| Feature     | Supported | Notes                       |
-| :---------- | :-------: | --------------------------: |
-| Headings    |    yes    | \`#\` through \`######\`        |
-| Emphasis    |    yes    | bold, italic, strikethrough |
-| Code blocks |    yes    | syntax highlighted          |
-| Tables      |    yes    | with column alignment       |
-
-## Code blocks
-
-TypeScript:
-
-\`\`\`ts
-import { createTypodown } from "@vemonet/typodown";
-import "@vemonet/typodown/style.css";
-
-const editor = createTypodown(document.getElementById("app")!, {
-  value: "# Hello",
-  theme: "auto", // "light" | "dark" | "auto"
-  placeholder: "Write some markdown...",
-  onChange: (markdown) => console.log(markdown),
-});
-\`\`\`
+### Code blocks
 
 Python:
 
@@ -288,8 +855,8 @@ def fib(n: int) -> int:
 Shell:
 
 \`\`\`bash
-npm install @vemonet/typodown
-vp dev   # start this demo
+npm i --save @vemonet/typodown
+vp run dev   # start this demo
 \`\`\`
 
 SPARQL:
@@ -298,15 +865,12 @@ SPARQL:
 PREFIX foaf: <http://xmlns.com/foaf/0.1/>
 SELECT ?name ?email WHERE {
   ?person a foaf:Person ;
-          foaf:name ?name ;
-          foaf:mbox ?email .
+    foaf:mbox ?email .
   FILTER(CONTAINS(?name, "Ada"))
-}
-ORDER BY ?name
-LIMIT 10
+} ORDER BY ?name LIMIT 10
 \`\`\`
 
-## Mermaid diagrams
+### Mermaid diagrams
 
 Fenced code blocks with the \`mermaid\` language render as live diagrams when idle, and reveal their raw source when you click into them:
 
@@ -317,7 +881,7 @@ flowchart LR
   B -- no --> D[Render live preview]
 \`\`\`
 
-## LaTeX maths
+### LaTeX maths
 
 Inline maths like $f = \\frac{2\\pi}{T}$ and $E = mc^2$ renders with KaTeX, and reveals its raw \`$...$\` source when you click into it. Block maths with \`$$\` renders centred on its own line:
 
@@ -327,11 +891,11 @@ $$
 
 Single-line block maths works too: $$\\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\frac{\\pi^2}{6}$$
 
-## Image
+### Image
 
 ![MIT licensed](https://img.shields.io/badge/license-MIT-blue)
 
-## Raw HTML
+### Raw HTML
 
 Raw HTML renders in place, and reveals its dimmed source when the caret lands on it, just like markdown syntax. It is on by default; pass **html: false** to turn it off.
 
@@ -349,21 +913,57 @@ Inline HTML like <kbd>Ctrl</kbd> + <kbd>K</kbd>, <span style="color: var(--td-ca
 ---
 
 Everything above is driven from a single markdown string. Edit freely and the source stays in sync.
-      `;
+`;
+
+      const savedTheme = localStorage.getItem("typodown-theme") || "auto";
 
       const editor = createTypodown(document.getElementById("editor"), {
         value: SAMPLE,
-        theme: "auto",
+        theme: savedTheme,
         placeholder: "Write some markdown...",
+        persist: true,
       });
 
       const applyTheme = (theme) => {
         editor.setTheme(theme);
         document.documentElement.dataset.theme = theme;
+        localStorage.setItem("typodown-theme", theme);
+        const btn = document.getElementById("theme");
+        btn.dataset.theme = theme;
+        btn.title = `Theme: ${theme}`;
+        btn.setAttribute("aria-label", `Switch theme (current: ${theme})`);
       };
-      const select = document.getElementById("theme");
-      select.addEventListener("change", () => applyTheme(select.value));
-      applyTheme(select.value);
+      const themeBtn = document.getElementById("theme");
+      const THEME_ORDER = ["auto", "light", "dark"];
+      themeBtn.addEventListener("click", () => {
+        const cur = themeBtn.dataset.theme || "auto";
+        const next = THEME_ORDER[(THEME_ORDER.indexOf(cur) + 1) % THEME_ORDER.length];
+        applyTheme(next);
+      });
+      applyTheme(savedTheme);
+
+      const copyBtn = document.querySelector(".copy");
+      if (copyBtn) {
+        copyBtn.addEventListener("click", async () => {
+          const cmd = "npm i --save @vemonet/typodown";
+          try {
+            await navigator.clipboard.writeText(cmd);
+          } catch {
+            const ta = document.createElement("textarea");
+            ta.value = cmd;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            ta.remove();
+          }
+          copyBtn.classList.add("copied");
+          copyBtn.title = "Copied";
+          setTimeout(() => {
+            copyBtn.classList.remove("copied");
+            copyBtn.title = "Copy";
+          }, 1200);
+        });
+      }
 
       editor.focus();
     </script>

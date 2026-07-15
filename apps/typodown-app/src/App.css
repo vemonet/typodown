@@ -169,11 +169,37 @@
   background: var(--background) !important;
 }
 
-/* Editor area: add breathing room so text isn't flush against edges. The top
- * padding is the "margin" the floating sidebar toggles and the editor's
- * formatting toolbar sit in. */
+/* Editor area. No reserved top band: the floating sidebar toggle and the
+ * formatting toolbar float directly over the content (the toolbar's frosted
+ * blur keeps text legible where it overlaps), so the prose starts right below
+ * the title bar. Only a small top gap keeps the first line off the chrome. No
+ * horizontal padding on the wrapper, so the CodeMirror scroller (and its
+ * vertical scrollbar) reaches the window edge like the web demo; the text's
+ * own side margin lives on .cm-content. */
 .z-sidebar-inset .typodown {
-  padding: 2.5rem 1.5rem 2rem;
+  padding: 0.5rem 0 2rem;
+}
+/* Breathing room between the text column and the side panels: a comfortable
+ * base, widened on large windows so prose doesn't run edge-to-edge. Scoped past
+ * .typodown so it beats the library's own .cm-content padding regardless of the
+ * stylesheet load order.
+ *
+ * The column is also capped and centered: on a large window the prose gets
+ * whitespace on both sides instead of stretching across the whole screen.
+ * Below the cap it still fills the width, and because only .cm-content is
+ * constrained (not the scroller) the vertical scrollbar stays glued to the
+ * window edge. */
+.z-sidebar-inset .typodown .cm-content {
+  max-width: 60rem;
+  margin-inline: auto;
+  padding-left: 1.75rem;
+  padding-right: 1.75rem;
+}
+@media (min-width: 1024px) {
+  .z-sidebar-inset .typodown .cm-content {
+    padding-left: 3rem;
+    padding-right: 3rem;
+  }
 }
 
 /* The app's file-explorer toggle floats at the editor's top-left corner, so
@@ -201,4 +227,12 @@
   height: 28px;
   flex-shrink: 0;
   user-select: none;
+}
+
+/* Edge-to-edge on mobile (Android/iOS): the app background reaches the top of
+ * the screen (under the status/notification bar) while content is offset below
+ * it. The padded area is filled with the container's own background, so there
+ * is no separate blank strip. On desktop env() resolves to 0, so it's a no-op. */
+.app-root {
+  padding-top: env(safe-area-inset-top, 0px);
 }

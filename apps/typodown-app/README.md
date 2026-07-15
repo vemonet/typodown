@@ -1,18 +1,18 @@
 # 🖋️ Typodown app
 
-A [Typora](https://typora.io)-inspired markdown editor for desktop (Linux, macOS, Windows) and Android, built with Tauri v2.
+Seamless open-source markdown editing for desktop (Linux, macOS, Windows) and Android, inspired by [Typora](https://typora.io).
 
 Typodown blends reading and writing markdown into one continuous motion. Markdown renders where you type: no preview pane to keep in sync, no mode to toggle, no markup cluttering the page. Move your caret into a heading, bold run, code span or link and only its raw markers (`#`, `**`, `` ` ``) surface for the moment you edit them. The content stays central, the syntax stays out of the way.
 
 ## Features
 
-- **WYSIWYG markdown editing** with syntax revealed under the cursor, powered by the [`@vemonet/typodown`](https://www.npmjs.com/package/@vemonet/typodown) library.
-- **GitHub Flavored Markdown**: headings, emphasis, strikethrough, inline code and fenced code (with syntax highlighting), blockquotes, GFM alerts (`> [!NOTE]`), task lists, editable tables, images and links.
+- **Seamless markdown editing** with syntax revealed under the cursor, powered by the [`@vemonet/typodown`](https://www.npmjs.com/package/@vemonet/typodown) library.
+- **GitHub Flavored Markdown**: GFM alerts (`> [!NOTE]`), task lists, editable tables, images and links.
 - **LaTeX math and Mermaid diagrams**, rendered with KaTeX.
-- **File explorer and outline.** Open a folder as a vault: file tree on the left, heading navigation on the right.
 - **Auto-save.** Edits are written about a second after you stop typing; on Android, writes to cloud providers are paced to avoid sync conflicts.
-- **GitHub light and dark themes**, following the OS colour scheme by default.
 - **Familiar shortcuts** (<kbd>Cmd/Ctrl</kbd>+<kbd>B</kbd> / <kbd>I</kbd> / <kbd>K</kbd>, <kbd>Tab</kbd> indent, undo/redo) plus a floating toolbar for touch screens.
+- **File explorer.** Open a folder as a file tree.
+- **Graph view.** Built from files using the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
 
 ### On desktop
 

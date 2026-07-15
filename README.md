@@ -3,9 +3,9 @@
 
 # Typodown
 
-**Open source seamless markdown editing, inspired by [Typora](https://typora.io).**
+**Seamless open-source markdown editing, inspired by [Typora](https://typora.io). Available everywhere you write.**
 
-[⚡️ Live demo](https://vemonet.github.io/typodown) · [🧩 VSCode extension](https://marketplace.visualstudio.com/items?itemName=vemonet.typodown-vsx) · [📦 npm package](https://www.npmjs.com/package/@vemonet/typodown) · [🖥️ Desktop & Android app](https://github.com/vemonet/typodown/releases)
+[⚡️ Live demo](https://vemonet.github.io/typodown) · [🧩 VSCode extension](https://marketplace.visualstudio.com/items?itemName=vemonet.typodown) · [🖥️ Desktop & Android app](https://github.com/vemonet/typodown/releases) · [📦 npm package](https://www.npmjs.com/package/@vemonet/typodown)
 
 </div>
 
@@ -23,31 +23,30 @@ But Typora is a closed-source desktop app, so that experience stops at its windo
 
 ## Features
 
-- **WYSIWYG markdown editing.** Edit rendered markdown directly. No preview to keep in sync, no rich-text mode.
-- **Syntax reveals under the cursor.** Raw markers appear only for the construct you are editing, everything else stays rendered — the Typora signature move.
-- **GitHub Flavored Markdown.** Headings, emphasis, strikethrough, inline code, blockquotes, GFM alerts (`> [!NOTE]`), task lists, editable tables, images, links, YAML front matter and horizontal rules.
-- **Syntax highlighting** in fenced code blocks, with a language autocomplete.
+- **Seamless markdown editing.** WYSIWYG, edit rendered markdown directly. No preview to keep in sync.
+- **Syntax reveals under the cursor.** Raw markers appear only for the construct you are editing, everything else stays rendered.
+- **GitHub Flavored Markdown.** GFM alerts (`> [!NOTE]`), task lists, editable tables, images, links, YAML front matter and arbitrary HTML.
 - **LaTeX math and Mermaid diagrams.** Inline `$...$` and block `$$...$$` rendered with KaTeX.
-- **GitHub light and dark themes.** Follows the OS colour scheme, or pin to light/dark.
-- **Floating toolbar.** Bold, italic, links, insert table.
 - **Familiar shortcuts.** <kbd>Cmd/Ctrl</kbd>+<kbd>B</kbd> bold, <kbd>Cmd/Ctrl</kbd>+<kbd>I</kbd> italic, <kbd>Cmd/Ctrl</kbd>+<kbd>K</kbd> link, <kbd>Tab</kbd> / <kbd>Shift+Tab</kbd> indent, <kbd>Cmd/Ctrl</kbd>+<kbd>Z</kbd> undo / redo.
 - **Built on CodeMirror 6.** Battle-tested editing, selection, undo, IME and viewport virtualisation, the live preview is a decoration layer on top.
+- **Fully local.** No telemetry, no remote server.
 
 ## Use it
 
-Typodown ships in 3 forms:
+Typodown ships in various forms:
 
-|                      | Description                                                                 | Get it                                                                                             |
-| -------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| **Library**          | Embed the editor in any web app. Framework-agnostic, built on CodeMirror 6. | [`@vemonet/typodown`](https://www.npmjs.com/package/@vemonet/typodown)                             |
-| **VSCode extension** | Edit `.md` files with the Typodown editor inside VSCode.                    | [`vemonet.typodown-vsx`](https://marketplace.visualstudio.com/items?itemName=vemonet.typodown-vsx) |
-| **Standalone app**   | Desktop (Linux, macOS, Windows) and Android, built with Tauri v2.           | [Download](https://github.com/vemonet/typodown/releases)                                           |
+|                      | Description                                                                            | Get it                                                                                     |
+| -------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| **Library**          | Embed the editor in any web app. Framework-agnostic                                    | [`@vemonet/typodown`](https://www.npmjs.com/package/@vemonet/typodown)                     |
+| **VSCode extension** | Edit `.md` files with the Typodown editor inside VSCode                                | [`vemonet.typodown`](https://marketplace.visualstudio.com/items?itemName=vemonet.typodown) |
+| **Desktop app**      | Open folders of `.md` files, with file explorer and graph view (Linux, macOS, Windows) |
+| **Android app**      | Open `.md` files                                                                       | [Download](https://github.com/vemonet/typodown/releases)                                   |
 
 > Contributions welcome, especially if someone with an iOS developer account wants to help ship the iOS app.
 
 ### Library
 
-```bash
+```sh
 npm i --save @vemonet/typodown
 ```
 
@@ -76,6 +75,10 @@ Desktop and Android apps are built from the same codebase with Tauri v2:
 
 - **Desktop**: open a folder as a vault, with a file tree on the left and outline navigation on the right.
 - **Android**: open a `.md` file straight from your storage app (Dropbox, Google Drive, ...). Edits auto-save about a second after you stop typing, paced to avoid cloud sync conflicts.
+
+The desktop app enables to generate a graph view from files in Open Knowledge Format.
+
+Install by downloading the right artefact from the releases page.
 
 ## Development
 

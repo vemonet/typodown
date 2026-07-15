@@ -1,13 +1,15 @@
 import { createEffect, onCleanup, onMount, Show, type Component } from "solid-js";
-import { Typodown, type Theme } from "@vemonet/typodown";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { Typodown, type Theme, type ToolbarSave } from "@vemonet/typodown";
 import "@vemonet/typodown/style.css";
 import { vault, onContentChange } from "@/lib/vault";
 
 interface EditorProps {
   theme?: Theme;
-  /** Ref callback that receives the Typodown instance so the parent can call
-   * scrollToLine on outline clicks. */
-  onReady?: (editor: Typodown) => void;
+  /** When set, the editor toolbar shows a Save button backed by this handle
+   * (run callback + dirty getter so it can grey out when nothing to save).
+   * Used on Android where auto-save is disabled in favour of an explicit save. */
+  save?: ToolbarSave;
 }
 
 const Editor: Component<EditorProps> = (props) => {
@@ -22,9 +24,12 @@ const Editor: Component<EditorProps> = (props) => {
       theme: props.theme ?? "auto",
       placeholder: "Open a markdown file to start writing…",
       onChange: onContentChange,
+      // window.open is a no-op in the Tauri webview; route Cmd/Ctrl-clicked
+      // links to the system browser via the opener plugin.
+      openLink: (url) => void openUrl(url),
+      save: props.save,
     });
     ready = true;
-    props.onReady?.(editor);
   });
 
   // React to theme changes.
