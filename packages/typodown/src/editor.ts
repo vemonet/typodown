@@ -866,14 +866,16 @@ export const openTableDialog: Command = (view) => {
 
 // Ctrl/⌘+A inside a fenced code block selects only that block's code content;
 // outside a code block it returns false so the browser's select-all runs.
-const selectCodeContent: Command = (view) => {
+export const selectCodeContent: Command = (view) => {
   const { state } = view;
   const node = syntaxTree(state).resolveInner(state.selection.main.head, -1);
   for (let n: typeof node | null = node; n; n = n.parent) {
     if (n.name === "FencedCode") {
-      const code = n.getChild("CodeText");
-      if (!code) return false;
-      view.dispatch({ selection: EditorSelection.range(code.from, code.to) });
+      const code = n.getChildren("CodeText");
+      const first = code[0];
+      const last = code[code.length - 1];
+      if (!first || !last) return false;
+      view.dispatch({ selection: EditorSelection.range(first.from, last.to) });
       return true;
     }
   }

@@ -41,7 +41,7 @@ test("blank line stays quiet unless explicitly invoked", () => {
 
 test("suggests OKF resource types as values for the type field", () => {
   const result = complete("---\ntype: Vi|\n---\n");
-  expect(labels(result)).toContain("Video");
+  expect(labels(result)).toContain("Article");
 });
 
 test("no completions outside the front matter block", () => {

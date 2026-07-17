@@ -1,0 +1,20 @@
+:root {
+  color-scheme: light;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+#benchmark {
+  box-sizing: border-box;
+  height: 720px;
+  overflow: auto;
+  padding: 24px;
+  width: 900px;
+}
+
+#benchmark > .muya {
+  min-height: 100%;
+}

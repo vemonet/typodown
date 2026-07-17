@@ -1244,8 +1244,26 @@ const markFaint = Decoration.mark({ class: "cm-td-mark" });
 
 // ---- the builder ----------------------------------------------------------
 
+interface DocumentFeatures {
+  directives: boolean;
+  footnotes: boolean;
+}
+
+/** Features whose decorators require a whole-document line scan. Cache these
+ * per document so a selection-only update can skip both scans when their
+ * opening syntax is absent. False positives are harmless; false negatives
+ * would suppress rendering, so keep these deliberately broad. */
+function documentFeatures(state: EditorState): DocumentFeatures {
+  const source = state.doc.toString();
+  return {
+    directives: source.includes(":::"),
+    footnotes: source.includes("[^"),
+  };
+}
+
 class DecoBuilder {
   readonly out: Range<Decoration>[] = [];
+  private readonly selections;
   private readonly fm: { open: number; close: number } | null;
   private fmApplied = false;
   private directivesApplied = false;
@@ -1253,12 +1271,17 @@ class DecoBuilder {
   constructor(
     readonly state: EditorState,
     readonly config: LivePreviewConfig,
+    readonly features: DocumentFeatures,
   ) {
+    this.selections = state.selection.ranges;
     this.fm = parseFrontMatter(state.doc);
   }
 
   private on(from: number, to: number): boolean {
-    return touches(this.state, from, to);
+    for (const range of this.selections) {
+      if (range.from <= to && range.to >= from) return true;
+    }
+    return false;
   }
 
   private line(pos: number, cls: string): void {
@@ -1289,11 +1312,11 @@ class DecoBuilder {
         this.frontMatter(doc);
       }
     }
-    if (!this.directivesApplied) {
+    if (this.features.directives && !this.directivesApplied) {
       this.directivesApplied = true;
       this.directiveContainers();
     }
-    if (!this.footnotesApplied) {
+    if (this.features.footnotes && !this.footnotesApplied) {
       this.footnotesApplied = true;
       this.footnoteDefinitions();
     }
@@ -1672,8 +1695,13 @@ class DecoBuilder {
     const doc = this.state.doc;
     const marks = node.node.getChildren("CodeMark");
     const info = node.node.getChild("CodeInfo");
-    const codeText = node.node.getChild("CodeText");
+    const codeParts = node.node.getChildren("CodeText");
+    const source = codeParts.map((part) => doc.sliceString(part.from, part.to)).join("");
     const openLine = doc.lineAt(node.from);
+    // A fence nested in a list starts after the list container's indentation.
+    // Move that indentation from the source text to the rendered line box so
+    // the whole code block is inset, rather than only its code being inset.
+    const indent = node.from - openLine.from;
     const closeLine = marks.length >= 2 ? doc.lineAt(marks[marks.length - 1]!.from) : null;
     const active = this.on(node.from, node.to);
     const lang = info ? doc.sliceString(info.from, info.to).trim() : "";
@@ -1695,13 +1723,24 @@ class DecoBuilder {
     for (let n = firstContent; n <= lastContent && n <= doc.lines; n++) {
       const line = doc.line(n);
       const cls = ["cm-td-code"];
+      const attributes: Record<string, string> = {};
+      if (indent > 0) {
+        cls.push("cm-td-code-indented");
+        attributes.style = `--cm-td-code-indent: ${indent}ch`;
+        let prefixEnd = line.from;
+        while (prefixEnd < line.to && prefixEnd - line.from < indent) {
+          const char = doc.sliceString(prefixEnd, prefixEnd + 1);
+          if (char !== " " && char !== "\t") break;
+          prefixEnd++;
+        }
+        this.syntax(line.from, prefixEnd, false);
+      }
       if (n === firstContent) cls.push("cm-td-code-top");
       if (n === lastContent) cls.push("cm-td-code-bottom");
-      this.out.push(Decoration.line({ class: cls.join(" ") }).range(line.from));
+      this.out.push(Decoration.line({ class: cls.join(" "), attributes }).range(line.from));
     }
 
     if (firstContent <= lastContent && firstContent <= doc.lines) {
-      const source = codeText ? doc.sliceString(codeText.from, codeText.to) : "";
       this.out.push(
         Decoration.widget({
           widget: new CopyButtonWidget(source),
@@ -1725,10 +1764,23 @@ class DecoBuilder {
     }
 
     // Syntax highlighting of the code content.
-    if (codeText) {
-      const text = doc.sliceString(codeText.from, codeText.to);
-      for (const tok of tokenize(text, lang)) {
-        this.mark(codeText.from + tok.from, codeText.from + tok.to, `cm-td-tok-${tok.type}`);
+    if (codeParts.length > 0) {
+      for (const tok of tokenize(source, lang)) {
+        let sourceFrom = 0;
+        for (const part of codeParts) {
+          const partLength = part.to - part.from;
+          const from = Math.max(tok.from, sourceFrom);
+          const to = Math.min(tok.to, sourceFrom + partLength);
+          if (to > from) {
+            this.mark(
+              part.from + from - sourceFrom,
+              part.from + to - sourceFrom,
+              `cm-td-tok-${tok.type}`,
+            );
+          }
+          sourceFrom += partLength;
+          if (sourceFrom >= tok.to) break;
+        }
       }
     }
   }
@@ -1985,20 +2037,23 @@ function inlinePlugin(
   return ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
+      features: DocumentFeatures;
       treeLen: number;
       constructor(view: EditorView) {
+        this.features = documentFeatures(view.state);
         this.treeLen = syntaxTree(view.state).length;
         this.decorations = this.build(view);
       }
       update(u: ViewUpdate): void {
         const treeLen = syntaxTree(u.view.state).length;
         if (u.docChanged || u.selectionSet || u.viewportChanged || treeLen !== this.treeLen) {
+          if (u.docChanged) this.features = documentFeatures(u.view.state);
           this.treeLen = treeLen;
           this.decorations = this.build(u.view);
         }
       }
       build(view: EditorView): DecorationSet {
-        const builder = new DecoBuilder(view.state, config);
+        const builder = new DecoBuilder(view.state, config, this.features);
         for (const { from, to } of view.visibleRanges) builder.build(from, to);
         return RangeSet.of(builder.out, true);
       }

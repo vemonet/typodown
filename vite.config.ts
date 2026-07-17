@@ -108,6 +108,10 @@ export default defineConfig({
         dependsOn: ["vsx:install", "app:apk"],
       },
 
+      benchmark: {
+        command: "node packages/typodown/tests/benchmark/run.mjs",
+      },
+
       // Release process
       changelog: {
         command: "git cliff -o CHANGELOG.md --tag v$(npm pkg get version | tr -d '\"')\"",

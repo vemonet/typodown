@@ -1,0 +1,383 @@
+{
+  "generatedAt": "2026-07-17T11:27:24.280Z",
+  "environment": {
+    "chromiumPath": "/opt/homebrew/bin/chromium",
+    "chromiumVersion": "137.0.7105.0",
+    "nodeVersion": "v24.18.0",
+    "platform": "darwin-arm64",
+    "iterations": 40,
+    "warmup": 8,
+    "largeSections": 1000,
+    "largeIterations": 10
+  },
+  "results": [
+    {
+      "engine": "typodown",
+      "paragraphs": 10,
+      "iterations": 40,
+      "showMarkers": {
+        "scriptMeanMs": 1.754999999993015,
+        "scriptP95Ms": 2.900000000023283,
+        "paintMeanMs": 39.93500000000349,
+        "paintP95Ms": 40.90000000002328,
+        "mutationsMean": 10
+      },
+      "render": {
+        "scriptMeanMs": 1.614999999984866,
+        "scriptP95Ms": 3.099999999976717,
+        "paintMeanMs": 39.99500000000116,
+        "paintP95Ms": 41.300000000046566,
+        "mutationsMean": 10
+      },
+      "resources": {
+        "jsHeapMiB": 8.802745819091797,
+        "domNodes": 182,
+        "taskMs": 161.016,
+        "layoutMs": 13.869,
+        "styleMs": 10.783999999999999
+      }
+    },
+    {
+      "engine": "muya",
+      "paragraphs": 10,
+      "iterations": 40,
+      "showMarkers": {
+        "scriptMeanMs": 0.8400000000081491,
+        "scriptP95Ms": 1.6999999999534339,
+        "paintMeanMs": 39.90999999999767,
+        "paintP95Ms": 40.09999999997672,
+        "mutationsMean": 1
+      },
+      "render": {
+        "scriptMeanMs": 0.8549999999988358,
+        "scriptP95Ms": 1.599999999976717,
+        "paintMeanMs": 40.12000000000698,
+        "paintP95Ms": 40.79999999993015,
+        "mutationsMean": 1
+      },
+      "resources": {
+        "jsHeapMiB": 9.470294952392578,
+        "domNodes": 82,
+        "taskMs": 85.77500000000005,
+        "layoutMs": 9.626,
+        "styleMs": 3.885999999999999
+      }
+    },
+    {
+      "engine": "typodown",
+      "paragraphs": 100,
+      "iterations": 40,
+      "showMarkers": {
+        "scriptMeanMs": 2.6050000000046567,
+        "scriptP95Ms": 3.5,
+        "paintMeanMs": 39.985000000015134,
+        "paintP95Ms": 40.5,
+        "mutationsMean": 10
+      },
+      "render": {
+        "scriptMeanMs": 2.524999999982538,
+        "scriptP95Ms": 3.699999999953434,
+        "paintMeanMs": 40.074999999994176,
+        "paintP95Ms": 41,
+        "mutationsMean": 10
+      },
+      "resources": {
+        "jsHeapMiB": 9.82132339477539,
+        "domNodes": 343,
+        "taskMs": 242.20099999999994,
+        "layoutMs": 18.749999999999996,
+        "styleMs": 13.828
+      }
+    },
+    {
+      "engine": "muya",
+      "paragraphs": 100,
+      "iterations": 40,
+      "showMarkers": {
+        "scriptMeanMs": 2.1750000000116416,
+        "scriptP95Ms": 2.599999999976717,
+        "paintMeanMs": 39.98000000000466,
+        "paintP95Ms": 40.59999999997672,
+        "mutationsMean": 1
+      },
+      "render": {
+        "scriptMeanMs": 2.1300000000104773,
+        "scriptP95Ms": 2.5,
+        "paintMeanMs": 39.93999999998486,
+        "paintP95Ms": 41.09999999997672,
+        "mutationsMean": 1
+      },
+      "resources": {
+        "jsHeapMiB": 9.706989288330078,
+        "domNodes": 802,
+        "taskMs": 280.814,
+        "layoutMs": 31.493000000000006,
+        "styleMs": 7.5710000000000015
+      }
+    },
+    {
+      "engine": "typodown",
+      "paragraphs": 500,
+      "iterations": 40,
+      "showMarkers": {
+        "scriptMeanMs": 2.884999999997672,
+        "scriptP95Ms": 3.800000000046566,
+        "paintMeanMs": 39.75999999999185,
+        "paintP95Ms": 40.79999999993015,
+        "mutationsMean": 10
+      },
+      "render": {
+        "scriptMeanMs": 2.9400000000139697,
+        "scriptP95Ms": 4.300000000046566,
+        "paintMeanMs": 40.21500000002561,
+        "paintP95Ms": 41.199999999953434,
+        "mutationsMean": 10
+      },
+      "resources": {
+        "jsHeapMiB": 10.309768676757812,
+        "domNodes": 353,
+        "taskMs": 270.66099999999994,
+        "layoutMs": 20.276000000000003,
+        "styleMs": 14.141
+      }
+    },
+    {
+      "engine": "muya",
+      "paragraphs": 500,
+      "iterations": 40,
+      "showMarkers": {
+        "scriptMeanMs": 2.7449999999953434,
+        "scriptP95Ms": 4.099999999976717,
+        "paintMeanMs": 40.005000000010476,
+        "paintP95Ms": 41.09999999997672,
+        "mutationsMean": 1
+      },
+      "render": {
+        "scriptMeanMs": 2.8749999999941793,
+        "scriptP95Ms": 3.900000000023283,
+        "paintMeanMs": 39.869999999983705,
+        "paintP95Ms": 41.199999999953434,
+        "mutationsMean": 1
+      },
+      "resources": {
+        "jsHeapMiB": 10.194011688232422,
+        "domNodes": 4002,
+        "taskMs": 431.01299999999986,
+        "layoutMs": 59.45700000000001,
+        "styleMs": 5.933000000000008
+      }
+    }
+  ],
+  "largeResults": [
+    {
+      "engine": "typodown",
+      "sections": 1000,
+      "setupMs": 59.86395900000025,
+      "actions": {
+        "start": {
+          "show-markers": {
+            "scriptMeanMs": 1.049999999976717,
+            "scriptP95Ms": 1.2999999999301508,
+            "paintMeanMs": 40.119999999983705,
+            "paintP95Ms": 40.39999999990687,
+            "mutationsMean": 10
+          },
+          "render": {
+            "scriptMeanMs": 1.1900000000139699,
+            "scriptP95Ms": 1.400000000023283,
+            "paintMeanMs": 39.98000000000466,
+            "paintP95Ms": 40.10000000009313,
+            "mutationsMean": 10
+          },
+          "edit-paragraph": {
+            "scriptMeanMs": 134.63000000000466,
+            "scriptP95Ms": 153.40000000002328,
+            "paintMeanMs": 144.0500000000233,
+            "paintP95Ms": 160.5,
+            "mutationsMean": 2
+          },
+          "edit-code": {
+            "scriptMeanMs": 121.65999999999767,
+            "scriptP95Ms": 139,
+            "paintMeanMs": 132.11999999999534,
+            "paintP95Ms": 140.30000000004657,
+            "mutationsMean": 2
+          }
+        },
+        "middle": {
+          "show-markers": {
+            "scriptMeanMs": 1.210000000044238,
+            "scriptP95Ms": 1.400000000023283,
+            "paintMeanMs": 40.12000000000698,
+            "paintP95Ms": 41.800000000046566,
+            "mutationsMean": 10
+          },
+          "render": {
+            "scriptMeanMs": 1.3000000000116416,
+            "scriptP95Ms": 1.5,
+            "paintMeanMs": 39.95,
+            "paintP95Ms": 40.5,
+            "mutationsMean": 10
+          },
+          "edit-paragraph": {
+            "scriptMeanMs": 132.11999999999534,
+            "scriptP95Ms": 158.30000000004657,
+            "paintMeanMs": 150.81999999999533,
+            "paintP95Ms": 208.10000000009313,
+            "mutationsMean": 2.1
+          },
+          "edit-code": {
+            "scriptMeanMs": 121.96999999999534,
+            "scriptP95Ms": 151.80000000004657,
+            "paintMeanMs": 131.32999999999302,
+            "paintP95Ms": 160.10000000009313,
+            "mutationsMean": 2
+          }
+        },
+        "end": {
+          "show-markers": {
+            "scriptMeanMs": 1.0400000000139697,
+            "scriptP95Ms": 1.3000000000465661,
+            "paintMeanMs": 39.99999999998836,
+            "paintP95Ms": 40.09999999997672,
+            "mutationsMean": 9
+          },
+          "render": {
+            "scriptMeanMs": 1.0999999999883585,
+            "scriptP95Ms": 1.400000000023283,
+            "paintMeanMs": 54.94999999997672,
+            "paintP95Ms": 189,
+            "mutationsMean": 35.5
+          },
+          "edit-paragraph": {
+            "scriptMeanMs": 138.1100000000093,
+            "scriptP95Ms": 156.30000000004657,
+            "paintMeanMs": 149.14000000000232,
+            "paintP95Ms": 160.09999999997672,
+            "mutationsMean": 2.3
+          },
+          "edit-code": {
+            "scriptMeanMs": 125.34000000000233,
+            "scriptP95Ms": 145.19999999995343,
+            "paintMeanMs": 138.12000000001862,
+            "paintP95Ms": 160.40000000002328,
+            "mutationsMean": 2.3
+          }
+        }
+      },
+      "resources": {
+        "jsHeapMiB": 23.944232940673828,
+        "domNodes": 607,
+        "textLength": 1058,
+        "taskMs": 9312.691,
+        "layoutMs": 73.15900000000003,
+        "styleMs": 87.19099999999999
+      }
+    },
+    {
+      "engine": "muya",
+      "sections": 1000,
+      "setupMs": 112993.34845900002,
+      "actions": {
+        "start": {
+          "show-markers": {
+            "scriptMeanMs": 16.109999999974388,
+            "scriptP95Ms": 16.79999999993015,
+            "paintMeanMs": 77.47999999998137,
+            "paintP95Ms": 81.90000000002328,
+            "mutationsMean": 1
+          },
+          "render": {
+            "scriptMeanMs": 16.079999999993014,
+            "scriptP95Ms": 17.300000000046566,
+            "paintMeanMs": 76.7,
+            "paintP95Ms": 81.79999999993015,
+            "mutationsMean": 1
+          },
+          "edit-paragraph": {
+            "scriptMeanMs": 17.720000000006983,
+            "scriptP95Ms": 18.800000000046566,
+            "paintMeanMs": 79.11000000002096,
+            "paintP95Ms": 86.09999999997672,
+            "mutationsMean": 2
+          },
+          "edit-code": {
+            "scriptMeanMs": 10.690000000002328,
+            "scriptP95Ms": 11.900000000023283,
+            "paintMeanMs": 71.73999999997905,
+            "paintP95Ms": 83.80000000004657,
+            "mutationsMean": 6
+          }
+        },
+        "middle": {
+          "show-markers": {
+            "scriptMeanMs": 16.020000000006984,
+            "scriptP95Ms": 16.599999999976717,
+            "paintMeanMs": 78.05000000001164,
+            "paintP95Ms": 85.80000000004657,
+            "mutationsMean": 1
+          },
+          "render": {
+            "scriptMeanMs": 16.10999999998603,
+            "scriptP95Ms": 17,
+            "paintMeanMs": 78.28999999999068,
+            "paintP95Ms": 86.29999999993015,
+            "mutationsMean": 1
+          },
+          "edit-paragraph": {
+            "scriptMeanMs": 36.55999999999767,
+            "scriptP95Ms": 41.09999999997672,
+            "paintMeanMs": 98.39000000002561,
+            "paintP95Ms": 109.5,
+            "mutationsMean": 2
+          },
+          "edit-code": {
+            "scriptMeanMs": 30.489999999979045,
+            "scriptP95Ms": 32.60000000009313,
+            "paintMeanMs": 90.79999999998836,
+            "paintP95Ms": 95.5,
+            "mutationsMean": 6
+          }
+        },
+        "end": {
+          "show-markers": {
+            "scriptMeanMs": 17.04000000000233,
+            "scriptP95Ms": 21.199999999953434,
+            "paintMeanMs": 77.99000000001396,
+            "paintP95Ms": 91.40000000002328,
+            "mutationsMean": 1
+          },
+          "render": {
+            "scriptMeanMs": 16.309999999974387,
+            "scriptP95Ms": 17.599999999976717,
+            "paintMeanMs": 76.6699999999837,
+            "paintP95Ms": 89.5,
+            "mutationsMean": 1
+          },
+          "edit-paragraph": {
+            "scriptMeanMs": 56.22000000001863,
+            "scriptP95Ms": 68,
+            "paintMeanMs": 117.94000000000233,
+            "paintP95Ms": 129.09999999997672,
+            "mutationsMean": 2
+          },
+          "edit-code": {
+            "scriptMeanMs": 49.929999999993015,
+            "scriptP95Ms": 51.20000000006985,
+            "paintMeanMs": 110.7800000000163,
+            "paintP95Ms": 115.59999999997672,
+            "mutationsMean": 6
+          }
+        }
+      },
+      "resources": {
+        "jsHeapMiB": 38.95974349975586,
+        "domNodes": 139622,
+        "textLength": 358995,
+        "taskMs": 14268.999000000007,
+        "layoutMs": 1029.3580000000002,
+        "styleMs": 27.230000000000032
+      }
+    }
+  ]
+}

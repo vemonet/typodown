@@ -445,6 +445,10 @@
     var(--cm-td-code-top),
     var(--cm-td-code-bottom);
 }
+/* Container indentation belongs to the rendered block, not its code text. */
+.typodown .cm-line.cm-td-code-indented {
+  margin-left: var(--cm-td-code-indent);
+}
 /* The first content line always carries the block's top gap itself, as a
  * transparent border like `cm-td-para-gap`, so the space above a code block is
  * constant no matter what precedes it -- a paragraph, a heading, or another
