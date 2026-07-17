@@ -1,15 +1,8 @@
 import { open } from "@tauri-apps/plugin-dialog";
-import {
-  readDir,
-  readTextFile,
-  rename,
-  writeTextFile,
-  watch,
-  type UnwatchFn,
-} from "@tauri-apps/plugin-fs";
+import { readDir, readTextFile, rename, writeTextFile, watch } from "@tauri-apps/plugin-fs";
 import ignore, { type Ignore } from "ignore";
 
-export type { UnwatchFn } from "@tauri-apps/plugin-fs";
+export type UnwatchFn = () => void;
 
 export interface TreeNode {
   name: string;
@@ -25,14 +18,46 @@ const MARKDOWN_EXT = /\.(md|markdown|mdown|mkd|mdx)$/i;
 // when the project has no .gitignore. Hidden dot-folders are otherwise shown.
 const DEFAULT_IGNORED = ["node_modules", ".git"];
 
+export const IS_TAURI = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+let webRoot: FileSystemDirectoryHandle | null = null;
+const webHandles = new Map<string, FileSystemHandle>();
+
 /** Open a folder picker. Returns the absolute path or null if cancelled. */
 export async function pickFolder(): Promise<string | null> {
+  if (!IS_TAURI) {
+    if (!("showDirectoryPicker" in window)) {
+      throw new Error(
+        "Opening folders requires a Chromium-based browser with File System Access support.",
+      );
+    }
+    webRoot = await window.showDirectoryPicker({ mode: "readwrite" });
+    webHandles.clear();
+    webHandles.set(webRoot.name, webRoot);
+    return webRoot.name;
+  }
   const result = await open({ directory: true, multiple: false, title: "Open markdown vault" });
   return typeof result === "string" ? result : null;
 }
 
 /** Open a single markdown file picker. Returns the absolute path or null. */
 export async function pickMarkdownFile(): Promise<string | null> {
+  if (!IS_TAURI) {
+    if (!("showOpenFilePicker" in window)) return null;
+    const [handle] = await window.showOpenFilePicker({
+      multiple: false,
+      types: [
+        {
+          description: "Markdown",
+          accept: { "text/markdown": [".md", ".markdown", ".mdown", ".mkd", ".mdx"] },
+        },
+      ],
+    });
+    if (!handle) return null;
+    webRoot = null;
+    webHandles.clear();
+    webHandles.set(handle.name, handle);
+    return handle.name;
+  }
   const result = await open({
     directory: false,
     multiple: false,
@@ -46,6 +71,7 @@ export async function pickMarkdownFile(): Promise<string | null> {
  * files and the folders that hold them. Hidden paths (dotfiles / dotdirs) are
  * skipped. Folders are sorted before files, each group alphabetical. */
 export async function readMarkdownTree(rootPath: string): Promise<TreeNode[]> {
+  if (!IS_TAURI) return readWebMarkdownTree(rootPath);
   const ig = await buildIgnore(rootPath);
   const root = await readDirSafe(rootPath);
   const nodes = await Promise.all(root.map((entry) => buildNode(entry, rootPath, rootPath, ig)));
@@ -119,22 +145,131 @@ function joinPath(parent: string, child: string): string {
 
 /** Read a markdown file as text. */
 export async function readFileContent(path: string): Promise<string> {
+  if (!IS_TAURI) {
+    const handle = webHandles.get(path);
+    if (!handle || handle.kind !== "file") throw new Error(`File is no longer available: ${path}`);
+    return (await (handle as FileSystemFileHandle).getFile()).text();
+  }
   return readTextFile(path);
 }
 
 /** Write text to a file. */
 export async function writeFileContent(path: string, content: string): Promise<void> {
+  if (!IS_TAURI) {
+    const handle = webHandles.get(path);
+    if (!handle || handle.kind !== "file") throw new Error(`File is no longer available: ${path}`);
+    const writable = await (handle as FileSystemFileHandle).createWritable();
+    await writable.write(content);
+    await writable.close();
+    return;
+  }
   await writeTextFile(path, content);
 }
 
 /** Rename / move a file. */
 export async function renamePath(oldPath: string, newPath: string): Promise<void> {
+  if (!IS_TAURI) {
+    await renameWebPath(oldPath, newPath);
+    return;
+  }
   await rename(oldPath, newPath);
 }
 
 /** Watch a folder for changes. Returns an unwatch function. */
 export async function watchVault(rootPath: string, cb: () => void): Promise<UnwatchFn> {
+  if (!IS_TAURI) {
+    const onFocus = () => cb();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }
   return watch(rootPath, cb, { recursive: true });
+}
+
+async function readWebMarkdownTree(rootPath: string): Promise<TreeNode[]> {
+  const root = webRoot ?? webHandles.get(rootPath);
+  if (!root) throw new Error("The folder permission has expired. Open the folder again.");
+  if (root.kind === "file") {
+    return MARKDOWN_EXT.test(root.name)
+      ? [{ name: root.name, path: root.name, isDir: false, children: [] }]
+      : [];
+  }
+  const directory = root as FileSystemDirectoryHandle;
+  webHandles.clear();
+  webHandles.set(rootPath, directory);
+  const ig = ignore().add(DEFAULT_IGNORED);
+  try {
+    const gitignore = await directory.getFileHandle(".gitignore");
+    ig.add(await (await gitignore.getFile()).text());
+  } catch {
+    // The folder does not contain a readable .gitignore.
+  }
+  return readWebDirectory(directory, rootPath, rootPath, ig);
+}
+
+async function readWebDirectory(
+  directory: FileSystemDirectoryHandle,
+  path: string,
+  rootPath: string,
+  ig: Ignore,
+): Promise<TreeNode[]> {
+  const nodes: TreeNode[] = [];
+  for await (const [name, handle] of directory.entries()) {
+    const childPath = joinPath(path, name);
+    const rel = relativePath(childPath, rootPath);
+    if (ig.ignores(rel)) continue;
+    webHandles.set(childPath, handle);
+    if (handle.kind === "directory") {
+      const children = await readWebDirectory(
+        handle as FileSystemDirectoryHandle,
+        childPath,
+        rootPath,
+        ig,
+      );
+      if (hasMarkdown(children)) nodes.push({ name, path: childPath, isDir: true, children });
+    } else if (MARKDOWN_EXT.test(name)) {
+      nodes.push({ name, path: childPath, isDir: false, children: [] });
+    }
+  }
+  return nodes.sort(compareNodes);
+}
+
+async function renameWebPath(oldPath: string, newPath: string): Promise<void> {
+  const handle = webHandles.get(oldPath);
+  const parentPath = oldPath.slice(0, oldPath.lastIndexOf("/"));
+  const parent = webHandles.get(parentPath);
+  if (!handle || !parent || parent.kind !== "directory")
+    throw new Error("Cannot access this path.");
+  const newName = newPath.slice(newPath.lastIndexOf("/") + 1);
+  const directory = parent as FileSystemDirectoryHandle;
+  if (handle.kind === "file") {
+    const target = await directory.getFileHandle(newName, { create: true });
+    const writable = await target.createWritable();
+    await writable.write(await (handle as FileSystemFileHandle).getFile());
+    await writable.close();
+  } else {
+    const target = await directory.getDirectoryHandle(newName, { create: true });
+    await copyWebDirectory(handle as FileSystemDirectoryHandle, target);
+  }
+  await directory.removeEntry(handle.name, { recursive: handle.kind === "directory" });
+}
+
+async function copyWebDirectory(
+  source: FileSystemDirectoryHandle,
+  target: FileSystemDirectoryHandle,
+): Promise<void> {
+  for await (const [name, handle] of source.entries()) {
+    if (handle.kind === "directory") {
+      await copyWebDirectory(
+        handle as FileSystemDirectoryHandle,
+        await target.getDirectoryHandle(name, { create: true }),
+      );
+    } else {
+      const output = await target.getFileHandle(name, { create: true });
+      const writable = await output.createWritable();
+      await writable.write(await (handle as FileSystemFileHandle).getFile());
+      await writable.close();
+    }
+  }
 }
 
 /** Strip the vault root prefix from an absolute path for display. */

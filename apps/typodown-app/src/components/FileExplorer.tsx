@@ -21,6 +21,7 @@ import {
   Sun,
   Moon,
   Monitor,
+  Palette,
 } from "lucide-solid";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -136,8 +137,10 @@ const FileExplorer: Component<FileExplorerProps> = (props) => {
                 <Moon class="size-3.5" />
               ) : colorMode() === "system" ? (
                 <Monitor class="size-3.5" />
-              ) : (
+              ) : colorMode() === "light" ? (
                 <Sun class="size-3.5" />
+              ) : (
+                <Palette class="size-3.5" />
               )}
             </TooltipTrigger>
             <TooltipContent>Toggle theme</TooltipContent>
@@ -154,6 +157,22 @@ const FileExplorer: Component<FileExplorerProps> = (props) => {
             <DropdownMenuItem onSelect={() => setColorMode("system")}>
               <Monitor class="mr-2 size-3.5" />
               System
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setColorMode("dracula")}>
+              <Palette class="mr-2 size-3.5" />
+              Dracula
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setColorMode("nord")}>
+              <Palette class="mr-2 size-3.5" />
+              Nord
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setColorMode("solarized-light")}>
+              <Palette class="mr-2 size-3.5" />
+              Solarized Light
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setColorMode("solarized-dark")}>
+              <Palette class="mr-2 size-3.5" />
+              Solarized Dark
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

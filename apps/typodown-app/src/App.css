@@ -4,6 +4,8 @@
 @import "@fontsource-variable/inter";
 @import "./styles/base.css";
 
+@source "./";
+
 @custom-variant dark (&:is(.dark *));
 
 :root {

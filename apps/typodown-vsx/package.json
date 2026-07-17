@@ -94,12 +94,20 @@
           "enum": [
             "editor",
             "light",
-            "dark"
+            "dark",
+            "dracula",
+            "nord",
+            "solarized-light",
+            "solarized-dark"
           ],
           "enumDescriptions": [
             "Follow the current VS Code color theme",
             "Typodown light (GitHub light)",
-            "Typodown dark (GitHub dark)"
+            "Typodown dark (GitHub dark)",
+            "Dracula",
+            "Nord",
+            "Solarized Light",
+            "Solarized Dark"
           ],
           "default": "editor",
           "description": "Color theme for the Typodown markdown editor."

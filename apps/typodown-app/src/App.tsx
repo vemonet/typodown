@@ -24,6 +24,7 @@ import {
   showGraph,
   vault,
 } from "@/lib/vault";
+import { IS_TAURI } from "@/lib/tauri";
 
 /** On mobile there is no window to drag, so the titlebar drag strip (which
  * costs a whole row) is dropped; on desktop it stays as the drag region for
@@ -36,7 +37,7 @@ const IS_MOBILE_OS = /android|iphone|ipad/i.test(navigator.userAgent);
 const IS_ANDROID = /android/i.test(navigator.userAgent);
 
 const App: Component = () => {
-  const { resolvedColorMode } = useColorMode();
+  const { colorMode, resolvedColorMode } = useColorMode();
 
   onMount(() => {
     void initOpenWith();
@@ -47,6 +48,9 @@ const App: Component = () => {
       if (key === "o") {
         e.preventDefault();
         void openFolder();
+      } else if (key === "s" && !IS_TAURI) {
+        e.preventDefault();
+        save();
       } else if (key === "g") {
         e.preventDefault();
         if (vault.view() === "graph") showEditor();
@@ -59,7 +63,7 @@ const App: Component = () => {
 
   return (
     <div class="app-root flex h-dvh flex-col bg-background text-foreground">
-      <Show when={!IS_MOBILE_OS}>
+      <Show when={IS_TAURI && !IS_MOBILE_OS}>
         {/* Blank drag strip for the macOS overlay titlebar. The built-in
          * data-tauri-drag-region handles double-click maximize; dragging goes
          * through our start_native_drag command because tauri's start_dragging
@@ -102,7 +106,7 @@ const App: Component = () => {
                 when={vault.view() === "graph"}
                 fallback={
                   <Editor
-                    theme={resolvedColorMode()}
+                    theme={colorMode() === "system" ? "auto" : colorMode()}
                     save={IS_ANDROID ? { run: save, isDirty: vault.dirty } : undefined}
                   />
                 }

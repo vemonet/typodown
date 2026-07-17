@@ -1,10 +1,8 @@
-/* @vemonet/typodown - GitHub-style theme for the CodeMirror 6 live-preview
- * editor, with light/dark support.
+/* @vemonet/typodown - themes for the CodeMirror 6 live-preview editor.
  *
  * Theming is driven by CSS variables on `.typodown`, selected via the
- * `data-td-theme` attribute ("light" | "dark" | "auto"); "auto" follows the OS
- * colour-scheme preference. Embedders (e.g. the VS Code webview) can remap the
- * variables to their own palette. */
+ * `data-td-theme` attribute; "auto" follows the OS colour-scheme preference.
+ * Embedders can add their own named theme by remapping these variables. */
 
 .typodown {
   --td-fg: #1f2328;
@@ -55,6 +53,146 @@
   background: var(--td-bg);
   font-family: var(--td-font);
   box-sizing: border-box;
+}
+
+.typodown[data-td-theme="dracula"] {
+  --td-fg: #f8f8f2;
+  --td-bg: #282a36;
+  --td-muted: #b6b6c2;
+  --td-faint: #6272a4;
+  --td-border: #44475a;
+  --td-border-muted: #383a4a;
+  --td-heading-border: #6272a4;
+  --td-link: #8be9fd;
+  --td-code-bg: rgba(68, 71, 90, 0.7);
+  --td-code-fg: #f8f8f2;
+  --td-block-bg: #30323f;
+  --td-code-block-bg: #21222c;
+  --td-table-header-bg: #343746;
+  --td-table-alt-bg: #2c2e3a;
+  --td-selection: rgba(189, 147, 249, 0.35);
+  --td-note: #8be9fd;
+  --td-tip: #50fa7b;
+  --td-important: #bd93f9;
+  --td-warning: #f1fa8c;
+  --td-caution: #ff5555;
+  --syn-keyword: #ff79c6;
+  --syn-string: #f1fa8c;
+  --syn-comment: #6272a4;
+  --syn-number: #bd93f9;
+  --syn-function: #50fa7b;
+  --syn-variable: #f8f8f2;
+  --syn-tag: #ff79c6;
+  --syn-attr: #50fa7b;
+  --syn-property: #66d9ef;
+  --syn-boolean: #bd93f9;
+  --syn-iri: #8be9fd;
+  --syn-prefixed: #ffb86c;
+}
+
+.typodown[data-td-theme="nord"] {
+  --td-fg: #d8dee9;
+  --td-bg: #2e3440;
+  --td-muted: #aeb8c7;
+  --td-faint: #7b88a1;
+  --td-border: #4c566a;
+  --td-border-muted: #3b4252;
+  --td-heading-border: #4c566a;
+  --td-link: #88c0d0;
+  --td-code-bg: rgba(76, 86, 106, 0.45);
+  --td-code-fg: #eceff4;
+  --td-block-bg: #353c4a;
+  --td-code-block-bg: #272c36;
+  --td-table-header-bg: #3b4252;
+  --td-table-alt-bg: #323946;
+  --td-selection: rgba(136, 192, 208, 0.3);
+  --td-note: #81a1c1;
+  --td-tip: #a3be8c;
+  --td-important: #b48ead;
+  --td-warning: #ebcb8b;
+  --td-caution: #bf616a;
+  --syn-keyword: #81a1c1;
+  --syn-string: #a3be8c;
+  --syn-comment: #616e88;
+  --syn-number: #b48ead;
+  --syn-function: #88c0d0;
+  --syn-variable: #d8dee9;
+  --syn-tag: #81a1c1;
+  --syn-attr: #8fbcbb;
+  --syn-property: #88c0d0;
+  --syn-boolean: #b48ead;
+  --syn-iri: #a3be8c;
+  --syn-prefixed: #d08770;
+}
+
+.typodown[data-td-theme="solarized-light"] {
+  --td-fg: #586e75;
+  --td-bg: #fdf6e3;
+  --td-muted: #657b83;
+  --td-faint: #93a1a1;
+  --td-border: #d8d2bd;
+  --td-border-muted: #eee8d5;
+  --td-heading-border: #d8d2bd;
+  --td-link: #268bd2;
+  --td-code-bg: rgba(147, 161, 161, 0.15);
+  --td-code-fg: #586e75;
+  --td-block-bg: #eee8d5;
+  --td-code-block-bg: #eee8d5;
+  --td-table-header-bg: #e7e0ca;
+  --td-table-alt-bg: #f7f0dd;
+  --td-selection: rgba(38, 139, 210, 0.24);
+  --td-note: #268bd2;
+  --td-tip: #859900;
+  --td-important: #6c71c4;
+  --td-warning: #b58900;
+  --td-caution: #dc322f;
+  --syn-keyword: #859900;
+  --syn-string: #2aa198;
+  --syn-comment: #93a1a1;
+  --syn-number: #d33682;
+  --syn-function: #268bd2;
+  --syn-variable: #cb4b16;
+  --syn-tag: #859900;
+  --syn-attr: #268bd2;
+  --syn-property: #268bd2;
+  --syn-boolean: #d33682;
+  --syn-iri: #2aa198;
+  --syn-prefixed: #6c71c4;
+}
+
+.typodown[data-td-theme="solarized-dark"] {
+  --td-fg: #839496;
+  --td-bg: #002b36;
+  --td-muted: #93a1a1;
+  --td-faint: #586e75;
+  --td-border: #31545c;
+  --td-border-muted: #073642;
+  --td-heading-border: #31545c;
+  --td-link: #268bd2;
+  --td-code-bg: rgba(88, 110, 117, 0.25);
+  --td-code-fg: #93a1a1;
+  --td-block-bg: #073642;
+  --td-code-block-bg: #073642;
+  --td-table-header-bg: #0b3b47;
+  --td-table-alt-bg: #04313c;
+  --td-selection: rgba(38, 139, 210, 0.35);
+  --td-note: #268bd2;
+  --td-tip: #859900;
+  --td-important: #6c71c4;
+  --td-warning: #b58900;
+  --td-caution: #dc322f;
+  --syn-keyword: #859900;
+  --syn-string: #2aa198;
+  --syn-comment: #586e75;
+  --syn-number: #d33682;
+  --syn-function: #268bd2;
+  --syn-variable: #cb4b16;
+  --syn-tag: #859900;
+  --syn-attr: #268bd2;
+  --syn-property: #268bd2;
+  --syn-boolean: #d33682;
+  --syn-iri: #2aa198;
+  --syn-prefixed: #6c71c4;
 }
 
 .typodown[data-td-theme="dark"] {
@@ -253,6 +391,24 @@
 .typodown .cm-td-link {
   color: var(--td-link);
 }
+.typodown .cm-td-footnote-ref {
+  color: var(--td-link);
+  font-size: 0.75em;
+  font-weight: 600;
+  line-height: 0;
+  vertical-align: super;
+}
+.typodown .cm-td-footnote-source {
+  color: var(--td-link);
+}
+.typodown .cm-line.cm-td-footnote-definition {
+  color: var(--td-muted);
+  font-size: 0.9em;
+  padding-left: 1.25em;
+}
+.typodown .cm-line.cm-td-footnote-continuation {
+  padding-left: 2.5em;
+}
 .typodown .cm-td-inline-code {
   font-family: var(--td-mono);
   font-size: 0.9em;
@@ -305,6 +461,8 @@
   border-top-left-radius: 6px calc(0.7em + 6px);
   border-top-right-radius: 6px calc(0.7em + 6px);
   padding-top: 10px;
+  padding-right: 48px;
+  position: relative;
 }
 /* Longhands only: a `border-radius` shorthand here would also zero the top
  * radii on a single-line block, which is both `-top` and `-bottom` at once. */
@@ -350,6 +508,56 @@
 .typodown .cm-td-lang-input:focus {
   color: var(--td-fg);
   border-color: var(--td-link);
+}
+
+.typodown .cm-td-copy-wrap {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+}
+.typodown .cm-td-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--td-muted);
+  background: var(--td-code-block-bg);
+  border: 1px solid var(--td-border-muted);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.typodown .cm-td-copy:hover {
+  color: var(--td-fg);
+  background: var(--td-bg);
+}
+.typodown .cm-td-copy:focus-visible {
+  outline: 2px solid var(--td-link);
+  outline-offset: 2px;
+}
+.typodown .cm-td-copy svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.typodown .cm-td-copy-success {
+  color: var(--td-success, #1a7f37);
+}
+
+.typodown .cm-td-mermaid {
+  position: relative;
+}
+.typodown .cm-td-mermaid > .cm-td-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
 }
 
 .typodown .cm-td-tok-keyword {
@@ -411,6 +619,9 @@
  * doesn't take up vertical space, matching how blank paragraph separators are
  * hidden. Stays visible when the caret is on it so it can be edited. */
 .typodown .cm-line.cm-td-quote-empty {
+  display: none;
+}
+.typodown .cm-line.cm-td-directive-close {
   display: none;
 }
 .typodown .cm-td-alert {

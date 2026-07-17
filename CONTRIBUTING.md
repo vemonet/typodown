@@ -60,6 +60,12 @@ Build and install extension in your local VSCode:
 vp run vsx:install
 ```
 
+Copy the `.apk` file:
+
+```sh
+cp apps/typodown-app/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk ~/Dropbox/typodown.apk
+```
+
 ## 💻 Desktop and smartphone app
 
 Built with [Tauri v2](https://v2.tauri.app/).

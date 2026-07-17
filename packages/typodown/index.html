@@ -543,20 +543,15 @@
       <img src="/logo.png" width="88" height="88" alt="Typodown" class="hero-logo" />
       <h1>Seamless markdown editing,<br />everywhere you write.</h1>
       <p class="hero-sub">
-        Typodown blends reading and writing into one continuous motion. Markdown renders where you
-        type: no preview pane, no markup cluttering the page.
+        Typodown blends reading and writing into one continuous experience. Markdown renders where
+        you type: no preview pane, no markup cluttering the page.
       </p>
       <p class="hero-sub">
         Open-source & cross-platform, inspired by
         <a href="https://typora.io/" target="_blank" rel="noopener">Typora</a>.
       </p>
       <div class="hero-cta">
-        <a
-          class="btn"
-          href="https://marketplace.visualstudio.com/items?itemName=vemonet.typodown"
-          target="_blank"
-          rel="noopener"
-        >
+        <a class="btn" href="vscode:extension/vemonet.typodown" title="Open in Visual Studio Code">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path
               fill="#0098FF"
@@ -610,6 +605,17 @@
             />
           </svg>
           Android app
+        </a>
+        <a class="btn" href="./vault/" title="⚠️ Requires a Chromium-based browser">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="11" fill="#4c8bf5" />
+            <path d="M12 1a11 11 0 0 1 9.53 5.5H12Z" fill="#80aef8" />
+            <path d="m21.53 6.5-5.5 9.53L12 12Z" fill="#2f6fda" />
+            <path d="m16.03 16.03-9.53 5.5L12 12Z" fill="#3b7de8" />
+            <circle cx="12" cy="12" r="5.15" fill="#d2e3fc" />
+            <circle cx="12" cy="12" r="3.55" fill="#4285f4" />
+          </svg>
+          Web app
         </a>
         <a
           class="btn"
@@ -678,21 +684,21 @@
         <p>Alerts, checkboxes lists, editable tables, YAML front matter and raw HTML.</p>
       </div>
       <div class="feature">
-        <h3>📈 Math &amp; diagrams</h3>
-        <p>Inline and block LaTeX, plus live Mermaid diagrams that reveal their source on focus.</p>
+        <h3>📈 Maths &amp; diagrams</h3>
+        <p>Inline and block LaTeX, plus live Mermaid diagrams.</p>
       </div>
       <div class="feature">
         <h3>⌨️ Familiar shortcuts</h3>
         <p>
-          <kbd>Cmd/Ctrl</kbd>+<kbd>B</kbd> <kbd>I</kbd> <kbd>K</kbd> <kbd>F</kbd> <kbd>Z</kbd>,
+          <kbd>Ctrl/⌘</kbd>+<kbd>B</kbd> <kbd>I</kbd> <kbd>K</kbd> <kbd>F</kbd> <kbd>Z</kbd>,
           <kbd>Tab</kbd> indent.
         </p>
       </div>
       <div class="feature">
         <h3>⚔️ Cross-platform</h3>
         <p>
-          Available as a VSCode extension, desktop app (Linux, macOS, windows), android app, and npm
-          package.
+          Available as a VSCode extension, desktop app (Linux, macOS, windows), android app, web
+          app, and npm package.
         </p>
       </div>
       <div class="feature">
@@ -725,8 +731,20 @@ description: Seamless open-source markdown editing
 
 # Typodown
 
-Markdown renders where you type. Move your caret into a heading, bold, code span or link and its raw markers surface while you edit, then settle back into place.
+Markdown renders where you type. Move your caret into a **bold term**, \`code span\` or [link](/) and its raw markers surface while you edit, then settle back into place.
 
+## Why?
+
+[**Typora**](https://typora.io) nailed markdown editing: you edit the rendered document directly. But Typora is a closed-source desktop app, so that experience stops at its window.
+
+[**Marktext**](https://marktext.me/) came up with a really good open-source alternative to Typora. However, as a long time Typora user, a few things were not feeling right:
+
+- Marktext is not as minimalist as Typora. It has a different design philosophy where it shows all available actions on the screen. Which might be better for some users, but I find it too cluttered.
+  - Every time I click a different line, a button moves in the left margin; every time I highlight some characters, a toolbar pops on top of the selection. Too many unnecessary movements on the screen to me.
+  - Codeblocks \`\`\` could be always hidden, no need to reveal them; frontmatter does not need a "front matter delimiter" written all around it, etc.
+- Despite having 10+ themes I could not find a good imitation of GitHub style markdown rendering, which is arguably the style developers are the most exposed to. And custom CSS seems to have its limitations (I could not figure out how to make the \`<hr>\` a plain line instead of the default dotted line)
+
+**Typodown** brings Typora's editing experience to the open-source world, the web, VSCode and smartphones, with a minimalist design, GitHub style rendering, and more.
 ## Install
 
 Typodown ships in several forms, and table columns can be left, center, or right aligned:
@@ -759,17 +777,24 @@ Open a folder of markdown files, with a file explorer tree on the left. You can 
 
 The desktop app (Linux, macOS, Windows) enables a **graph view** built from files using the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf): see how your notes link to each other, and jump to any node.
 
+### 🌐 Progressive Web App
+
+[Open Typodown Vault](https://vemonet.github.io/typodown/vault/) to edit a local folder directly in your browser, with the same file explorer, editor and graph view as the desktop app. It can also be installed as a PWA for a standalone app experience.
+
+> [!WARNING]
+> Typodown Vault requires a Chromium-based browser because it uses the [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/Window/showDirectoryPicker) to read and write your selected folder. Firefox and Safari are not currently supported. Your files remain local and are not uploaded.
+
 ### 📱 Android app
 
-Open a \`.md\` file with Typodown straight from your file or storage app: Dropbox, Google Drive, Nextcloud, anything exposing a writable Android documents provider works; there is no per-provider integration.
+Open a \`.md\` file with Typodown straight from your file or storage app: git, Dropbox, Google Drive, Nextcloud, anything exposing a writable Android documents provider works; there is no per-provider integration. With Dropbox you will need to save the \`.md\` file on device to be able to edit it with Typodown.
 
-Edits auto-save about a second after you stop typing, paced to avoid cloud sync conflicts. A floating toolbar brings formatting actions to touch screens where keyboard shortcuts are out of reach.
+A floating toolbar brings formatting actions to touch screens where keyboard shortcuts are out of reach.
 
 ### 📦 npm package
 
 Embed the editor in any web app, framework-agnostic. Built with [CodeMirror 6](https://codemirror.net/). Install it from npm:
 
-\`\`\`bash
+\`\`\`sh
 npm i --save @vemonet/typodown
 \`\`\`
 
@@ -794,19 +819,19 @@ editor.destroy();
 \`\`\`
 
 > [!TIP]
-> A standalone UMD build (CodeMirror and Lezer bundled in) is also available on [unpkg](https://unpkg.com) / [jsDelivr](https://www.jsdelivr.com), exposing a \`Typodown\` global for use from plain HTML with no bundler. It is larger than the npm package since it cannot dedupe CodeMirror against the rest of your bundle.
+> A standalone UMD build (CodeMirror bundled in) is also available on [unpkg](https://unpkg.com) / [jsDelivr](https://www.jsdelivr.com), exposing a \`Typodown\` global for use from plain HTML with no bundler.
 
 ## Features
 
 ### Inline formatting
 
-Write **bold**, _italic_, ***bold italic***, ~~strikethrough~~ and \`inline code\`. Links can be [inline](https://github.com/vemonet/typodown), autolinks like https://vemonet.github.io/typodown.
+Write **bold**, _italic_, ***bold italic***, ~~strikethrough~~, \`inline code\`, and footnotes[^1].
 
-Select some text and press <kbd>cmd/ctrl</kbd> + <kbd>B</kbd>, <kbd>cmd/ctrl</kbd> + <kbd>I</kbd>, or <kbd>cmd/ctrl</kbd> + <kbd>K</kbd> to format it.
+Select some text and press <kbd>Ctrl/⌘</kbd> + <kbd>B</kbd>, <kbd>Ctrl/⌘</kbd> + <kbd>I</kbd>, or <kbd>Ctrl/⌘</kbd> + <kbd>K</kbd> to format it.
 
 ### Lists
 
-Unordered lists nest with different bullets per level (Tab / Shift+Tab):
+Unordered lists nest with different bullets per level (Tab / ⇧+Tab):
 
 - Fruit
   - Apple
@@ -823,13 +848,11 @@ Ordered lists keep their starting number:
 Task lists stay interactive:
 
 - [x] Parse GitHub Flavored Markdown
-- [x] Reveal the syntax under the cursor
 - [ ] Create new JS framework
 
-### Blockquotes and alerts
+### Alerts
 
 > A plain blockquote.
-> It can span several lines.
 
 > [!NOTE]
 > Useful information that users should know, even when skimming.
@@ -843,32 +866,19 @@ Task lists stay interactive:
 > [!CAUTION]
 > Advises about risks or negative outcomes of certain actions.
 
-### Code blocks
+Directive containers used by documentation sites are supported too:
 
-Python:
+:::note
+Useful context can be written as regular Markdown inside the container.
+:::
 
-\`\`\`python
-def fib(n: int) -> int:
-    return n if n < 2 else fib(n - 1) + fib(n - 2)
-\`\`\`
+:::tip Custom label
+Add a label after the directive type to replace the default title.
+:::
 
-Shell:
-
-\`\`\`bash
-npm i --save @vemonet/typodown
-vp run dev   # start this demo
-\`\`\`
-
-SPARQL:
-
-\`\`\`sparql
-PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-SELECT ?name ?email WHERE {
-  ?person a foaf:Person ;
-    foaf:mbox ?email .
-  FILTER(CONTAINS(?name, "Ada"))
-} ORDER BY ?name LIMIT 10
-\`\`\`
+:::danger[Destructive action]
+Docusaurus-style bracket labels work too.
+:::
 
 ### Mermaid diagrams
 
@@ -897,7 +907,7 @@ Single-line block maths works too: $$\\sum_{n=1}^{\\infty} \\frac{1}{n^2} = \\fr
 
 ### Raw HTML
 
-Raw HTML renders in place, and reveals its dimmed source when the caret lands on it, just like markdown syntax. It is on by default; pass **html: false** to turn it off.
+Raw HTML renders in place, and reveals its source when the caret lands on it, just like markdown syntax. It is on by default; pass **html: false** to turn it off.
 
 <div style="padding: 12px; border-left: 3px solid var(--td-link); background: var(--td-block-bg); border-radius: 0 6px 6px 0;">
   <strong>Custom callout</strong> built from a block of inline-styled HTML.
@@ -909,6 +919,34 @@ Raw HTML renders in place, and reveals its dimmed source when the caret lands on
 </details>
 
 Inline HTML like <kbd>Ctrl</kbd> + <kbd>K</kbd>, <span style="color: var(--td-caution);">colored text</span>, subscript H<sub>2</sub>O, and <small>small print</small> all work too.
+
+### Themes
+
+Available themes: \`light\`, \`dark\`, \`system\`, \`dracula\`, \`nord\`, \`solarized-light\`, \`solarized-dark\`
+
+Define a custom theme:
+
+\`\`\`css
+.typodown[data-td-theme="rose-pine"] {
+  --td-bg: #191724;
+  --td-fg: #e0def4;
+  --td-muted: #908caa;
+  --td-faint: #6e6a86;
+  --td-border: #403d52;
+  --td-border-muted: #26233a;
+  --td-heading-border: #403d52;
+  --td-link: #c4a7e7;
+  --td-code-bg: rgba(110, 106, 134, 0.2);
+  --td-code-fg: #e0def4;
+  --td-block-bg: #1f1d2e;
+  --td-code-block-bg: #1f1d2e;
+  --td-table-header-bg: #26233a;
+  --td-table-alt-bg: #1f1d2e;
+  --td-selection: rgba(196, 167, 231, 0.3);
+}
+\`\`\`
+
+[^1]: Footnotes are useful for citations and additional context. They appear at the bottom of the document.
 
 ---
 
@@ -926,6 +964,7 @@ Everything above is driven from a single markdown string. Edit freely and the so
 
       const applyTheme = (theme) => {
         editor.setTheme(theme);
+        // editor.setTheme("solarized-dark");
         document.documentElement.dataset.theme = theme;
         localStorage.setItem("typodown-theme", theme);
         const btn = document.getElementById("theme");

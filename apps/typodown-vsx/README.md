@@ -11,7 +11,7 @@ Typodown renders markdown inline as you type, no split preview to keep in sync. 
 - **Seamless markdown editing.** WYSIWYG, edit rendered markdown directly. No preview to keep in sync.
 - **GitHub Flavored Markdown**. GFM alerts (`> [!NOTE]`), checkboxes lists, editable tables, images, links, YAML front matter and arbitrary HTML.
 - **LaTeX maths and Mermaid diagram visualization**. Inline `$...$` and block `$$...$$` math rendered with KaTeX.
-- **Editor shortcuts**: <kbd>Cmd/Ctrl</kbd>+<kbd>B</kbd> bold, <kbd>Cmd/Ctrl</kbd>+<kbd>I</kbd> italic, <kbd>Cmd/Ctrl</kbd>+<kbd>K</kbd> link, <kbd>Tab</kbd> / <kbd>Shift+Tab</kbd> indent, <kbd>Cmd/Ctrl</kbd>+<kbd>Z</kbd> undo / redo.
+- **Editor shortcuts**: <kbd>Ctrl/⌘</kbd>+<kbd>B</kbd> bold, <kbd>Ctrl/⌘</kbd>+<kbd>I</kbd> italic, <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> link, <kbd>Tab</kbd> / <kbd>Shift+Tab</kbd> indent, <kbd>Ctrl/⌘</kbd>+<kbd>Z</kbd> undo / redo.
 - **Theme aware**: follows your VSCode color theme by default, or pin it to a GitHub-like light/dark theme.
 - Powered by the [**`@vemonet/typodown`**](https://www.npmjs.com/package/@vemonet/typodown) library.
 

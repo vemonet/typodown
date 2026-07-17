@@ -6,10 +6,10 @@ import { useColorMode } from "@/components/color-mode";
 type ToasterProps = ComponentProps<typeof Sonner>;
 
 const Toaster: Component<ToasterProps> = (props) => {
-  const { colorMode } = useColorMode();
+  const { resolvedColorMode } = useColorMode();
   return (
     <Sonner
-      theme={colorMode()}
+      theme={resolvedColorMode()}
       class="toaster group"
       position="top-center"
       icons={{

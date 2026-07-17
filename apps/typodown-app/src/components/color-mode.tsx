@@ -12,7 +12,14 @@ import {
 
 export const ZAIDAN_COLOR_MODE_COOKIE_KEY = "zaidan-color-mode";
 
-export type ColorMode = "light" | "dark" | "system";
+export type ColorMode =
+  | "light"
+  | "dark"
+  | "system"
+  | "dracula"
+  | "nord"
+  | "solarized-light"
+  | "solarized-dark";
 export type ResolvedColorMode = "light" | "dark";
 
 export type ColorModeContextValue = {
@@ -45,7 +52,8 @@ export function ColorModeProvider(
    * "light"/"dark" when set to "system". */
   const resolvedColorMode = createMemo<ResolvedColorMode>(() => {
     const mode = colorMode();
-    return mode === "system" ? (osDark() ? "dark" : "light") : mode;
+    if (mode === "system") return osDark() ? "dark" : "light";
+    return mode === "light" || mode === "solarized-light" ? "light" : "dark";
   });
 
   // Apply the resolved mode to <html>. Runs on mount (so a saved preference
@@ -92,6 +100,15 @@ export const getClientColorMode = (): ColorMode => {
     .split("; ")
     .find((cookie) => cookie.startsWith(`${ZAIDAN_COLOR_MODE_COOKIE_KEY}=`))
     ?.split("=")[1];
-  if (stored === "light" || stored === "dark" || stored === "system") return stored;
+  if (
+    stored === "light" ||
+    stored === "dark" ||
+    stored === "system" ||
+    stored === "dracula" ||
+    stored === "nord" ||
+    stored === "solarized-light" ||
+    stored === "solarized-dark"
+  )
+    return stored;
   return "system";
 };

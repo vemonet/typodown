@@ -217,27 +217,30 @@ export function createOutline(
   };
 }
 
-/** Scroll so the start of `line` (1-indexed) is centred, without moving the
- * caret. Clamps out-of-range lines to the first / last line.
+/** Scroll so the start of `line` (1-indexed) sits near the top of the visible
+ * editor, without moving the caret. Clamps out-of-range lines to the first /
+ * last line.
  *
- * Hosts scroll differently, so pick the mechanism by who actually owns the
- * scroll: when CodeMirror's own scroller overflows (a fixed-height editor, e.g.
- * the desktop app) its `scrollIntoView` effect handles the scroll and the
- * viewport virtualisation; otherwise the page / window scrolls (the demo site,
- * the VS Code webview), where every line is rendered, so scroll the target
- * line's DOM element into view across its scrollable ancestors. */
-function scrollToLine(view: EditorView, line: number): void {
+ * Always go through CodeMirror's scroll effect. Calling `domAtPos` directly
+ * for a distant line can return the nearest rendered DOM node while that line
+ * is outside CodeMirror's virtual viewport, making the first click land at the
+ * wrong place and only the second click succeed after the target is rendered. */
+export function scrollToLine(view: EditorView, line: number): void {
   const doc = view.state.doc;
   const n = Math.max(1, Math.min(line, doc.lines));
   const pos = doc.line(n).from;
   const scroller = view.scrollDOM;
-  if (scroller.scrollHeight > scroller.clientHeight + 1) {
-    view.dispatch({ effects: EditorView.scrollIntoView(pos, { y: "center" }) });
-    return;
-  }
-  const node = view.domAtPos(pos).node;
-  const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element);
-  el?.scrollIntoView({ block: "center", inline: "nearest" });
+  const rect = scroller.getBoundingClientRect();
+  const visibleHeight =
+    scroller.scrollHeight > scroller.clientHeight + 1
+      ? scroller.clientHeight
+      : Math.max(0, Math.min(window.innerHeight, rect.bottom) - Math.max(0, rect.top));
+  view.dispatch({
+    effects: EditorView.scrollIntoView(pos, {
+      y: "start",
+      yMargin: Math.round(visibleHeight * 0.2),
+    }),
+  });
 }
 
 /** Parse markdown text into a flat list of headings.

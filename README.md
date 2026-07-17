@@ -11,15 +11,22 @@
 
 ---
 
-Typodown blends reading and writing markdown into one continuous motion. Markdown renders where you type: no preview pane to keep in sync, no mode to toggle, no markup cluttering the page.
+Typodown blends reading and writing markdown into one continuous experience. Markdown renders where you type: no preview pane to keep in sync, no mode to toggle, no markup cluttering the page.
 
 Move your caret into a heading, bold run, code span or link and only its raw markers (`#`, `**`, `` ` ``) surface for the moment you edit them, then settle back into place as you move on. The content stays central, the syntax stays out of the way.
 
 ## Why
 
-[Typora](https://typora.io) nailed markdown editing: you edit the rendered document directly, and it is still just markdown underneath. Nothing else gets that feeling right, rich-text editors that export to markdown are word processors in disguise.
+[**Typora**](https://typora.io) nailed markdown editing: you edit the rendered document directly, and it is still just markdown underneath. Nothing else gets that feeling right, rich-text editors that export to markdown are word processors in disguise.
 
 But Typora is a closed-source desktop app, so that experience stops at its window. Typodown is an open source editor component heavily inspired by it, that embeds anywhere the web runs: your app, VSCode, desktop, your phone.
+
+[**Marktext**](https://marktext.me/) came up with a really good open-source alternative to Typora. However, as a long time Typora users a few things were not feeling right:
+
+- Marktext is not as minimalist and pure as Typora.
+  - Everytime the cursor select some characters, a toolbar pops on top of the selection; everytime I click a different line, a button moves in the margin. That's too much unnecessary movements on the screen to me.
+  - Other details I found were cluttering the UI: ```could be always hidden, no need to revel them; frontmatter does not need a "front matter delimiter" written all around it;`<hr>` would be more elegant as plain line.
+- Despite having 10+ themes there are no imitiation of GitHub style markdown rendering, which is what I am used too, and arguably the most publicly exposed style of markdown rendering to developers. Custom CSS seems to have its limitations (I could not figure out how to make the `<hr>` a plain line, the choice of dotted line is debatable)
 
 ## Features
 
@@ -27,7 +34,7 @@ But Typora is a closed-source desktop app, so that experience stops at its windo
 - **Syntax reveals under the cursor.** Raw markers appear only for the construct you are editing, everything else stays rendered.
 - **GitHub Flavored Markdown.** GFM alerts (`> [!NOTE]`), task lists, editable tables, images, links, YAML front matter and arbitrary HTML.
 - **LaTeX math and Mermaid diagrams.** Inline `$...$` and block `$$...$$` rendered with KaTeX.
-- **Familiar shortcuts.** <kbd>Cmd/Ctrl</kbd>+<kbd>B</kbd> bold, <kbd>Cmd/Ctrl</kbd>+<kbd>I</kbd> italic, <kbd>Cmd/Ctrl</kbd>+<kbd>K</kbd> link, <kbd>Tab</kbd> / <kbd>Shift+Tab</kbd> indent, <kbd>Cmd/Ctrl</kbd>+<kbd>Z</kbd> undo / redo.
+- **Familiar shortcuts.** <kbd>Ctrl/⌘</kbd>+<kbd>B</kbd> bold, <kbd>Ctrl/⌘</kbd>+<kbd>I</kbd> italic, <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> link, <kbd>Tab</kbd> / <kbd>⇧+Tab</kbd> indent, <kbd>Ctrl/⌘</kbd>+<kbd>Z</kbd> undo / redo.
 - **Built on CodeMirror 6.** Battle-tested editing, selection, undo, IME and viewport virtualisation, the live preview is a decoration layer on top.
 - **Fully local.** No telemetry, no remote server.
 

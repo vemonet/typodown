@@ -168,7 +168,14 @@ class TypodownEditorProvider implements vscode.CustomTextEditorProvider {
 
 function readTheme(): ThemeSetting {
   const value = vscode.workspace.getConfiguration("typodown").get<string>("theme");
-  return value === "light" || value === "dark" ? value : "editor";
+  return value === "light" ||
+    value === "dark" ||
+    value === "dracula" ||
+    value === "nord" ||
+    value === "solarized-light" ||
+    value === "solarized-dark"
+    ? value
+    : "editor";
 }
 
 function makeNonce(): string {

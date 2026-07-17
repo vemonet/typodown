@@ -1,7 +1,14 @@
 // Messages exchanged between the extension host and the webview.
 
 /** Theme setting from `typodown.theme`. */
-export type ThemeSetting = "editor" | "light" | "dark";
+export type ThemeSetting =
+  | "editor"
+  | "light"
+  | "dark"
+  | "dracula"
+  | "nord"
+  | "solarized-light"
+  | "solarized-dark";
 
 /** Host -> webview. */
 export type HostMessage =

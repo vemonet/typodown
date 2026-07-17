@@ -1,6 +1,6 @@
 import { expect, test } from "vite-plus/test";
 import { EditorState } from "@codemirror/state";
-import { typodownMarkdown, quoteMultilinePaste } from "../src/editor.ts";
+import { typodownMarkdown, quoteMultilinePaste, selectionInCodeBlock } from "../src/editor.ts";
 
 // caret marked by `|` in the doc string.
 function pasteAt(doc: string, text: string): string {
@@ -40,4 +40,25 @@ test("single-line paste is unchanged", () => {
 
 test("paste outside a quote is unchanged", () => {
   expect(pasteAt("plain text|", "a\nb")).toBe("a\nb");
+});
+
+function selectionAt(doc: string): EditorState {
+  const caret = doc.indexOf("|");
+  return EditorState.create({
+    doc: doc.replace("|", ""),
+    extensions: [typodownMarkdown()],
+    selection: { anchor: caret },
+  });
+}
+
+test("paste inside a fenced code block uses plain clipboard text", () => {
+  expect(selectionInCodeBlock(selectionAt("```js\nconst x = |1;\n```"))).toBe(true);
+});
+
+test("paste inside an indented code block uses plain clipboard text", () => {
+  expect(selectionInCodeBlock(selectionAt("    const x = |1;"))).toBe(true);
+});
+
+test("paste outside a code block may keep rich formatting", () => {
+  expect(selectionInCodeBlock(selectionAt("plain |text"))).toBe(false);
 });

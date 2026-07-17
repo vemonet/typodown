@@ -13,6 +13,7 @@ import {
   writeFileContent,
   watchVault,
   type UnwatchFn,
+  IS_TAURI,
 } from "./tauri";
 
 export type VaultMode = "folder" | "file" | null;
@@ -111,7 +112,9 @@ function updateWindowTitle(): void {
   const path = currentPath();
   const root = vaultRoot();
   const name = path ? baseName(path) : root ? baseName(root) : null;
-  void getCurrentWindow().setTitle(name ? `${name} - Typodown` : "Typodown");
+  const title = name ? `${name} - Typodown` : "Typodown";
+  if (IS_TAURI) void getCurrentWindow().setTitle(title);
+  else document.title = title;
 }
 
 function baseName(path: string): string {
@@ -197,6 +200,7 @@ export async function openExternalFile(target: string): Promise<void> {
 /** Wire up OS "open with" handling. Registers the warm-start event listener
  * first, then drains any file that arrived before the frontend was ready. */
 export async function initOpenWith(): Promise<void> {
+  if (!IS_TAURI) return;
   try {
     await listen<string>("open-file", (event) => void openExternalFile(event.payload));
     const pending = await invoke<string | null>("take_pending_open_file");
@@ -383,6 +387,10 @@ export async function renameEntry(oldPath: string, newName: string, isDir = fals
 /** Copy a file to the system clipboard as a file object, so it can be pasted
  * into Finder / Explorer / the VS Code file tree. */
 export async function copyFileToClipboard(path: string): Promise<void> {
+  if (!IS_TAURI) {
+    toast.error("Copy file is only available in the desktop app");
+    return;
+  }
   try {
     await invoke("copy_file_to_clipboard", { path });
     toast.success("File copied", { description: "Paste it in your file manager or editor." });

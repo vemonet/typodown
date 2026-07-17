@@ -3,6 +3,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { Typodown, type Theme, type ToolbarSave } from "@vemonet/typodown";
 import "@vemonet/typodown/style.css";
 import { vault, onContentChange } from "@/lib/vault";
+import { IS_TAURI } from "@/lib/tauri";
 
 interface EditorProps {
   theme?: Theme;
@@ -24,9 +25,12 @@ const Editor: Component<EditorProps> = (props) => {
       theme: props.theme ?? "auto",
       placeholder: "Open a markdown file to start writing…",
       onChange: onContentChange,
-      // window.open is a no-op in the Tauri webview; route Cmd/Ctrl-clicked
+      // window.open is a no-op in the Tauri webview; route Ctrl/⌘-clicked
       // links to the system browser via the opener plugin.
-      openLink: (url) => void openUrl(url),
+      openLink: (url) => {
+        if (IS_TAURI) void openUrl(url);
+        else window.open(url, "_blank", "noopener,noreferrer");
+      },
       save: props.save,
     });
     ready = true;

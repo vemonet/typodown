@@ -41,6 +41,16 @@ export interface LivePreviewConfig {
 
 export const ALERT_KINDS = ["note", "tip", "important", "warning", "caution"] as const;
 type AlertKind = (typeof ALERT_KINDS)[number];
+export const DIRECTIVE_KINDS = [
+  "note",
+  "info",
+  "tip",
+  "important",
+  "warning",
+  "caution",
+  "danger",
+] as const;
+export type DirectiveKind = (typeof DIRECTIVE_KINDS)[number];
 const ALERT_LABEL: Record<AlertKind, string> = {
   note: "Note",
   tip: "Tip",
@@ -48,6 +58,38 @@ const ALERT_LABEL: Record<AlertKind, string> = {
   warning: "Warning",
   caution: "Caution",
 };
+const DIRECTIVE_ALERT_KIND: Record<DirectiveKind, AlertKind> = {
+  note: "note",
+  info: "note",
+  tip: "tip",
+  important: "important",
+  warning: "warning",
+  caution: "caution",
+  danger: "caution",
+};
+
+export interface DirectiveOpening {
+  kind: DirectiveKind;
+  alertKind: AlertKind;
+  label: string;
+}
+
+/** Parse VitePress-style `:::tip Title` and Docusaurus-style
+ * `:::tip[Title]` directive openings. */
+export function parseDirectiveOpening(text: string): DirectiveOpening | null {
+  const match =
+    /^\s*:::(note|info|tip|important|warning|caution|danger)(?:\s*\[([^\]]+)\]|\s+(.+?))?\s*$/i.exec(
+      text,
+    );
+  if (!match) return null;
+  const kind = match[1]!.toLowerCase() as DirectiveKind;
+  const customLabel = (match[2] ?? match[3] ?? "").trim();
+  return {
+    kind,
+    alertKind: DIRECTIVE_ALERT_KIND[kind],
+    label: customLabel || ALERT_LABEL[DIRECTIVE_ALERT_KIND[kind]],
+  };
+}
 
 /** A selection is "on" a construct when any of its ranges overlaps [from, to].
  That is what reveals the raw syntax for the construct under the caret. */
@@ -156,6 +198,22 @@ class HrWidget extends WidgetType {
   }
 }
 
+class FootnoteRefWidget extends WidgetType {
+  constructor(readonly label: string) {
+    super();
+  }
+  eq(other: FootnoteRefWidget): boolean {
+    return other.label === this.label;
+  }
+  toDOM(): HTMLElement {
+    const sup = document.createElement("sup");
+    sup.className = "cm-td-footnote-ref";
+    sup.textContent = this.label;
+    sup.setAttribute("aria-label", `Footnote ${this.label}`);
+    return sup;
+  }
+}
+
 class ImageWidget extends WidgetType {
   constructor(
     readonly src: string,
@@ -254,6 +312,85 @@ class MathWidget extends WidgetType {
 
 let mermaidSeq = 0;
 
+async function copyText(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+}
+
+function copyIcon(): SVGSVGElement {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.innerHTML =
+    '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/>';
+  return svg;
+}
+
+function checkIcon(): SVGSVGElement {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.innerHTML = '<path d="m5 12 4 4L19 6"/>';
+  return svg;
+}
+
+function createCopyButton(source: string): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.className = "cm-td-copy";
+  button.type = "button";
+  button.title = "Copy code";
+  button.setAttribute("aria-label", "Copy code");
+  button.appendChild(copyIcon());
+  let resetTimer: ReturnType<typeof setTimeout> | undefined;
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    void copyText(source).then(() => {
+      button.classList.add("cm-td-copy-success");
+      button.title = "Copied";
+      button.setAttribute("aria-label", "Code copied");
+      button.replaceChildren(checkIcon());
+      clearTimeout(resetTimer);
+      resetTimer = setTimeout(() => {
+        button.classList.remove("cm-td-copy-success");
+        button.title = "Copy code";
+        button.setAttribute("aria-label", "Copy code");
+        button.replaceChildren(copyIcon());
+      }, 1200);
+    });
+  });
+  return button;
+}
+
+class CopyButtonWidget extends WidgetType {
+  constructor(readonly source: string) {
+    super();
+  }
+  eq(other: CopyButtonWidget): boolean {
+    return other.source === this.source;
+  }
+  toDOM(): HTMLElement {
+    const wrap = document.createElement("span");
+    wrap.className = "cm-td-copy-wrap";
+    wrap.contentEditable = "false";
+    wrap.appendChild(createCopyButton(this.source));
+    return wrap;
+  }
+  ignoreEvent(): boolean {
+    return true;
+  }
+}
+
 // Renders lazily: `mermaid` is a large dependency, so it is only imported the
 // first time a mermaid code block is actually idle (not being edited).
 class MermaidWidget extends WidgetType {
@@ -266,15 +403,18 @@ class MermaidWidget extends WidgetType {
   toDOM(): HTMLElement {
     const host = document.createElement("div");
     host.className = "cm-td-mermaid";
+    const diagram = document.createElement("div");
+    diagram.className = "cm-td-mermaid-diagram";
+    host.append(createCopyButton(this.source), diagram);
     void import("mermaid")
       .then(async ({ default: mermaid }) => {
         mermaid.initialize({ startOnLoad: false, securityLevel: "strict" });
         const { svg } = await mermaid.render(`cm-td-mermaid-${mermaidSeq++}`, this.source);
-        host.innerHTML = svg;
+        diagram.innerHTML = svg;
       })
       .catch((error: unknown) => {
         host.classList.add("cm-td-mermaid-error");
-        host.textContent = error instanceof Error ? error.message : String(error);
+        diagram.textContent = error instanceof Error ? error.message : String(error);
       });
     return host;
   }
@@ -378,16 +518,19 @@ class LanguageWidget extends WidgetType {
 }
 
 class AlertLabelWidget extends WidgetType {
-  constructor(readonly kind: AlertKind) {
+  constructor(
+    readonly kind: AlertKind,
+    readonly label = ALERT_LABEL[kind],
+  ) {
     super();
   }
   eq(other: AlertLabelWidget): boolean {
-    return other.kind === this.kind;
+    return other.kind === this.kind && other.label === this.label;
   }
   toDOM(): HTMLElement {
     const span = document.createElement("span");
     span.className = `cm-td-alert-title cm-td-alert-${this.kind}`;
-    span.dataset.label = ALERT_LABEL[this.kind];
+    span.dataset.label = this.label;
     return span;
   }
 }
@@ -1105,6 +1248,8 @@ class DecoBuilder {
   readonly out: Range<Decoration>[] = [];
   private readonly fm: { open: number; close: number } | null;
   private fmApplied = false;
+  private directivesApplied = false;
+  private footnotesApplied = false;
   constructor(
     readonly state: EditorState,
     readonly config: LivePreviewConfig,
@@ -1144,6 +1289,14 @@ class DecoBuilder {
         this.frontMatter(doc);
       }
     }
+    if (!this.directivesApplied) {
+      this.directivesApplied = true;
+      this.directiveContainers();
+    }
+    if (!this.footnotesApplied) {
+      this.footnotesApplied = true;
+      this.footnoteDefinitions();
+    }
     const tree = syntaxTree(this.state);
     tree.iterate({
       from,
@@ -1151,6 +1304,87 @@ class DecoBuilder {
       enter: (node) => this.enter(node),
     });
     this.collapseBlankSeparators(from, to, tree);
+  }
+
+  private footnoteDefinitions(): void {
+    const doc = this.state.doc;
+    const tree = syntaxTree(this.state);
+    for (let n = 1; n <= doc.lines; n++) {
+      const line = doc.line(n);
+      const definition = parseFootnoteDefinition(line.text);
+      if (!definition || this.insideCodeBlock(tree, line.from)) continue;
+      const markerTo = line.from + definition.markerLength;
+      const active = this.on(line.from, line.to);
+      this.line(line.from, "cm-td-footnote-definition");
+      this.syntax(line.from, markerTo, active);
+
+      // CommonMark-style continuation lines belong visually to the same
+      // footnote while retaining their source indentation for editing.
+      while (n < doc.lines) {
+        const continuation = doc.line(n + 1);
+        if (!/^(?: {4}|\t)\S/.test(continuation.text)) break;
+        n++;
+        this.line(continuation.from, "cm-td-footnote-definition cm-td-footnote-continuation");
+        const indent = /^(?: {4}|\t)/.exec(continuation.text)?.[0].length ?? 0;
+        this.syntax(continuation.from, continuation.from + indent, active);
+      }
+    }
+  }
+
+  private directiveContainers(): void {
+    const doc = this.state.doc;
+    const tree = syntaxTree(this.state);
+    let lineNumber = 1;
+    while (lineNumber <= doc.lines) {
+      const openingLine = doc.line(lineNumber);
+      const opening = parseDirectiveOpening(openingLine.text);
+      if (!opening || this.insideCodeBlock(tree, openingLine.from)) {
+        lineNumber++;
+        continue;
+      }
+
+      let closingLine: ReturnType<typeof doc.line> | null = null;
+      for (let candidate = lineNumber + 1; candidate <= doc.lines; candidate++) {
+        const line = doc.line(candidate);
+        if (/^\s*:::\s*$/.test(line.text) && !this.insideCodeBlock(tree, line.from)) {
+          closingLine = line;
+          break;
+        }
+      }
+      if (!closingLine) {
+        lineNumber++;
+        continue;
+      }
+
+      const active = this.on(openingLine.from, closingLine.to);
+      const alertClass = `cm-td-quote cm-td-alert cm-td-alert-${opening.alertKind}`;
+      this.out.push(Decoration.line({ class: alertClass }).range(openingLine.from));
+      for (let contentLine = lineNumber + 1; contentLine < closingLine.number; contentLine++) {
+        this.out.push(Decoration.line({ class: alertClass }).range(doc.line(contentLine).from));
+      }
+      this.out.push(Decoration.line({ class: alertClass }).range(closingLine.from));
+
+      if (active) {
+        this.mark(openingLine.from, openingLine.to, "cm-td-mark");
+        this.mark(closingLine.from, closingLine.to, "cm-td-mark");
+      } else {
+        this.replaceWith(
+          openingLine.from,
+          openingLine.to,
+          new AlertLabelWidget(opening.alertKind, opening.label),
+        );
+        this.out.push(Decoration.line({ class: "cm-td-directive-close" }).range(closingLine.from));
+        this.syntax(closingLine.from, closingLine.to, false);
+      }
+      lineNumber = closingLine.number + 1;
+    }
+  }
+
+  private insideCodeBlock(tree: ReturnType<typeof syntaxTree>, pos: number): boolean {
+    for (let node: SyntaxNode | null = tree.resolveInner(pos, 1); node; node = node.parent) {
+      if (/FencedCode|CodeBlock/.test(node.name)) return true;
+    }
+    return false;
   }
 
   // A run of one or more blank lines between two content lines is the Markdown
@@ -1466,6 +1700,16 @@ class DecoBuilder {
       this.out.push(Decoration.line({ class: cls.join(" ") }).range(line.from));
     }
 
+    if (firstContent <= lastContent && firstContent <= doc.lines) {
+      const source = codeText ? doc.sliceString(codeText.from, codeText.to) : "";
+      this.out.push(
+        Decoration.widget({
+          widget: new CopyButtonWidget(source),
+          side: 1,
+        }).range(doc.line(firstContent).to),
+      );
+    }
+
     // The language selector floats just outside the block's corner while active
     // (a point widget on the last content line, absolutely positioned), so it
     // never adds a row to the block.
@@ -1493,11 +1737,17 @@ class DecoBuilder {
     // A GFM alert marker like `[!NOTE]` is parsed as a shortcut link; leave it to
     // the blockquote handler (which renders the alert label) so the two don't
     // fight over the same range.
-    if (
-      /^\[!(note|tip|important|warning|caution)\]$/i.test(
-        this.state.doc.sliceString(node.from, node.to),
-      )
-    ) {
+    const raw = this.state.doc.sliceString(node.from, node.to);
+    const footnote = /^\[\^([^\]\s]+)\]$/.exec(raw);
+    if (footnote) {
+      if (this.on(node.from, node.to)) {
+        this.mark(node.from, node.to, "cm-td-footnote-source");
+      } else {
+        this.replaceWith(node.from, node.to, new FootnoteRefWidget(footnote[1]!));
+      }
+      return;
+    }
+    if (/^\[!(note|tip|important|warning|caution)\]$/i.test(raw)) {
       return;
     }
     const active = this.on(node.from, node.to);
@@ -1714,6 +1964,17 @@ class DecoBuilder {
         : doc.sliceString(node.from, node.to);
     this.replaceWith(node.from, node.to, new MathWidget(source, display));
   }
+}
+
+export interface FootnoteDefinition {
+  label: string;
+  markerLength: number;
+}
+
+/** Parse the marker at the start of a standard Markdown footnote definition. */
+export function parseFootnoteDefinition(line: string): FootnoteDefinition | null {
+  const match = /^(?: {0,3})\[\^([^\]\s]+)\]:[ \t]*/.exec(line);
+  return match ? { label: match[1]!, markerLength: match[0].length } : null;
 }
 
 // ---- inline / line decorations (ViewPlugin, viewport-only) ----------------

@@ -17,7 +17,7 @@
  */
 
 export { Typodown, createTypodown } from "./editor.ts";
-export type { Theme, TypodownOptions } from "./editor.ts";
+export type { BuiltInTheme, Theme, TypodownOptions } from "./editor.ts";
 export { LANGUAGES, matchLanguages } from "./highlight.ts";
 export {
   insertTable,

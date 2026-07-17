@@ -10,7 +10,7 @@ Typodown blends reading and writing markdown into one continuous motion. Markdow
 - **GitHub Flavored Markdown**: GFM alerts (`> [!NOTE]`), task lists, editable tables, images and links.
 - **LaTeX math and Mermaid diagrams**, rendered with KaTeX.
 - **Auto-save.** Edits are written about a second after you stop typing; on Android, writes to cloud providers are paced to avoid sync conflicts.
-- **Familiar shortcuts** (<kbd>Cmd/Ctrl</kbd>+<kbd>B</kbd> / <kbd>I</kbd> / <kbd>K</kbd>, <kbd>Tab</kbd> indent, undo/redo) plus a floating toolbar for touch screens.
+- **Familiar shortcuts** (<kbd>Ctrl/⌘</kbd>+<kbd>B</kbd> / <kbd>I</kbd> / <kbd>K</kbd>, <kbd>Tab</kbd> indent, undo/redo) plus a floating toolbar for touch screens.
 - **File explorer.** Open a folder as a file tree.
 - **Graph view.** Built from files using the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
 

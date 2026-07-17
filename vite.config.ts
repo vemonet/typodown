@@ -58,7 +58,7 @@ export default defineConfig({
         command: "vp run -r build",
       },
       "demo:build": {
-        command: "vp run @vemonet/typodown#demo:build",
+        command: "vp run @vemonet/typodown#demo:build && vp run typodown-pwa#build",
       },
 
       // VSCode extension (vsce runs vscode:prepublish, which bundles via build.mjs)
@@ -74,6 +74,11 @@ export default defineConfig({
       },
 
       // Tauri app
+      "pwa:dev": {
+        command: "vp run typodown-pwa#dev",
+        dependsOn: ["@vemonet/typodown#build"],
+        cache: false,
+      },
       "app:dev": {
         command: "npm run tauri dev",
         cwd: "apps/typodown-app",

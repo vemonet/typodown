@@ -22,7 +22,7 @@ interface ToolbarAction {
   icon: string;
   run: (view: EditorView) => void;
   /** Keyboard shortcut in CodeMirror key-spec form (e.g. "Mod-Shift-x"),
-   * appended to the button tooltip. `Mod` renders as Cmd on macOS, Ctrl
+   * appended to the button tooltip. `Mod` renders as ⌘ on macOS, Ctrl
    * elsewhere. Omit for actions with no keybinding. */
   shortcut?: string;
   /** Whether to return focus to the editor after running (default true, so a
@@ -33,18 +33,19 @@ interface ToolbarAction {
   refocus?: boolean;
 }
 
-/** True on macOS, where `Mod` shortcuts use Cmd rather than Ctrl. */
+/** True on macOS, where `Mod` shortcuts use ⌘ rather than Ctrl. */
 const IS_MAC = /Mac|iPhone|iPad/i.test(
   (typeof navigator !== "undefined" && (navigator.platform || navigator.userAgent)) || "",
 );
 
 /** Render a CodeMirror key spec ("Mod-Shift-x") as a tooltip hint, mapping
- * `Mod` to Cmd on macOS and Ctrl elsewhere. */
+ * `Mod` to ⌘ on macOS and Ctrl elsewhere. */
 function formatShortcut(spec: string): string {
   return spec
     .split("-")
     .map((part) => {
-      if (part === "Mod") return IS_MAC ? "Cmd" : "Ctrl";
+      if (part === "Mod") return IS_MAC ? "⌘" : "Ctrl";
+      if (part === "Shift") return "⇧";
       if (part === "Alt") return IS_MAC ? "Option" : "Alt";
       return part.length === 1 ? part.toUpperCase() : part;
     })

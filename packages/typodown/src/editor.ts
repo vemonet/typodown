@@ -35,7 +35,7 @@ import {
 import { GFM } from "@lezer/markdown";
 import { livePreview, ALERT_KINDS, markerEndOnLine } from "./live-preview.ts";
 import { openInsertTableDialog, insertTable } from "./menu.ts";
-import { createOutline, type OutlineHandle } from "./outline.ts";
+import { createOutline, scrollToLine as scrollViewToLine, type OutlineHandle } from "./outline.ts";
 import { createPrefs } from "./prefs.ts";
 import { Math as MathExtension } from "./math.ts";
 import { matchLanguages } from "./highlight.ts";
@@ -49,7 +49,18 @@ import {
   type ToolbarMode,
 } from "./toolbar.ts";
 
-export type Theme = "light" | "dark" | "auto";
+/** Themes bundled with Typodown. `light` and `dark` are the GitHub themes. */
+export type BuiltInTheme =
+  | "auto"
+  | "light"
+  | "dark"
+  | "dracula"
+  | "nord"
+  | "solarized-light"
+  | "solarized-dark";
+
+/** A bundled theme name, or a custom name styled through `data-td-theme`. */
+export type Theme = BuiltInTheme | (string & Record<never, never>);
 
 export interface TypodownOptions {
   /** Initial markdown content. */
@@ -61,14 +72,14 @@ export interface TypodownOptions {
   /** Enable the browser's native spellcheck (red squiggles). Defaults to false. */
   spellcheck?: boolean;
   /**
-   * Read the clipboard for the Cmd/Ctrl+K link shortcut and plain paste. Defaults
+   * Read the clipboard for the Ctrl/⌘+K link shortcut and plain paste. Defaults
    * to `navigator.clipboard.readText()`, which works in browsers but is blocked
    * in some embedders (e.g. VS Code webviews); provide this to read it from the
    * host instead.
    */
   getClipboardText?: () => string | Promise<string>;
   /**
-   * Open a link's URL when it is Cmd/Ctrl-clicked. Defaults to
+   * Open a link's URL when it is Ctrl/⌘-clicked. Defaults to
    * `window.open(url, "_blank")`, which works in browsers but not in some
    * embedders (e.g. a Tauri webview, where it must go through the host's opener
    * plugin to reach the system browser); provide this to route it to the host.
@@ -223,7 +234,7 @@ export class Typodown {
         paste: (event, view) => this.handlePaste(event, view),
         mousedown: (event, view) => this.handleMouseDown(event, view),
       }),
-      // Cmd/Ctrl+A: select the code content when inside a code block. Handled at
+      // Ctrl/⌘+A: select the code content when inside a code block. Handled at
       // highest precedence with stopPropagation so a host (e.g. the VS Code
       // webview, which reimplements select-all at the window level) does not run
       // its own select-all afterwards and clobber our selection.
@@ -243,7 +254,7 @@ export class Typodown {
                 return true;
               }
             }
-            // The shortcuts the editor owns (Cmd/Ctrl+B, +I, +K, +Shift+X/T/V)
+            // The shortcuts the editor owns (Ctrl/⌘+B, +I, +K, +Shift+X/T/V)
             // must not also fire the host's command for the same chord -- in the
             // VS Code webview, Cmd+B would otherwise toggle the side bar. The
             // keymap below still runs our command; stopping propagation here
@@ -372,14 +383,11 @@ export class Typodown {
     this.wrapper.dataset.tdTheme = theme;
   }
 
-  /** Scroll the viewport so the start of `line` (1-indexed) is centred, without
+  /** Scroll the viewport so the start of `line` (1-indexed) is near the top, without
    * moving the caret. Used by hosts that show a clickable outline of the
    * document's headings. Out-of-range lines clamp to the first / last line. */
   scrollToLine(line: number): void {
-    const doc = this.view.state.doc;
-    const n = Math.max(1, Math.min(line, doc.lines));
-    const pos = doc.line(n).from;
-    this.view.dispatch({ effects: EditorView.scrollIntoView(pos, { y: "center" }) });
+    scrollViewToLine(this.view, line);
   }
 
   focus(): void {
@@ -397,6 +405,10 @@ export class Typodown {
   // ---- clipboard ----------------------------------------------------------
 
   private handlePaste(event: ClipboardEvent, view: EditorView): boolean {
+    // Code is plain text by definition. Let CodeMirror use the clipboard's
+    // text/plain payload directly instead of converting rich HTML to Markdown
+    // (which would add emphasis, link, list, or fence markers to the code).
+    if (selectionInCodeBlock(view.state)) return false;
     const html = event.clipboardData?.getData("text/html") ?? "";
     const plain = event.clipboardData?.getData("text/plain") ?? "";
     // No HTML: let CodeMirror insert the plain text itself, but if the caret is
@@ -440,7 +452,7 @@ export class Typodown {
     return true;
   }
 
-  /** Cmd/Ctrl-click a link to open it; a plain click just places the caret. */
+  /** Ctrl/⌘-click a link to open it; a plain click just places the caret. */
   private handleMouseDown(event: MouseEvent, view: EditorView): void {
     if (!(event.metaKey || event.ctrlKey)) return;
     const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
@@ -453,7 +465,7 @@ export class Typodown {
     }
   }
 
-  /** Cmd/Ctrl+K: wrap the selection (or word) as a link; paste a URL from the
+  /** Ctrl/⌘+K: wrap the selection (or word) as a link; paste a URL from the
    * clipboard into the destination when one is available. Inside an existing
    * link it unwraps it instead (back to plain text), rather than nesting a
    * second, broken link around the first.
@@ -628,6 +640,22 @@ function inRawBlock(state: EditorState, pos: number): boolean {
     if (pos > fmFrom && pos < fmTo) return true;
   }
   return false;
+}
+
+/** Whether the main selection is fully contained in one code block. */
+export function selectionInCodeBlock(state: EditorState): boolean {
+  const { from, to } = state.selection.main;
+  const blockAt = (pos: number) => {
+    const node = syntaxTree(state).resolveInner(pos, -1);
+    for (let n: typeof node | null = node; n; n = n.parent) {
+      if (n.name === "FencedCode" || n.name === "CodeBlock") return n;
+    }
+    return null;
+  };
+  const start = blockAt(from);
+  if (!start) return false;
+  const end = blockAt(to);
+  return end?.from === start.from && end.to === start.to;
 }
 
 /** Backtick with an active selection auto-fences the selection as inline code
@@ -805,7 +833,7 @@ export function taskListLineEdit(
 
 /** Toggle every line the selection touches into a GFM task-list item (`- [ ] `),
  * or, when they are all already checkbox lines, back to plain text. Bound to the
- * toolbar's checkbox button and Cmd/Ctrl+Shift+X (the X of `[x]`). */
+ * toolbar's checkbox button and Ctrl/⌘+Shift+X (the X of `[x]`). */
 export const toggleTaskList: Command = (view) => {
   const { state } = view;
   const nums = new Set<number>();
@@ -826,7 +854,7 @@ export const toggleTaskList: Command = (view) => {
 };
 
 /** Open the insert-table dialog anchored at the caret. Bound to the toolbar's
- * table button and Cmd/Ctrl+Shift+T. */
+ * table button and Ctrl/⌘+Shift+T. */
 export const openTableDialog: Command = (view) => {
   const head = view.state.selection.main.head;
   const coords = view.coordsAtPos(head);
@@ -836,7 +864,7 @@ export const openTableDialog: Command = (view) => {
   return true;
 };
 
-// Cmd/Ctrl+A inside a fenced code block selects only that block's code content;
+// Ctrl/⌘+A inside a fenced code block selects only that block's code content;
 // outside a code block it returns false so the browser's select-all runs.
 const selectCodeContent: Command = (view) => {
   const { state } = view;
@@ -1335,14 +1363,7 @@ export async function emojiCompletions(
 // values (https://github.com/okfn/opendatahandbook), used as suggestions for
 // the YAML front matter `type:` field. The value can be anything: these are
 // only suggestions, the editor lets free text through.
-const OKF_RESOURCE_TYPES = [
-  "Articles",
-  "Publications",
-  "Publication",
-  "Video",
-  "Website",
-  "Podcast",
-];
+const OKF_RESOURCE_TYPES = ["Article", "Publication", "Website", "Podcast", "Software"];
 
 // Common front matter keys, suggested when typing a field name at the start of
 // a line inside the block. Free text is always allowed; `type` additionally
