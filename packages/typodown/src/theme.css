@@ -291,6 +291,9 @@
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
+.typodown[data-td-raw] .cm-scroller {
+  font-family: var(--td-mono);
+}
 .typodown .cm-content {
   padding: 1rem 1.25rem;
   caret-color: var(--td-fg);
@@ -615,9 +618,18 @@
    * border used for the paragraph gap (which produced a little accent "spike"
    * above the block). */
   box-shadow: inset 0.25em 0 0 var(--td-alert-color, var(--td-border));
-  padding-left: 1em;
+  /* One gutter per nesting level (live-preview.ts sets the depth from the
+   * line's own `>` markers), so a quote inside a quote reads as nested. */
+  padding-left: calc(var(--td-quote-depth, 1) * 1em);
   color: var(--td-muted);
   background: transparent;
+}
+/* A fenced code block inside a blockquote / alert: the quote keeps its accent
+ * and gutter, and the code fill spans the quote's content width. The code
+ * block's own side borders are dropped -- they are inset shadows on the same
+ * box as the accent, so only one of the two can be drawn. */
+.typodown .cm-line.cm-td-quote.cm-td-code {
+  background-color: var(--td-code-block-bg);
 }
 /* An empty `>` line (paragraph separator inside a blockquote) collapses so it
  * doesn't take up vertical space, matching how blank paragraph separators are
@@ -688,11 +700,14 @@
 /* Bullets are CSS shapes at one fixed size so disc / circle / square all read
  * consistently (Unicode bullet glyphs vary wildly in size). The shape cycles
  * with nesting depth, GitHub-style. */
+/* The gap to the item's text is mostly the source's own space character, which
+ * live-preview.ts deliberately leaves visible; the margin here only tops it up.
+ */
 .typodown .cm-td-bullet {
   display: inline-block;
   width: 0.4em;
   height: 0.4em;
-  margin-right: 0.6em;
+  margin-right: 0.35em;
   vertical-align: middle;
   color: var(--td-fg);
 }
@@ -711,7 +726,7 @@
   color: var(--td-muted);
 }
 .typodown .cm-td-task-box {
-  margin: 0 0.4em 0 0;
+  margin: 0 0.15em 0 0;
   vertical-align: middle;
 }
 
@@ -891,9 +906,35 @@
   color: var(--td-muted, #59636e);
   cursor: pointer;
 }
-.cm-td-toolbar-btn:hover {
+.cm-td-toolbar-btn:hover:not(:disabled) {
   background: var(--td-table-header-bg, #f6f8fa);
   color: var(--td-fg, #1f2328);
+}
+.cm-td-toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* Mode toggles (raw Markdown) read as pressed while the mode is on. */
+.cm-td-toolbar-btn[aria-pressed="true"] {
+  background: var(--td-code-bg);
+  color: var(--td-link, #0969da);
+}
+
+/* Tooltips are ours rather than the native `title`, which never shows in some
+ * hosts (a VS Code webview) and would be clipped by the bar's own horizontal
+ * scrolling. Parked in the zero-height anchor, positioned by toolbar.ts. */
+.cm-td-toolbar-tip {
+  position: absolute;
+  z-index: 1;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--td-fg, #1f2328);
+  color: var(--td-bg, #fff);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
 }
 .cm-td-toolbar-sep {
   flex-shrink: 0;
@@ -1186,6 +1227,12 @@
   overflow-x: auto;
   padding: 0.4em 0;
 }
+.typodown .cm-td-mermaid-diagram {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+}
 .typodown .cm-td-mermaid svg {
   max-width: 100%;
 }
@@ -1223,6 +1270,10 @@
   font-family: var(--td-mono);
   font-size: 0.9em;
   color: var(--td-faint);
+}
+.typodown .cm-td-comment {
+  color: var(--td-faint);
+  opacity: 0.65;
 }
 .typodown .cm-td-html img {
   max-width: 100%;

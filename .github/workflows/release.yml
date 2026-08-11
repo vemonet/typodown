@@ -1,5 +1,4 @@
 name: Release
-
 on:
   push:
     tags: ["v*.*.*"]
@@ -204,7 +203,7 @@ jobs:
           storeFile=$RUNNER_TEMP/typodown.jks
           storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          keyPassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           EOF
 
       # Play requires a unique, increasing versionCode per upload. Tauri derives
@@ -262,10 +261,120 @@ jobs:
         if: ${{ needs.create-release.outputs.release_id != '' && env.HAS_PLAY_CREDS != 'true' }}
         run: echo "::notice::PLAY_SERVICE_ACCOUNT_JSON not set · skipped Google Play upload. APK is on the GitHub release."
 
+  # Build an unsigned iOS .ipa.
+  #
+  # There is no Apple Developer account behind this repo, so the archive is
+  # exported with `--no-sign`: the resulting .ipa cannot be installed by
+  # double-clicking and has to be re-signed first (Sideloadly, AltStore, or a
+  # local Xcode run). It is published so iOS users have something to sideload,
+  # not as an App Store / TestFlight build.
+  #
+  # Unlike gen/android, gen/apple is not committed: generating it needs Xcode,
+  # so the Xcode project is created on the fly by `tauri ios init`.
+  build-ios:
+    name: 🍎 Build iOS (unsigned)
+    needs: create-release
+    # Run on tag pushes (release_id set) and on manual dry runs (create-release skipped).
+    if: ${{ always() && needs.create-release.result != 'failure' && needs.create-release.result != 'cancelled' }}
+    # The app has never shipped on iOS and this artifact is a bonus rather than a
+    # release blocker, so a failure here must not hold back the release. Dependent
+    # jobs still run (that is what continue-on-error means for `needs`).
+    continue-on-error: true
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ env.APP_PATH }}/src-tauri
+
+      # cargo-mobile2 (which drives `tauri ios init`) generates the Xcode project
+      # through XcodeGen. CocoaPods is already on the runner image.
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Install Vite+
+        run: npm install -g vite-plus@${{ env.VITE_PLUS_VERSION }}
+
+      - name: Install dependencies
+        run: vp i
+
+      # Same reason as Android: the bundle's short version string comes from
+      # tauri.conf.json `version`, which `bumpp` does not touch.
+      - name: Sync app version from tag
+        if: github.ref_type == 'tag'
+        working-directory: ${{ env.APP_PATH }}
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          node -e "const fs=require('fs'),f='src-tauri/tauri.conf.json',c=require('./'+f);c.version='$v';fs.writeFileSync(f,JSON.stringify(c,null,2)+'\n')"
+          echo "Set iOS app version to $v"
+
+      - name: Generate the Xcode project
+        run: npm run tauri ios init -- --ci
+        working-directory: ${{ env.APP_PATH }}
+
+      # `--archive-only` stops before the export step, which is the part that
+      # insists on a signing identity, and leaves a plain .xcarchive behind.
+      - name: Build unsigned archive
+        run: npm run tauri ios build -- --no-sign --archive-only
+        working-directory: ${{ env.APP_PATH }}
+
+      # An .ipa is just a zip with the .app under `Payload/`, so the archive's
+      # unsigned app bundle can be packaged by hand.
+      - name: Package the archive as an unsigned .ipa
+        working-directory: ${{ env.APP_PATH }}
+        run: |
+          set -euo pipefail
+          archive=$(find src-tauri/gen/apple/build -name '*.xcarchive' | head -1)
+          if [ -z "$archive" ]; then
+            echo "::error::No .xcarchive found under src-tauri/gen/apple/build"
+            find src-tauri/gen/apple/build -maxdepth 3 || true
+            exit 1
+          fi
+          app=$(find "$archive/Products/Applications" -maxdepth 1 -name '*.app' | head -1)
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          out="$GITHUB_WORKSPACE/dist-artifacts/Typodown_${version}_ios_unsigned.ipa"
+          mkdir -p "$(dirname "$out")"
+          staging=$(mktemp -d)
+          mkdir "$staging/Payload"
+          cp -R "$app" "$staging/Payload/"
+          (cd "$staging" && zip -qry "$out" Payload)
+          ls -lh "$out"
+
+      - name: Upload .ipa to release
+        if: needs.create-release.outputs.release_id != ''
+        uses: softprops/action-gh-release@v3.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: dist-artifacts/*.ipa
+
+      - name: Upload .ipa to workflow run (dry run)
+        if: needs.create-release.outputs.release_id == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios
+          path: dist-artifacts/*.ipa
+          if-no-files-found: error
+
   # Publish the release once every artifact has been attached.
   publish-release:
     name: ✅ Publish release
-    needs: [create-release, build-desktop, build-android]
+    needs: [create-release, build-desktop, build-android, build-ios]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:

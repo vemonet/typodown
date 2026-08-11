@@ -1,13 +1,18 @@
 // Floating formatting toolbar.
 //
-// A light pill-shaped action bar floating at the top of the editor with the
-// classic formatting actions (bold, italic, strikethrough, inline code, link)
-// plus "Add table". It can be hidden; while hidden a small round button floats
-// in the top-left margin to bring it back. By default it starts visible
-// everywhere; hosts can force "auto" (visible only on small screens) or
-// "hidden" via the `toolbar` option.
+// A light pill-shaped action bar floating at the top of the editor: history
+// (undo / redo), the classic formatting actions (bold, italic, strikethrough,
+// inline code, link, checkbox, table), then the editor's own utilities (find,
+// save, raw Markdown) and view toggles (outline, hide). It can be hidden; while
+// hidden a small round button floats in the top-left margin to bring it back.
+// By default it starts visible everywhere; hosts can force "auto" (visible only
+// on small screens) or "hidden" via the `toolbar` option.
+//
+// Every button -- formatting or utility -- is one `ToolbarAction`, so state
+// (disabled / pressed), tooltips and focus handling are implemented once.
 
 import { type EditorView } from "@codemirror/view";
+import { redo, redoDepth, undo, undoDepth } from "@codemirror/commands";
 import { type Prefs } from "./prefs.ts";
 
 /** Visibility policy for the floating toolbar.
@@ -17,7 +22,7 @@ import { type Prefs } from "./prefs.ts";
  * The user can always toggle it with the floating button. */
 export type ToolbarMode = "auto" | "shown" | "hidden";
 
-interface ToolbarAction {
+export interface ToolbarAction {
   label: string;
   icon: string;
   run: (view: EditorView) => void;
@@ -29,8 +34,13 @@ interface ToolbarAction {
    * formatting action keeps the caret/selection live). Set false for actions
    * that shouldn't touch the caret -- e.g. toggling the outline, where
    * refocusing the editor would pop the soft keyboard on mobile; instead the
-   * editor is blurred so any open keyboard is dismissed. */
+   * editor is blurred so any open keyboard is dismissed too. */
   refocus?: boolean;
+  /** Greys the button out while this returns false. Re-read by `refresh()`. */
+  enabled?: () => boolean;
+  /** Renders the button pressed while this returns true (a mode toggle rather
+   * than a one-shot action). Re-read by `refresh()`. */
+  active?: () => boolean;
 }
 
 /** True on macOS, where `Mod` shortcuts use ⌘ rather than Ctrl. */
@@ -60,13 +70,29 @@ export interface ToolbarSave {
   isDirty?: () => boolean;
 }
 
+export interface ToolbarOptions {
+  mode: ToolbarMode;
+  /** The formatting actions, rendered as the second group. */
+  actions: ToolbarAction[];
+  prefs?: Prefs;
+  /** Optional Save action, grouped with the editor's other utilities. Used by
+   * hosts that disable auto-save and want an explicit Save button. */
+  save?: ToolbarSave;
+  /** Open the find & replace panel. Omit to drop the button. */
+  openSearch?: () => void;
+  /** Toggle raw Markdown source mode, and report whether it is currently on so
+   * the button can render pressed. Omit to drop the button. */
+  rawMarkdown?: { toggle: () => void; isRaw: () => boolean };
+  /** Toggle the document outline panel. Omit when the outline is disabled. */
+  toggleOutline?: () => void;
+}
+
 export interface ToolbarHandle {
   destroy(): void;
-  /** Re-read `save.isDirty()` and update the Save button's disabled state.
-   * Called by the editor on every doc-changed transaction so the button
-   * re-enables the moment the user starts typing again. Noop when there is
-   * no Save button. */
-  refreshSave(): void;
+  /** Re-read every action's `enabled()` / `active()` state (Save's dirty flag,
+   * undo/redo depth, raw mode). Called by the editor on every doc-changed
+   * transaction so the buttons track the document. */
+  refresh(): void;
 }
 
 const SMALL_SCREEN = "(max-width: 767px)";
@@ -75,19 +101,7 @@ const SMALL_SCREEN = "(max-width: 767px)";
 export function createToolbar(
   wrapper: HTMLElement,
   view: EditorView,
-  mode: ToolbarMode,
-  actions: ToolbarAction[],
-  prefs?: Prefs,
-  /** Optional Save action appended after the formatting actions, in its own
-   * group. Used by hosts that disable auto-save and want an explicit Save
-   * button in the toolbar instead. */
-  save?: ToolbarSave,
-  /** Toggle the document outline panel, rendered in the same rightmost group
-   * as the hide-toolbar chevron. Omit when the outline feature is disabled. */
-  toggleOutline?: () => void,
-  /** Open the find & replace panel. Rendered as a button in the same group as
-   * the Save button (the editor's utility actions). Omit to drop the button. */
-  openSearch?: () => void,
+  options: ToolbarOptions,
 ): ToolbarHandle {
   // Zero-height sticky strip holding the bar and the show button. Sticky (not
   // absolute) so that when the page itself scrolls (demo site, VS Code
@@ -102,23 +116,66 @@ export function createToolbar(
   bar.setAttribute("role", "toolbar");
   bar.setAttribute("aria-label", "Formatting");
 
+  // The bar scrolls horizontally when it doesn't fit, which clips anything
+  // painted inside it, and native `title` tooltips don't show in every host
+  // (notably a VS Code webview). So tooltips are our own element, parked in the
+  // zero-height anchor next to the bar and positioned under the hovered button.
+  const tip = document.createElement("div");
+  tip.className = "cm-td-toolbar-tip";
+  tip.setAttribute("role", "tooltip");
+  tip.hidden = true;
+
+  const showTip = (btn: HTMLElement, text: string): void => {
+    tip.textContent = text;
+    tip.hidden = false;
+    const anchorBox = anchor.getBoundingClientRect();
+    const btnBox = btn.getBoundingClientRect();
+    // Centre under the button, clamped to the anchor so it can't overflow the
+    // editor's edges.
+    const left = btnBox.left - anchorBox.left + btnBox.width / 2 - tip.offsetWidth / 2;
+    const max = anchorBox.width - tip.offsetWidth;
+    tip.style.left = `${Math.max(0, Math.min(left, Math.max(0, max)))}px`;
+    tip.style.top = `${btnBox.bottom - anchorBox.top + 6}px`;
+  };
+  const hideTip = (): void => {
+    tip.hidden = true;
+  };
+
   /** Tapping a button must not move focus out of the editor, or the selection
    * the action applies to would collapse before the click lands.
    */
   const keepFocus = (e: Event): void => e.preventDefault();
 
-  for (const action of actions) {
+  /** All the buttons with dynamic state, refreshed together. */
+  const stateful: { btn: HTMLButtonElement; action: ToolbarAction }[] = [];
+  /** Set while a save has been requested but no edit has landed since. */
+  let savePending = false;
+
+  const refresh = (): void => {
+    for (const { btn, action } of stateful) {
+      if (action.enabled) btn.disabled = !action.enabled();
+      if (action.active) btn.setAttribute("aria-pressed", String(action.active()));
+    }
+  };
+
+  const button = (action: ToolbarAction): HTMLButtonElement => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "cm-td-toolbar-btn";
-    btn.title = action.shortcut
+    const hint = action.shortcut
       ? `${action.label} (${formatShortcut(action.shortcut)})`
       : action.label;
     btn.setAttribute("aria-label", action.label);
     btn.innerHTML = icon(action.icon);
     btn.addEventListener("mousedown", keepFocus);
+    btn.addEventListener("pointerenter", () => showTip(btn, hint));
+    btn.addEventListener("pointerleave", hideTip);
+    btn.addEventListener("focus", () => showTip(btn, hint));
+    btn.addEventListener("blur", hideTip);
     btn.addEventListener("click", (e) => {
       e.preventDefault();
+      if (btn.disabled) return;
+      hideTip();
       action.run(view);
       if (action.refocus === false) {
         // Don't pull focus back into the editor: on mobile that would pop the
@@ -127,87 +184,94 @@ export function createToolbar(
       } else {
         view.focus();
       }
+      refresh();
     });
-    bar.appendChild(btn);
-  }
-
-  bar.appendChild(separator());
-
-  // Utility group: Save. Rendered in its own group set off by separators.
-  let saveBtn: HTMLButtonElement | null = null;
-  const updateSaveDisabled = (): void => {
-    if (!saveBtn || !save) return;
-    saveBtn.disabled = save.isDirty ? !save.isDirty() : false;
+    if (action.enabled || action.active) stateful.push({ btn, action });
+    return btn;
   };
 
-  if (save) {
-    saveBtn = document.createElement("button");
-    saveBtn.type = "button";
-    saveBtn.className = "cm-td-toolbar-btn";
-    saveBtn.title = "Save";
-    saveBtn.setAttribute("aria-label", "Save");
-    saveBtn.innerHTML = icon("save");
-    saveBtn.addEventListener("mousedown", keepFocus);
-    saveBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      save.run();
-      // Disable immediately: the write is async, and the next doc-changed
-      // transaction (when the user types again) re-enables it via
-      // `refreshSave`. Stops a rapid double-tap from queuing a second save.
-      saveBtn!.disabled = true;
-      view.focus();
+  const setVisible = (visible: boolean, persist = true): void => {
+    anchor.classList.toggle("cm-td-toolbar-anchor-visible", visible);
+    bar.style.display = visible ? "" : "none";
+    showBtn.style.display = visible ? "none" : "";
+    hideTip();
+    if (persist) options.prefs?.set("toolbar", visible);
+  };
+
+  // History first, then the formatting actions, then the editor's utilities and
+  // the view toggles: one group per run of related buttons, separated by a rule.
+  const history: ToolbarAction[] = [
+    {
+      label: "Undo",
+      icon: "undo",
+      shortcut: "Mod-z",
+      run: (v) => void undo(v),
+      enabled: () => undoDepth(view.state) > 0,
+    },
+    {
+      label: "Redo",
+      icon: "redo",
+      shortcut: "Mod-Shift-z",
+      run: (v) => void redo(v),
+      enabled: () => redoDepth(view.state) > 0,
+    },
+  ];
+  const utilities: ToolbarAction[] = [];
+  if (options.openSearch) {
+    utilities.push({
+      label: "Find",
+      icon: "search",
+      shortcut: "Mod-f",
+      // The search panel focuses its own input, so don't refocus the editor.
+      refocus: false,
+      run: options.openSearch,
     });
-    bar.appendChild(saveBtn);
-    updateSaveDisabled();
   }
-
-  if (save) bar.appendChild(separator());
-
-  // The rightmost group holds the Find button, outline toggle (when present),
-  // and the hide-toolbar chevron together: all are UI controls rather than
-  // formatting actions, so they share one group with no separators between them.
-  if (openSearch) {
-    const searchBtn = document.createElement("button");
-    searchBtn.type = "button";
-    searchBtn.className = "cm-td-toolbar-btn";
-    searchBtn.title = `Find (${formatShortcut("Mod-f")})`;
-    searchBtn.setAttribute("aria-label", "Find");
-    searchBtn.innerHTML = icon("search");
-    searchBtn.addEventListener("mousedown", keepFocus);
-    searchBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      // Don't refocus the editor: the search panel focuses its own input.
-      openSearch();
+  if (options.save) {
+    const save = options.save;
+    utilities.push({
+      label: "Save",
+      icon: "save",
+      run: () => {
+        save.run();
+        // The write is async, and `refresh()` runs right after the click: latch
+        // the button off so a rapid double-tap can't queue a second save. The
+        // next document change clears the latch (see the returned `refresh`).
+        savePending = true;
+      },
+      enabled: () => !savePending && (save.isDirty?.() ?? true),
     });
-    bar.appendChild(searchBtn);
   }
-
-  if (toggleOutline) {
-    const outlineBtn = document.createElement("button");
-    outlineBtn.type = "button";
-    outlineBtn.className = "cm-td-toolbar-btn";
-    outlineBtn.title = "Toggle outline";
-    outlineBtn.setAttribute("aria-label", "Toggle outline");
-    outlineBtn.innerHTML = icon("list");
-    outlineBtn.addEventListener("mousedown", keepFocus);
-    outlineBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      toggleOutline();
+  if (options.rawMarkdown) {
+    const raw = options.rawMarkdown;
+    utilities.push({
+      label: "Raw Markdown",
+      icon: "raw",
+      shortcut: "Mod-/",
+      run: raw.toggle,
+      active: raw.isRaw,
+    });
+  }
+  // View toggles: they change what is on screen rather than the document, so
+  // the hide chevron belongs here too, last.
+  const toggles: ToolbarAction[] = [];
+  if (options.toggleOutline) {
+    toggles.push({
+      label: "Toggle outline",
+      icon: "list",
       // Don't pull focus back into the editor: on mobile that would pop the
-      // soft keyboard. Blur it so an already-open keyboard is dismissed too.
-      view.contentDOM.blur();
+      // soft keyboard.
+      refocus: false,
+      run: options.toggleOutline,
     });
-    bar.appendChild(outlineBtn);
   }
+  toggles.push({ label: "Hide toolbar", icon: "hide", run: () => setVisible(false) });
 
-  const hideBtn = document.createElement("button");
-  hideBtn.type = "button";
-  hideBtn.className = "cm-td-toolbar-btn";
-  hideBtn.title = "Hide toolbar";
-  hideBtn.setAttribute("aria-label", "Hide toolbar");
-  hideBtn.innerHTML = icon("hide");
-  hideBtn.addEventListener("mousedown", keepFocus);
-  bar.appendChild(hideBtn);
+  for (const group of [history, options.actions, utilities, toggles]) {
+    if (group.length === 0) continue;
+    if (bar.childElementCount > 0) bar.appendChild(separator());
+    for (const action of group) bar.appendChild(button(action));
+  }
 
   const showBtn = document.createElement("button");
   showBtn.type = "button";
@@ -217,16 +281,6 @@ export function createToolbar(
   showBtn.innerHTML = icon("format");
   showBtn.addEventListener("mousedown", keepFocus);
 
-  const setVisible = (visible: boolean, persist = true): void => {
-    anchor.classList.toggle("cm-td-toolbar-anchor-visible", visible);
-    bar.style.display = visible ? "" : "none";
-    showBtn.style.display = visible ? "none" : "";
-    if (persist) prefs?.set("toolbar", visible);
-  };
-  hideBtn.addEventListener("click", () => {
-    setVisible(false);
-    view.focus();
-  });
   showBtn.addEventListener("click", () => {
     setVisible(true);
     view.focus();
@@ -234,15 +288,16 @@ export function createToolbar(
 
   // A saved preference wins over the mode default; the initial paint must not
   // overwrite that stored value (persist=false).
-  const saved = prefs?.get("toolbar");
+  const stored = options.prefs?.get("toolbar");
   const initiallyVisible =
-    typeof saved === "boolean"
-      ? saved
-      : mode === "shown" || (mode === "auto" && window.matchMedia(SMALL_SCREEN).matches);
+    typeof stored === "boolean"
+      ? stored
+      : options.mode === "shown" ||
+        (options.mode === "auto" && window.matchMedia(SMALL_SCREEN).matches);
   setVisible(initiallyVisible, false);
+  refresh();
 
-  anchor.appendChild(bar);
-  anchor.appendChild(showBtn);
+  anchor.append(bar, showBtn, tip);
   wrapper.prepend(anchor);
 
   /** Float the show button in the margin left of the text column: as far out
@@ -264,13 +319,16 @@ export function createToolbar(
       window.removeEventListener("resize", updateShowOffset);
       anchor.remove();
     },
-    refreshSave: updateSaveDisabled,
+    refresh() {
+      savePending = false; // the document changed, so there is something to save
+      refresh();
+    },
   };
 }
 
-/** The default action set: classic formatting plus "Add table". The outline
- * toggle is intentionally not part of this list -- it is rendered by
- * `createToolbar` in its own group next to the hide chevron. */
+/** The default action set: classic formatting plus "Add table". History,
+ * utilities and view toggles are rendered by `createToolbar` in their own
+ * groups. */
 export function defaultToolbarActions(opts: {
   wrapMarker: (marker: string) => (view: EditorView) => void;
   insertLink: (view: EditorView) => void;
@@ -311,6 +369,9 @@ const ICONS: Record<string, string> = {
     '<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/>',
   save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>',
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  undo: '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>',
+  redo: '<path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/>',
+  raw: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m10 12.5-2 2.5 2 2.5"/><path d="m14 12.5 2 2.5-2 2.5"/>',
 };
 
 function icon(name: string): string {

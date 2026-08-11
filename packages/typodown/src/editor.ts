@@ -7,6 +7,7 @@
 // the raw syntax except on the construct under the caret.
 
 import {
+  Compartment,
   EditorSelection,
   EditorState,
   type Extension,
@@ -15,7 +16,13 @@ import {
   type Transaction,
   type TransactionSpec,
 } from "@codemirror/state";
-import { EditorView, keymap, placeholder as placeholderExt, type Command } from "@codemirror/view";
+import {
+  EditorView,
+  keymap,
+  placeholder as placeholderExt,
+  type Command,
+  type ViewUpdate,
+} from "@codemirror/view";
 import { history, historyKeymap, defaultKeymap, insertNewline } from "@codemirror/commands";
 import {
   autocompletion,
@@ -25,7 +32,7 @@ import {
   type CompletionResult,
 } from "@codemirror/autocomplete";
 import { search } from "@codemirror/search";
-import { syntaxTree } from "@codemirror/language";
+import { defaultHighlightStyle, syntaxHighlighting, syntaxTree } from "@codemirror/language";
 import {
   insertNewlineContinueMarkup,
   deleteMarkupBackward,
@@ -85,6 +92,9 @@ export interface TypodownOptions {
    * plugin to reach the system browser); provide this to route it to the host.
    */
   openLink?: (url: string) => void;
+  /** Resolve image destinations before rendering them. Useful for hosts that
+   * need to translate paths relative to the open Markdown document. */
+  resolveImageSrc?: (src: string) => string;
   /** Called whenever the content changes. */
   onChange?: (value: string) => void;
   /** Render raw HTML blocks/tags as live widgets. Defaults to true. */
@@ -139,10 +149,19 @@ export class Typodown {
   private readonly toolbar: ToolbarHandle;
   private readonly outline?: OutlineHandle;
   private readonly search: SearchHandle;
+  private readonly preview = new Compartment();
+  private readonly html: boolean;
+  private readonly resolveImageSrc?: (src: string) => string;
+  private rawMarkdown = false;
+  /** Where the last pointer press landed, and where that document position sat
+   * on screen before the press was handled. See `anchorPointer`. */
+  private clickAnchor: { pos: number; top: number } | null = null;
 
   constructor(parent: HTMLElement, options: TypodownOptions = {}) {
     this.getClipboardText = options.getClipboardText;
     this.openLink = options.openLink;
+    this.html = options.html ?? true;
+    this.resolveImageSrc = options.resolveImageSrc;
 
     this.wrapper = document.createElement("div");
     this.wrapper.className = "typodown";
@@ -151,8 +170,10 @@ export class Typodown {
 
     const extensions: Extension[] = [
       typodownMarkdown(),
-      livePreview({ html: options.html ?? true }),
-      clampCursorPastMarker,
+      this.preview.of([
+        livePreview({ html: this.html, resolveImageSrc: this.resolveImageSrc }),
+        clampCursorPastMarker,
+      ]),
       history(),
       // Match highlighting + find/replace commands. The built-in bottom-docked
       // panel is never opened; our floating panel (search.ts) drives this state
@@ -177,9 +198,10 @@ export class Typodown {
         ...completionKeymap,
         { key: "Mod-b", run: wrap("**") },
         { key: "Mod-i", run: wrap("*") },
-        { key: "`", run: closeFenceOnThirdBacktick },
-        { key: "`", run: wrapBacktick },
+        { key: "`", run: (v) => !this.rawMarkdown && closeFenceOnThirdBacktick(v) },
+        { key: "`", run: (v) => !this.rawMarkdown && wrapBacktick(v) },
         { key: "Mod-k", run: (v) => this.insertLink(v) },
+        { key: "Mod-/", run: () => this.toggleRawMarkdown() },
         {
           key: "Mod-f",
           run: () => {
@@ -200,20 +222,22 @@ export class Typodown {
         {
           key: "Enter",
           run: (v) =>
-            continueAlert(v) ||
-            exitMarkupOnEmptyEnter(v) ||
-            insertNewlineContinueMarkup(v) ||
-            insertParagraph(v),
+            !this.rawMarkdown &&
+            (continueAlert(v) ||
+              exitMarkupOnEmptyEnter(v) ||
+              insertNewlineContinueMarkup(v) ||
+              insertParagraph(v)),
           shift: insertNewline,
         },
         {
           key: "Backspace",
           run: (v) =>
-            deleteCodeBlockAtStart(v) || deleteParagraphGapBackward(v) || deleteMarkupBackward(v),
+            !this.rawMarkdown &&
+            (deleteCodeBlockAtStart(v) || deleteParagraphGapBackward(v) || deleteMarkupBackward(v)),
         },
         // At the content start of a bullet/checkbox/quote line, Left exits to
         // the previous line (runs before the default cursorCharLeft).
-        { key: "ArrowLeft", run: arrowLeftPastMarker },
+        { key: "ArrowLeft", run: (v) => !this.rawMarkdown && arrowLeftPastMarker(v) },
         ...historyKeymap,
         ...defaultKeymap,
       ]),
@@ -227,13 +251,15 @@ export class Typodown {
       // insertion (the command inserted the backtick itself, plus the
       // closing fence). Desktop keyboards keep using the keymap path.
       EditorView.inputHandler.of((view, from, to, text) => {
-        if (text !== "`" || from !== to) return false;
+        if (this.rawMarkdown || text !== "`" || from !== to) return false;
         return closeFenceOnThirdBacktick(view);
       }),
       EditorView.domEventHandlers({
         paste: (event, view) => this.handlePaste(event, view),
         mousedown: (event, view) => this.handleMouseDown(event, view),
+        pointerdown: (event, view) => this.anchorPointer(event, view),
       }),
+      EditorView.updateListener.of((u) => this.reanchorClick(u)),
       // Ctrl/⌘+A: select the code content when inside a code block. Handled at
       // highest precedence with stopPropagation so a host (e.g. the VS Code
       // webview, which reimplements select-all at the window level) does not run
@@ -288,21 +314,17 @@ export class Typodown {
         }),
       );
     }
-    // Refresh the toolbar Save button after the onChange listener (so the
-    // host's dirty state has been updated first). Runs on every doc-changed
-    // transaction to re-enable the button as soon as the user edits again.
-    if (options.save) {
-      extensions.push(
-        EditorView.updateListener.of((u) => {
-          if (u.docChanged) this.toolbar?.refreshSave();
-        }),
-      );
-    }
-    // Keep the search panel's match counter accurate while it is open: the doc
-    // changes on every edit (including its own Replace / Replace all).
+    // Refresh the toolbar's stateful buttons (Save's dirty flag, undo / redo
+    // depth) after the onChange listener, so the host's dirty state has been
+    // updated first, and keep the search panel's match counter accurate: the
+    // doc changes on every edit, including the panel's own Replace / Replace
+    // all. Both handles are assigned right after the view is created, before
+    // any transaction can fire this listener.
     extensions.push(
       EditorView.updateListener.of((u) => {
-        if (u.docChanged) this.search?.refresh();
+        if (!u.docChanged) return;
+        this.toolbar?.refresh();
+        this.search?.refresh();
       }),
     );
 
@@ -314,22 +336,24 @@ export class Typodown {
       ? createPrefs(options.persist === true ? "typodown" : options.persist)
       : undefined;
     this.search = createSearch(this.wrapper, this.view);
-    this.toolbar = createToolbar(
-      this.wrapper,
-      this.view,
-      options.toolbar ?? "shown",
-      defaultToolbarActions({
+    this.toolbar = createToolbar(this.wrapper, this.view, {
+      mode: options.toolbar ?? "shown",
+      actions: defaultToolbarActions({
         wrapMarker: (marker) => (view) => void wrap(marker)(view),
         insertLink: (view) => void this.insertLink(view),
         toggleTask: (view) => void toggleTaskList(view),
         openTable: (view) => void openTableDialog(view),
       }),
       prefs,
-      options.save,
+      save: options.save,
+      openSearch: () => this.search.toggle(),
+      rawMarkdown: {
+        toggle: () => void this.toggleRawMarkdown(),
+        isRaw: () => this.rawMarkdown,
+      },
       // `this.outline` is created just below; resolved lazily at click time.
-      outlineEnabled ? () => this.outline?.toggle() : undefined,
-      () => this.search.toggle(),
-    );
+      toggleOutline: outlineEnabled ? () => this.outline?.toggle() : undefined,
+    });
     if (outlineEnabled) this.outline = createOutline(this.wrapper, this.view, prefs);
     // The transaction filter only runs on transactions, not on the initial
     // state, so if the document opens on a marker line with the caret at the
@@ -383,6 +407,49 @@ export class Typodown {
     this.wrapper.dataset.tdTheme = theme;
   }
 
+  /** Rebuild rendered widgets whose host-provided URL resolution context may
+   * have changed without a Markdown edit, for example after switching files. */
+  refreshPreview(): void {
+    if (this.rawMarkdown) return;
+    this.view.dispatch({
+      effects: this.preview.reconfigure([
+        livePreview({ html: this.html, resolveImageSrc: this.resolveImageSrc }),
+        clampCursorPastMarker,
+      ]),
+    });
+  }
+
+  /** Switch between rendered live preview and plain Markdown source. Raw mode
+   * keeps CodeMirror's Markdown parser, syntax highlighting, and diagnostics. */
+  setRawMarkdown(raw: boolean): void {
+    if (raw === this.rawMarkdown) return;
+    this.rawMarkdown = raw;
+    this.wrapper.toggleAttribute("data-td-raw", raw);
+    // Keep the toolbar's raw-mode button pressed state in sync when the mode is
+    // toggled from the keyboard or by the host rather than by the button.
+    this.toolbar?.refresh();
+    this.view.dispatch({
+      effects: this.preview.reconfigure(
+        raw
+          ? syntaxHighlighting(defaultHighlightStyle)
+          : [
+              livePreview({ html: this.html, resolveImageSrc: this.resolveImageSrc }),
+              clampCursorPastMarker,
+            ],
+      ),
+    });
+  }
+
+  /** Toggle raw Markdown source mode. Returns true for CodeMirror commands. */
+  toggleRawMarkdown(): true {
+    this.setRawMarkdown(!this.rawMarkdown);
+    return true;
+  }
+
+  isRawMarkdown(): boolean {
+    return this.rawMarkdown;
+  }
+
   /** Scroll the viewport so the start of `line` (1-indexed) is near the top, without
    * moving the caret. Used by hosts that show a clickable outline of the
    * document's headings. Out-of-range lines clamp to the first / last line. */
@@ -405,6 +472,7 @@ export class Typodown {
   // ---- clipboard ----------------------------------------------------------
 
   private handlePaste(event: ClipboardEvent, view: EditorView): boolean {
+    if (this.rawMarkdown) return false;
     // Code is plain text by definition. Let CodeMirror use the clipboard's
     // text/plain payload directly instead of converting rich HTML to Markdown
     // (which would add emphasis, link, list, or fence markers to the code).
@@ -450,6 +518,50 @@ export class Typodown {
         // Clipboard unavailable: nothing to paste.
       });
     return true;
+  }
+
+  /** Records where the pressed spot sits on screen, so `reanchorClick` can put
+   * it back there.
+   *
+   * Live preview reveals a construct's raw syntax when the caret enters it and
+   * re-hides the one the caret left, and either can add or remove whole lines:
+   * the ``` fences of a code block, the --- of the front matter, the blank line
+   * separating two paragraphs (hidden as `cm-td-blank-sep`, a full line tall
+   * once the caret is on it). When that happens *above* the press, the caret
+   * lands on the right document position, but the text around it has already
+   * moved up or down by a line or two -- so the caret shows up somewhere other
+   * than where the click was, typically up and to the left, since a line that
+   * re-wraps also throws its tail onto another row.
+   *
+   * The position itself is resolved against the layout the user was looking at,
+   * so it is the one they aimed at; only the viewport ends up stale.
+   *
+   * `pointerdown` (not `mousedown`) so touch on the phone app is covered too,
+   * and it fires while the old layout is still in place, which is the only
+   * moment `top` can be read. Returns false: this only observes the press. */
+  private anchorPointer(event: PointerEvent, view: EditorView): false {
+    this.clickAnchor = null;
+    if (event.button !== 0) return false;
+    const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+    const top = pos == null ? null : view.coordsAtPos(pos)?.top;
+    if (pos != null && top != null) this.clickAnchor = { pos, top };
+    return false;
+  }
+
+  /** Takes up whatever the press moved the pressed spot by, holding the
+   * viewport still instead of letting the text slide out from under the
+   * pointer.
+   *
+   * This runs from the selection update rather than straight from
+   * `anchorPointer`: CodeMirror moves the selection on `mousedown`, which is
+   * after `pointerdown`, and a measure cycle can be flushed in between -- a
+   * measure requested during the press would read the layout before the reveal
+   * and see nothing to correct. */
+  private reanchorClick(update: ViewUpdate): void {
+    const anchor = this.clickAnchor;
+    if (!anchor || !update.transactions.some((tr) => tr.isUserEvent("select.pointer"))) return;
+    this.clickAnchor = null;
+    pin(update.view, anchor.pos, anchor.top, 3);
   }
 
   /** Ctrl/⌘-click a link to open it; a plain click just places the caret. */
@@ -520,14 +632,59 @@ export function createTypodown(parent: HTMLElement, options?: TypodownOptions): 
   return new Typodown(parent, options);
 }
 
+/** The largest relayout a click is allowed to compensate for, in pixels. A
+ * reveal adds at most a few lines (front matter delimiters, a pair of code
+ * fences, a blank separator); anything bigger was not caused by the reveal, so
+ * leave the scroll position alone. */
+const MAX_ANCHOR_SHIFT = 200;
+
+/** Hold `pos` at `top` in the viewport for the next few measure cycles.
+ *
+ * One pass is not enough: correcting the scroll position brings lines that were
+ * only height-estimated into view, and measuring them for real shifts the
+ * content again. Each pass re-reads the position and takes up whatever is
+ * left, stopping as soon as nothing moved (or after `tries`, so a layout that
+ * refuses to settle cannot spin). */
+function pin(view: EditorView, pos: number, top: number, tries: number): void {
+  view.requestMeasure({
+    // Runs after the selection change has been rendered, so this reads the
+    // revealed layout.
+    read: () => view.coordsAtPos(pos)?.top,
+    write: (after) => {
+      if (after == null) return;
+      const shift = after - top;
+      if (Math.abs(shift) < 1 || Math.abs(shift) > MAX_ANCHOR_SHIFT) return;
+      takeUpSlack(view.scrollDOM, shift);
+      if (tries > 1) pin(view, pos, top, tries - 1);
+    },
+  });
+}
+
+/** Scroll `shift` pixels away, starting at the editor's own scroller and
+ * walking up to the page. Which element scrolls depends on the host: the app
+ * gives the editor a fixed height so `cm-scroller` scrolls, while the website
+ * and the VS Code webview let it grow and scroll the page instead. Each
+ * ancestor absorbs what it can (it may already be at an end) and passes the
+ * rest up. Exported for the tests. */
+export function takeUpSlack(from: HTMLElement, shift: number): void {
+  let left = shift;
+  for (let el: HTMLElement | null = from; el && Math.abs(left) >= 1; el = el.parentElement) {
+    if (el.scrollHeight <= el.clientHeight + 1) continue;
+    const before = el.scrollTop;
+    el.scrollTop = before + left;
+    left -= el.scrollTop - before;
+  }
+}
+
 /** Whether a keydown matches one of the Mod-based shortcuts the editor binds
- * (Bold, Italic, Link, Find, Checkbox, Add table, plain paste). Used to stop those
+ * (Bold, Italic, Link, Find, raw Markdown, Checkbox, Add table, plain paste). Used to stop those
  * chords from also triggering the host's own command (e.g. Cmd+B toggling the
  * VS Code side bar). Keep in sync with the keymap above. */
 function isOwnedModShortcut(event: KeyboardEvent): boolean {
   if (!(event.metaKey || event.ctrlKey) || event.altKey) return false;
   const key = event.key.toLowerCase();
-  if (!event.shiftKey) return key === "b" || key === "i" || key === "k" || key === "f";
+  if (!event.shiftKey)
+    return key === "b" || key === "i" || key === "k" || key === "f" || key === "/";
   return key === "x" || key === "t" || key === "v";
 }
 
@@ -1166,15 +1323,29 @@ export function mapPosThroughReplacement(oldDoc: string, newDoc: string, pos: nu
   return nl + Math.min(col, lineEnd - nl);
 }
 
-/** Expand an empty selection at `pos` to the run of word characters it sits in.
- * If the caret is not on a word character, returns an empty range at `pos`. */
+// A word, for the purpose of "expand the caret to the whole word": letters,
+// digits and `_` (\w), plus the punctuation that reads as part of one token in
+// prose about code -- `.` for file names (`test.md`), `-` for kebab-case, `/`
+// for paths. Those three only count *between* word characters, so a sentence's
+// trailing full stop or a dash used as punctuation is not swallowed.
+const WORD_CHAR = /[\w.\-/]/;
+const WORD_INNER_ONLY = /[.\-/]/;
+
+/** Expand an empty selection at `pos` to the word it sits in -- the run of word
+ * characters around it, with any leading / trailing inner-only punctuation
+ * trimmed back off, so `test.md` wraps whole while `word.` keeps its full stop
+ * outside. If the caret is not on a word, returns an empty range at `pos`. */
 function wordRangeAt(state: EditorState, pos: number): { from: number; to: number } {
   const line = state.doc.lineAt(pos);
   let from = pos;
-  while (from > line.from && /\w/.test(state.sliceDoc(from - 1, from))) from--;
+  while (from > line.from && WORD_CHAR.test(state.sliceDoc(from - 1, from))) from--;
   let to = pos;
-  while (to < line.to && /\w/.test(state.sliceDoc(to, to + 1))) to++;
-  return { from, to };
+  while (to < line.to && WORD_CHAR.test(state.sliceDoc(to, to + 1))) to++;
+  while (to > from && WORD_INNER_ONLY.test(state.sliceDoc(to - 1, to))) to--;
+  while (from < to && WORD_INNER_ONLY.test(state.sliceDoc(from, from + 1))) from++;
+  // Nothing but inner-only punctuation around the caret (`a -|- b`): there is no
+  // word here, so stay put rather than jumping to the start of the run.
+  return from === to ? { from: pos, to: pos } : { from, to };
 }
 
 /** The URL of a Link / autolink whose source range contains `pos`, or null. */

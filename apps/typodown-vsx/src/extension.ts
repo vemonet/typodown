@@ -103,6 +103,8 @@ class TypodownEditorProvider implements vscode.CustomTextEditorProvider {
           .then(settle, settle);
       } else if (message.type === "clipboard") {
         void vscode.env.clipboard.readText().then((text) => post({ type: "clipboard", text }));
+      } else if (message.type === "openLink") {
+        void vscode.env.openExternal(vscode.Uri.parse(message.url));
       }
     });
   }

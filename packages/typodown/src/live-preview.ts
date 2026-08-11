@@ -37,6 +37,8 @@ import { sanitizeHtml } from "./sanitize.ts";
 export interface LivePreviewConfig {
   /** Render raw HTML blocks/tags as live widgets while idle. */
   html: boolean;
+  /** Resolve an image destination before assigning it to an img element. */
+  resolveImageSrc?: (src: string) => string;
 }
 
 export const ALERT_KINDS = ["note", "tip", "important", "warning", "caution"] as const;
@@ -132,6 +134,14 @@ export function markerEndOnLine(
   const quote = /^(\s*)((?:> ?)+)/.exec(text);
   if (quote) return line.from + quote[0].length;
   return null;
+}
+
+/** How many blockquote levels a line's leading marker run opens (`> > x` -> 2).
+ * 0 when the line has no marker, which happens on a lazy continuation line
+ * inside a quote; such a line renders at the outermost level. */
+export function quoteDepth(text: string): number {
+  const marker = /^\s*(?:> ?)+/.exec(text);
+  return marker ? (marker[0].match(/>/g) ?? []).length : 0;
 }
 
 function sanitizeUrl(url: string): string {
@@ -1608,6 +1618,9 @@ class DecoBuilder {
       case "HTMLTag":
         this.htmlInline(node);
         return;
+      case "Comment":
+        if (this.config.html) this.mark(node.from, node.to, "cm-td-comment");
+        return;
       case "MathInline":
         this.mathInline(node);
         return;
@@ -1698,10 +1711,15 @@ class DecoBuilder {
     const codeParts = node.node.getChildren("CodeText");
     const source = codeParts.map((part) => doc.sliceString(part.from, part.to)).join("");
     const openLine = doc.lineAt(node.from);
+    // What sits between the line start and the fence: the enclosing containers'
+    // prefixes -- blockquote markers, then list indentation.
+    const prefix = doc.sliceString(openLine.from, node.from);
     // A fence nested in a list starts after the list container's indentation.
     // Move that indentation from the source text to the rendered line box so
     // the whole code block is inset, rather than only its code being inset.
-    const indent = node.from - openLine.from;
+    // Blockquote markers are not indentation: the quote's own gutter already
+    // insets the block, so only what follows the last `>` counts.
+    const indent = prefix.replace(/^.*>[ \t]?/, "").length;
     const closeLine = marks.length >= 2 ? doc.lineAt(marks[marks.length - 1]!.from) : null;
     const active = this.on(node.from, node.to);
     const lang = info ? doc.sliceString(info.from, info.to).trim() : "";
@@ -1709,9 +1727,17 @@ class DecoBuilder {
     // level (see `buildBlocks`) instead of as styled/highlighted code lines.
     if (lang.toLowerCase() === "mermaid" && !active) return;
 
-    // The backticks are never shown: both fence lines are dropped from layout,
-    // so the block is exactly its content lines and never changes size.
-    this.out.push(Decoration.line({ class: "cm-td-fence-hidden" }).range(openLine.from));
+    // The backticks are never shown. Usually the opening fence line can be
+    // dropped entirely -- including inside a blockquote, where the line holds
+    // nothing but the quote marker and the fence. A fence that starts a list
+    // item shares its line with the list marker (`- ```js`), though, so keep
+    // that line and hide only the fence. Otherwise hiding the line also hides
+    // the rendered bullet.
+    if (/^[\s>]*$/.test(prefix)) {
+      this.out.push(Decoration.line({ class: "cm-td-fence-hidden" }).range(openLine.from));
+    } else {
+      this.syntax(node.from, openLine.to, false);
+    }
     if (closeLine) {
       this.out.push(Decoration.line({ class: "cm-td-fence-hidden" }).range(closeLine.from));
     }
@@ -1834,22 +1860,31 @@ class DecoBuilder {
     const raw = doc.sliceString(node.from, node.to);
     const m = /^!\[([^\]]*)\]\(([^)\s]*)/.exec(raw);
     if (!m) return;
+    const src = this.config.resolveImageSrc?.(m[2] ?? "") ?? m[2] ?? "";
     if (this.on(node.from, node.to)) {
       // Editing: show the raw markdown, and keep a preview of the image to the
       // right of it so it stays visible while you edit the source.
       this.mark(node.from, node.to, "cm-td-mark");
       this.out.push(
         Decoration.widget({
-          widget: new ImageWidget(m[2] ?? "", m[1] ?? ""),
+          widget: new ImageWidget(src, m[1] ?? ""),
           side: 1,
         }).range(node.to),
       );
       return;
     }
-    this.replaceWith(node.from, node.to, new ImageWidget(m[2] ?? "", m[1] ?? ""));
+    this.replaceWith(node.from, node.to, new ImageWidget(src, m[1] ?? ""));
   }
 
   private blockquote(node: SyntaxNodeRef): void {
+    // Only the outermost blockquote decorates. It already covers every line of
+    // the whole block, and each line's nesting depth comes from its own `>`
+    // markers, so a nested quote indents instead of every level re-applying the
+    // same styles to the same lines (which left nested quotes flush with their
+    // parent and stacked duplicate classes).
+    for (let a = node.node.parent; a; a = a.parent) {
+      if (a.name === "Blockquote") return;
+    }
     const doc = this.state.doc;
     const startLine = doc.lineAt(node.from).number;
     const endLine = doc.lineAt(node.to > node.from ? node.to - 1 : node.to).number;
@@ -1858,15 +1893,19 @@ class DecoBuilder {
     const kind = alertMatch ? (alertMatch[1]!.toLowerCase() as AlertKind) : null;
     for (let n = startLine; n <= endLine; n++) {
       const line = doc.line(n);
+      const depth = quoteDepth(line.text);
       const cls = ["cm-td-quote"];
-      if (kind) cls.push("cm-td-alert", `cm-td-alert-${kind}`);
+      // The alert's colour and icon belong to the quote the `[!KIND]` marker
+      // opened, not to quotes nested inside it (those get the plain accent).
+      if (kind && depth <= 1) cls.push("cm-td-alert", `cm-td-alert-${kind}`);
       // An empty `>` line is a paragraph separator inside the blockquote.
       // Collapse it (unless the caret is on it) so it doesn't take up a line,
       // the same way blank paragraph separators are collapsed.
-      if (/^>\s*$/.test(line.text) && !this.on(line.from, line.to)) {
+      if (/^\s*(?:> ?)+\s*$/.test(line.text) && !this.on(line.from, line.to)) {
         cls.push("cm-td-quote-empty");
       }
-      this.out.push(Decoration.line({ class: cls.join(" ") }).range(line.from));
+      const attributes = depth > 1 ? { style: `--td-quote-depth: ${depth}` } : undefined;
+      this.out.push(Decoration.line({ class: cls.join(" "), attributes }).range(line.from));
     }
     // Always hide the "> " marker on each line; the raw marker is never shown
     // (Typora-style), even when the caret is on the line.
@@ -1888,21 +1927,14 @@ class DecoBuilder {
     }
   }
 
-  // Descendant nodes of `node` with a given name (marks can be nested in cells).
+  /** Every descendant of `node` with a given name, at any depth -- a quote mark
+   * can sit under a nested list or another blockquote, a table's marks under its
+   * cells. */
   private collect(node: SyntaxNodeRef, wanted: string): SyntaxNode[] {
     const out: SyntaxNode[] = [];
-    const cursor = node.node.cursor();
-    if (!cursor.firstChild()) return out;
-    do {
-      if (cursor.name === wanted) out.push(cursor.node);
-      // descend
-      if (cursor.firstChild()) {
-        do {
-          if (cursor.name === wanted) out.push(cursor.node);
-        } while (cursor.nextSibling());
-        cursor.parent();
-      }
-    } while (cursor.nextSibling());
+    node.node.cursor().iterate((child) => {
+      if (child.name === wanted) out.push(child.node);
+    });
     return out;
   }
 
@@ -1914,6 +1946,11 @@ class DecoBuilder {
     if (!listMark) return;
     const ordered = /\d/.test(doc.sliceString(listMark.from, listMark.to));
 
+    // The space that separates the marker from the item's text is left in place
+    // rather than swallowed by the widget, so the caret has a position between
+    // the rendered bullet / checkbox and the text: pressing Enter on a list item
+    // lands the caret where the first typed character will appear, instead of
+    // hard against the widget and then jumping right on the first keystroke.
     if (task) {
       const marker = task.node.getChild("TaskMarker");
       // Always hide "- " and replace "[ ]"/"[x]" with a checkbox, even when the
@@ -1923,21 +1960,18 @@ class DecoBuilder {
         const checked = doc.sliceString(marker.from, marker.to).toLowerCase().includes("x");
         const boxPos =
           doc.sliceString(marker.from, marker.from + 1) === "[" ? marker.from + 1 : marker.from;
-        let end = marker.to;
-        if (doc.sliceString(end, end + 1) === " ") end++;
-        this.replaceWith(marker.from, end, new CheckboxWidget(checked, boxPos));
+        this.replaceWith(marker.from, marker.to, new CheckboxWidget(checked, boxPos));
       }
       return;
     }
 
-    const markEnd = this.afterSpace(listMark.to);
     if (ordered) {
       // Keep the ordered number visible; just style it faint.
       this.mark(listMark.from, listMark.to, "cm-td-list-mark");
     } else {
-      // Replace "- " with a rendered bullet whose style cycles with nesting.
-      // The raw marker is never shown, even when the caret is on the line.
-      this.replaceWith(listMark.from, markEnd, new BulletWidget(this.listLevel(node)));
+      // Replace "-" with a rendered bullet whose style cycles with nesting. The
+      // raw marker is never shown, even when the caret is on the line.
+      this.replaceWith(listMark.from, listMark.to, new BulletWidget(this.listLevel(node)));
     }
   }
 
@@ -1967,11 +2001,15 @@ class DecoBuilder {
     if (!this.config.html) return;
     const doc = this.state.doc;
     const raw = doc.sliceString(node.from, node.to);
-    // Self-contained tags (void, self-closing) and comments render on their own.
+    // Comments remain visible as dimmed source. Rendering them as HTML would
+    // make both their delimiters and commented-out content disappear.
+    if (/^<!--[\s\S]*-->$/.test(raw)) {
+      this.mark(node.from, node.to, "cm-td-comment");
+      return;
+    }
+    // Self-contained tags (void and self-closing) render on their own.
     const standalone =
-      /^<!--[\s\S]*-->$/.test(raw) ||
-      /\/>\s*$/.test(raw) ||
-      /^<(br|hr|img|input|wbr|area|col|embed|source|track)\b/i.test(raw);
+      /\/>\s*$/.test(raw) || /^<(br|hr|img|input|wbr|area|col|embed|source|track)\b/i.test(raw);
     if (standalone) {
       if (this.on(node.from, node.to)) this.mark(node.from, node.to, "cm-td-html-raw");
       else this.replaceWith(node.from, node.to, new HtmlWidget(raw, false));
@@ -2107,9 +2145,14 @@ function buildBlocks(
             block: true,
           }).range(first.from, last.to),
         );
-      } else if (node.name === "HTMLBlock") {
+      } else if (node.name === "HTMLBlock" || node.name === "CommentBlock") {
         claim(node.from, node.to);
         if (!config.html) return;
+        const raw = doc.sliceString(node.from, node.to);
+        if (node.name === "CommentBlock" || /^\s*<!--[\s\S]*-->\s*$/.test(raw)) {
+          out.push(Decoration.mark({ class: "cm-td-comment" }).range(node.from, node.to));
+          return;
+        }
         const touched = touches(state, node.from, node.to);
         sensitive.push({ from: node.from, to: node.to, touched });
         if (touched) return;

@@ -3,7 +3,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { Typodown, type Theme, type ToolbarSave } from "@vemonet/typodown";
 import "@vemonet/typodown/style.css";
 import { vault, onContentChange } from "@/lib/vault";
-import { IS_TAURI } from "@/lib/tauri";
+import { IS_TAURI, resolveLocalImageSrc } from "@/lib/tauri";
 
 interface EditorProps {
   theme?: Theme;
@@ -25,6 +25,7 @@ const Editor: Component<EditorProps> = (props) => {
       theme: props.theme ?? "auto",
       placeholder: "Open a markdown file to start writing…",
       onChange: onContentChange,
+      resolveImageSrc: (src) => resolveLocalImageSrc(src, vault.currentPath()),
       // window.open is a no-op in the Tauri webview; route Ctrl/⌘-clicked
       // links to the system browser via the opener plugin.
       openLink: (url) => {
@@ -47,8 +48,10 @@ const Editor: Component<EditorProps> = (props) => {
   // with the current content in onMount).
   createEffect(() => {
     const content = vault.currentContent();
+    vault.currentPath();
     if (!ready || !editor) return;
     if (editor.getValue() !== content) editor.setValue(content);
+    editor.refreshPreview();
   });
 
   onCleanup(() => {

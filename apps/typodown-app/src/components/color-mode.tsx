@@ -60,10 +60,18 @@ export function ColorModeProvider(
   // is honoured from the first app paint, not only after a manual toggle) and
   // on every change. This is the single place that touches the class list.
   createEffect(() => {
+    const mode = colorMode();
     const resolved = resolvedColorMode();
     const html = document.documentElement;
     html.classList.remove("light", "dark");
     html.classList.add(resolved);
+    html.dataset.colorMode = mode === "system" ? resolved : mode;
+
+    // Keep installed-PWA and mobile webview chrome on the same surface colour.
+    const background = getComputedStyle(html).getPropertyValue("--background").trim();
+    for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
+      meta.content = background;
+    }
   });
 
   const setColorMode = (mode: ColorMode) => {

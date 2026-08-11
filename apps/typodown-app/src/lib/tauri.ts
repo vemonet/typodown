@@ -1,3 +1,4 @@
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readDir, readTextFile, rename, writeTextFile, watch } from "@tauri-apps/plugin-fs";
 import ignore, { type Ignore } from "ignore";
@@ -20,6 +21,32 @@ const DEFAULT_IGNORED = ["node_modules", ".git"];
 
 export const IS_TAURI = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 let webRoot: FileSystemDirectoryHandle | null = null;
+
+/** Resolve an image path relative to its Markdown file. Remote URLs, data
+ * URLs, anchors, and root-relative paths are already meaningful and remain
+ * unchanged. Tauri's asset protocol serves local files with their MIME type,
+ * including SVG images. */
+export function resolveLocalImageSrc(src: string, markdownPath: string | null): string {
+  if (!IS_TAURI || !markdownPath || !src || /^(?:[a-z][a-z\d+.-]*:|\/|#)/i.test(src)) return src;
+  const normalizedMarkdownPath = markdownPath.replace(/\\/g, "/");
+  const slash = normalizedMarkdownPath.lastIndexOf("/");
+  if (slash < 0) return src;
+  const relativePath = src.split(/[?#]/, 1)[0]!;
+  const suffix = src.slice(relativePath.length);
+  let decodedPath = relativePath;
+  try {
+    decodedPath = decodeURIComponent(relativePath);
+  } catch {
+    // Keep malformed percent escapes literal instead of breaking rendering.
+  }
+  const segments = `${normalizedMarkdownPath.slice(0, slash + 1)}${decodedPath}`.split("/");
+  const resolved: string[] = [];
+  for (const segment of segments) {
+    if (segment === "..") resolved.pop();
+    else if (segment !== ".") resolved.push(segment);
+  }
+  return convertFileSrc(resolved.join("/")) + suffix;
+}
 const webHandles = new Map<string, FileSystemHandle>();
 
 /** Open a folder picker. Returns the absolute path or null if cancelled. */

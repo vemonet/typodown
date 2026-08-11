@@ -251,8 +251,8 @@ export function scrollToLine(view: EditorView, line: number): void {
 export function parseOutline(markdown: string): OutlineHeading[] {
   const lines = markdown.split(/\r?\n/);
   const headings: OutlineHeading[] = [];
-  let inFence = false;
-  let fenceMarker = "";
+  /** The open fence's delimiter, or null outside a fenced block. */
+  let fence: { char: string; length: number } | null = null;
   let inFrontMatter = false;
   let frontMatterSeen = false;
 
@@ -272,18 +272,26 @@ export function parseOutline(markdown: string): OutlineHeading[] {
       continue;
     }
 
-    // Fenced code blocks toggle on a line starting with ``` or ~~~.
-    const fenceMatch = /^(`{3,}|~{3,})/.exec(trimmed);
+    // Fenced code blocks open on a line starting with ``` or ~~~, and close on
+    // a run of the *same character, at least as long*, with nothing after it
+    // (CommonMark). Anything shorter, of the other character, or carrying an
+    // info string is content -- which is what a markdown example nesting fences
+    // inside a wider fence looks like.
+    const fenceMatch = /^(`{3,}|~{3,})(.*)$/.exec(trimmed);
     if (fenceMatch) {
-      if (!inFence) {
-        inFence = true;
-        fenceMarker = fenceMatch[1]![0]!;
-      } else if (trimmed.startsWith(fenceMarker)) {
-        inFence = false;
+      const run = fenceMatch[1]!;
+      if (!fence) {
+        fence = { char: run[0]!, length: run.length };
+      } else if (
+        run[0] === fence.char &&
+        run.length >= fence.length &&
+        fenceMatch[2]!.trim() === ""
+      ) {
+        fence = null;
       }
       continue;
     }
-    if (inFence) continue;
+    if (fence) continue;
 
     const atx = /^(#{1,6})\s+(.*?)(?:\s+#+\s*)?$/.exec(trimmed);
     if (atx) {

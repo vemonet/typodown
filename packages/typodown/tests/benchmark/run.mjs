@@ -1,5 +1,5 @@
 /* eslint-disable no-console -- This CLI prints benchmark tables and report paths. */
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -178,6 +178,7 @@ try {
     results,
     largeResults,
   };
+  await mkdir(outputDir, { recursive: true });
   await writeFile(resolve(outputDir, "results.json"), `${JSON.stringify(report, null, 2)}\n`);
   await writeFile(resolve(outputDir, "RESULTS.md"), renderMarkdownReport(report));
   console.table(
@@ -209,7 +210,7 @@ try {
       })),
     ),
   );
-  console.log("Reports: packages/typodown/tests/benchmark/RESULTS.md and results.json");
+  console.log(`Reports: ${resolve(outputDir, "RESULTS.md")} and results.json`);
 } finally {
   await browser?.close();
   await server.close();

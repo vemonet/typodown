@@ -7,21 +7,27 @@ import {
   Show,
   type Component,
 } from "solid-js";
-import { Portal } from "solid-js/web";
+import { Dynamic, Portal } from "solid-js/web";
 import {
   ChevronRight,
+  Bot,
+  BookOpenText,
   Copy,
   FileText,
   Folder,
   FolderOpen,
   FolderPlus,
   BookOpen,
+  Handshake,
+  ListTree,
+  ListTodo,
   Pencil,
   Share2,
   Sun,
   Moon,
   Monitor,
   Palette,
+  ScrollText,
 } from "lucide-solid";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -55,6 +61,28 @@ const [ctxMenu, setCtxMenu] = createSignal<{
   isDir: boolean;
 } | null>(null);
 const [renaming, setRenaming] = createSignal<string | null>(null);
+
+const markdownFileIcons: Record<string, Component<{ class?: string }>> = {
+  "readme.md": BookOpenText,
+  "contributing.md": Handshake,
+  "todo.md": ListTodo,
+  "claude.md": Bot,
+  "agents.md": Bot,
+  "log.md": ScrollText,
+  "index.md": ListTree,
+};
+
+const MarkdownFileIcon: Component<{ name: string; active?: boolean }> = (props) => {
+  return (
+    <Dynamic
+      component={markdownFileIcons[props.name.toLowerCase()] ?? FileText}
+      class={cn(
+        "size-4 shrink-0",
+        props.active ? "text-sidebar-accent-foreground" : "text-muted-foreground",
+      )}
+    />
+  );
+};
 
 interface FileExplorerProps {
   onOpenFile?: (path: string) => void;
@@ -338,12 +366,7 @@ const TreeRow: Component<{
               setCtxMenu({ x: e.clientX, y: e.clientY, path: props.node.path, isDir: false });
             }}
           >
-            <FileText
-              class={cn(
-                "size-4 shrink-0",
-                isActive() ? "text-sidebar-accent-foreground" : "text-muted-foreground",
-              )}
-            />
+            <MarkdownFileIcon name={props.node.name} active={isActive()} />
             <span class="truncate">{props.node.name}</span>
           </button>
         }
@@ -388,10 +411,7 @@ const RenameInput: Component<{
       class="flex items-center gap-1.5 py-0.5 pr-2"
       style={{ "padding-left": `${props.depth * 12 + props.indent}px` }}
     >
-      <Show
-        when={props.isDir}
-        fallback={<FileText class="size-4 shrink-0 text-muted-foreground" />}
-      >
+      <Show when={props.isDir} fallback={<MarkdownFileIcon name={props.node.name} />}>
         <Folder class="size-4 shrink-0 text-muted-foreground" />
       </Show>
       <input

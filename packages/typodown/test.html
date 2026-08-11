@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Typodown · test.md</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      Dev-only harness: renders the repo's `test.md` torture fixture with the
+      editor built from `src`, so its weird cases (nested fences, alerts holding
+      code blocks, deep indentation) can be eyeballed while iterating. Not part
+      of the built demo, which only bundles index.html.
+    -->
+    <main id="editor"></main>
+    <script type="module">
+      import SAMPLE from "../../test.md?raw";
+      import { createTypodown } from "/src/index.ts";
+      import "/src/theme.css";
+
+      window.editor = createTypodown(document.getElementById("editor"), {
+        value: SAMPLE,
+        theme: "auto",
+        persist: false,
+      });
+    </script>
+  </body>
+</html>

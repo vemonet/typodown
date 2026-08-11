@@ -5,7 +5,12 @@ export default defineConfig({
   staged: {
     "*": "vp check --fix",
   },
-  fmt: {},
+  fmt: {
+    // `test.md` is a hand-written torture fixture: unclosed fences, tilde
+    // fences, tab indentation and deliberately awkward nesting. Formatting it
+    // rewrites exactly the syntax it is meant to exercise.
+    ignorePatterns: ["test.md"],
+  },
   lint: {
     jsPlugins: [
       { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },
@@ -110,6 +115,11 @@ export default defineConfig({
 
       benchmark: {
         command: "node packages/typodown/tests/benchmark/run.mjs",
+      },
+
+      // Upgrade dependencies in package.json
+      upgrade: {
+        command: "vp update --latest --recursive --workspace-root",
       },
 
       // Release process

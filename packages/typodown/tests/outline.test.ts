@@ -36,3 +36,31 @@ test("strips trailing closing hashes and whitespace", () => {
 test("no headings yields an empty list", () => {
   expect(parseOutline("just a paragraph\nand another")).toEqual([]);
 });
+
+test("keeps nested fences closed until the outer fence's own delimiter", () => {
+  // A markdown example nesting a ``` block inside a ```` block: the inner
+  // fences are content, so nothing between the outer delimiters is a heading.
+  const md = [
+    "# Real",
+    "",
+    "````md",
+    "```md",
+    "# not a heading",
+    "---",
+    "type: not-frontmatter",
+    "---",
+    "```",
+    "````",
+    "",
+    "## After",
+  ].join("\n");
+  expect(parseOutline(md)).toEqual([
+    { level: 1, text: "Real", line: 1 },
+    { level: 2, text: "After", line: 12 },
+  ]);
+});
+
+test("a tilde fence is not closed by a backtick fence of the same width", () => {
+  const md = "~~~md\n```json\n# not a heading\n```\n~~~\n\n# Body";
+  expect(parseOutline(md)).toEqual([{ level: 1, text: "Body", line: 7 }]);
+});

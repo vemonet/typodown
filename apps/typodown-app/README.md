@@ -1,6 +1,6 @@
 # 🖋️ Typodown app
 
-Seamless open-source markdown editing for desktop (Linux, macOS, Windows) and Android, inspired by [Typora](https://typora.io).
+Seamless open-source markdown editing for desktop (Linux, macOS, windows) and Android, inspired by [Typora](https://typora.io).
 
 Typodown blends reading and writing markdown into one continuous motion. Markdown renders where you type: no preview pane to keep in sync, no mode to toggle, no markup cluttering the page. Move your caret into a heading, bold run, code span or link and only its raw markers (`#`, `**`, `` ` ``) surface for the moment you edit them. The content stays central, the syntax stays out of the way.
 
@@ -16,7 +16,7 @@ Typodown blends reading and writing markdown into one continuous motion. Markdow
 
 ### On desktop
 
-Open a folder of markdown files, or a single file — double-clicking a `.md` file in your file manager works too.
+Open a folder of markdown files, or a single file, double-clicking a `.md` file in your file manager works too.
 
 ### On Android
 

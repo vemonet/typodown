@@ -2,7 +2,7 @@
 
 Seamless open-source markdown editing, inspired by [Typora](https://typora.io).
 
-Typodown renders markdown inline as you type, no split preview to keep in sync. Put your caret on a heading, bold run, link or code span and its raw markdown syntax (`#`, `**`, `` ` ``) reveals for just that construct.
+Typodown renders markdown inline as you type, no split preview to keep in sync. Put your caret on a heading, **bold term**, [link](/) or `code span` and its raw markdown syntax reveals for just that construct.
 
 **[⚡️ Live demo →](https://vemonet.github.io/typodown)**
 

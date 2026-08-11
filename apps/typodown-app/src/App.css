@@ -84,6 +84,29 @@
   --sidebar-ring: var(--ring);
 }
 
+/* Named editor themes also provide the app surface colours. Keeping these on
+ * the root makes the Tauri shell and PWA chrome blend into the editor instead
+ * of retaining the generic light/dark background. */
+:root[data-color-mode="dracula"] {
+  --background: #282a36;
+  --foreground: #f8f8f2;
+}
+
+:root[data-color-mode="nord"] {
+  --background: #2e3440;
+  --foreground: #d8dee9;
+}
+
+:root[data-color-mode="solarized-light"] {
+  --background: #fdf6e3;
+  --foreground: #586e75;
+}
+
+:root[data-color-mode="solarized-dark"] {
+  --background: #002b36;
+  --foreground: #839496;
+}
+
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: var(--font-sans);
@@ -151,24 +174,13 @@
   }
 }
 
-/* Typodown editor: override the library's theme variables so the editor bg
- * matches the app shell's --background exactly. High specificity + !important
- * to win against the library's style.css which may load after this file. */
+/* Keep app controls aligned with the active palette without replacing the
+ * editor theme's own foreground and background colours. */
 .typodown.typodown {
   height: 100%;
-  --td-bg: var(--background) !important;
-  --td-fg: var(--foreground) !important;
-  --td-block-bg: var(--muted);
-  --td-code-block-bg: var(--muted);
-  --td-table-header-bg: var(--muted);
-  --td-table-alt-bg: var(--muted);
-  --td-border: var(--border);
-  --td-border-muted: var(--border);
-  --td-code-bg: color-mix(in oklch, var(--muted-foreground) 12%, transparent);
 }
 .typodown .cm-editor {
   height: 100%;
-  background: var(--background) !important;
 }
 
 /* Editor area. No reserved top band: the floating sidebar toggle and the

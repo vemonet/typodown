@@ -5,7 +5,7 @@
 
 **Seamless open-source markdown editing, inspired by [Typora](https://typora.io). Available everywhere you write.**
 
-[⚡️ Live demo](https://vemonet.github.io/typodown) · [🧩 VSCode extension](https://marketplace.visualstudio.com/items?itemName=vemonet.typodown) · [🖥️ Desktop & Android app](https://github.com/vemonet/typodown/releases) · [📦 npm package](https://www.npmjs.com/package/@vemonet/typodown)
+[⚡️ Website](https://vemonet.github.io/typodown) · [🧩 VSCode extension](https://marketplace.visualstudio.com/items?itemName=vemonet.typodown) · [🖥️ Desktop & Android app](https://github.com/vemonet/typodown/releases) · [📦 npm package](https://www.npmjs.com/package/@vemonet/typodown)
 
 </div>
 
@@ -13,20 +13,7 @@
 
 Typodown blends reading and writing markdown into one continuous experience. Markdown renders where you type: no preview pane to keep in sync, no mode to toggle, no markup cluttering the page.
 
-Move your caret into a heading, bold run, code span or link and only its raw markers (`#`, `**`, `` ` ``) surface for the moment you edit them, then settle back into place as you move on. The content stays central, the syntax stays out of the way.
-
-## Why
-
-[**Typora**](https://typora.io) nailed markdown editing: you edit the rendered document directly, and it is still just markdown underneath. Nothing else gets that feeling right, rich-text editors that export to markdown are word processors in disguise.
-
-But Typora is a closed-source desktop app, so that experience stops at its window. Typodown is an open source editor component heavily inspired by it, that embeds anywhere the web runs: your app, VSCode, desktop, your phone.
-
-[**Marktext**](https://marktext.me/) came up with a really good open-source alternative to Typora. However, as a long time Typora users a few things were not feeling right:
-
-- Marktext is not as minimalist and pure as Typora.
-  - Everytime the cursor select some characters, a toolbar pops on top of the selection; everytime I click a different line, a button moves in the margin. That's too much unnecessary movements on the screen to me.
-  - Other details I found were cluttering the UI: ```could be always hidden, no need to revel them; frontmatter does not need a "front matter delimiter" written all around it;`<hr>` would be more elegant as plain line.
-- Despite having 10+ themes there are no imitiation of GitHub style markdown rendering, which is what I am used too, and arguably the most publicly exposed style of markdown rendering to developers. Custom CSS seems to have its limitations (I could not figure out how to make the `<hr>` a plain line, the choice of dotted line is debatable)
+Move your caret into a heading, **bold term**, `code span` or [link](/) and only its raw markers surface for the moment you edit them, then settle back into place as you move on. The content stays central, the syntax stays out of the way.
 
 ## Features
 
@@ -46,46 +33,12 @@ Typodown ships in various forms:
 | -------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | **Library**          | Embed the editor in any web app. Framework-agnostic                                    | [`@vemonet/typodown`](https://www.npmjs.com/package/@vemonet/typodown)                     |
 | **VSCode extension** | Edit `.md` files with the Typodown editor inside VSCode                                | [`vemonet.typodown`](https://marketplace.visualstudio.com/items?itemName=vemonet.typodown) |
-| **Desktop app**      | Open folders of `.md` files, with file explorer and graph view (Linux, macOS, Windows) |
+| **Desktop app**      | Open folders of `.md` files, with file explorer and graph view (Linux, macOS, Windows) | [Download](https://github.com/vemonet/typodown/releases)                                   |
 | **Android app**      | Open `.md` files                                                                       | [Download](https://github.com/vemonet/typodown/releases)                                   |
 
 > Contributions welcome, especially if someone with an iOS developer account wants to help ship the iOS app.
 
-### Library
-
-```sh
-npm i --save @vemonet/typodown
-```
-
-```ts
-import { createTypodown } from "@vemonet/typodown";
-import "@vemonet/typodown/style.css";
-
-createTypodown(document.getElementById("app")!, {
-  value: "# Hello",
-  theme: "auto",
-});
-```
-
-> See the [package README](packages/typodown/README.md) for the full API.
-
-### VSCode extension
-
-Install **Typodown** from the Marketplace, then right-click any `.md` file → **Open with Typodown**. See the [extension README](apps/typodown-vsx/README.md) for details.
-
-> [!TIP]
-> To make it the default editor for Markdown, run **View: Reopen Editor With... → Configure default editor for `*.md`**.
-
-### App
-
-Desktop and Android apps are built from the same codebase with Tauri v2:
-
-- **Desktop**: open a folder as a vault, with a file tree on the left and outline navigation on the right.
-- **Android**: open a `.md` file straight from your storage app (Dropbox, Google Drive, ...). Edits auto-save about a second after you stop typing, paced to avoid cloud sync conflicts.
-
-The desktop app enables to generate a graph view from files in Open Knowledge Format.
-
-Install by downloading the right artefact from the releases page.
+See the [website](https://vemonet.github.io/typodown) for more details.
 
 ## Development
 

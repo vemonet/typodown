@@ -28,6 +28,17 @@ jobs:
         run: vp i
       - name: Run tests
         run: vp test
+      - name: Run benchmark
+        run: node packages/typodown/tests/benchmark/run.mjs
+        env:
+          BENCH_OUTPUT_DIR: benchmark-results
+          CHROMIUM_PATH: /usr/bin/google-chrome
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: benchmark-results
+          retention-days: 30
 
   deploy:
     name: ⚡️ Deploy to GitHub Pages

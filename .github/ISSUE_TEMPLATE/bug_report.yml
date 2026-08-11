@@ -1,0 +1,62 @@
+name: Bug report
+description: Report a reproducible problem with Typodown
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Typodown. Please provide enough detail for us to reproduce the problem.
+
+  - type: checkboxes
+    id: platforms
+    attributes:
+      label: Which platform(s) are affected?
+      description: Select every platform where you encountered the problem.
+      options:
+        - label: VSCode extension
+        - label: Linux desktop app
+        - label: Windows desktop app
+        - label: macOS desktop app
+        - label: Android app
+        - label: Progressive Web App
+        - label: The markdown editor in an another app
+    # validations:
+    #   required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Describe the problem
+      description: Clearly explain what happened and include the steps needed to reproduce it.
+      placeholder: |
+        1. Open ...
+        2. Select ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+      description: Describe what you expected to happen instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Potential solution
+      description: If you have an idea for a fix or workaround, describe it here.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add relevant logs, screenshots, versions, or other details.
+    validations:
+      required: false

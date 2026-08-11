@@ -21,4 +21,5 @@ export type HostMessage =
 export type WebviewMessage =
   | { type: "ready" }
   | { type: "edit"; text: string }
-  | { type: "clipboard" };
+  | { type: "clipboard" }
+  | { type: "openLink"; url: string };

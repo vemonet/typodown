@@ -1,8 +1,11 @@
+---
+---
+
 # 🛠️ Development
 
 [![CI](https://github.com/vemonet/typodown/actions/workflows/ci.yml/badge.svg)](https://github.com/vemonet/typodown/actions/workflows/ci.yml) [![Release](https://github.com/vemonet/typodown/actions/workflows/release.yml/badge.svg)](https://github.com/vemonet/typodown/actions/workflows/release.yml)
 
-> \[!IMPORTANT]
+> [!IMPORTANT]
 >
 > Requires [Vite+](https://viteplus.dev/guide/) installed.
 
@@ -102,7 +105,6 @@ vp run app:aab
 >
 > - `ANDROID_KEYSTORE_BASE64`: your upload keystore `typodown.jks`, base64-encoded (`base64 -i ~/.keystores/typodown.jks | pbcopy`)
 > - `ANDROID_KEYSTORE_PASSWORD`
-> - `ANDROID_KEY_PASSWORD` (same as previous)
 > - `ANDROID_KEY_ALIAS` (`typodown`)
 >
 > For Play Store publishing (optional; the release still succeeds without it):
@@ -113,10 +115,18 @@ vp run app:aab
 vp run release
 ```
 
-> \[!NOTE]
-> The npm package and VSCode extension are built and published locally, then a GitHub Actions workflow ([`release.yml`](.github/workflows/release.yml)) builds the platform artefacts (desktop app, Android `.apk` + `.aab`), attaches the desktop bundles and `.apk` to the GitHub release, and uploads the `.aab` to the Play Store's internal track.
+> [!NOTE]
+> The npm package and VSCode extension are built and published locally, then a GitHub Actions workflow ([`release.yml`](.github/workflows/release.yml)) builds the platform artefacts (desktop app, Android `.apk` + `.aab`, unsigned iOS `.ipa`), attaches the desktop bundles, `.apk` and `.ipa` to the GitHub release, and uploads the `.aab` to the Play Store's internal track.
 
 You can trigger the release workflow manually (`workflow_dispatch`) for a **dry run**: it builds every artefact and uploads them to the workflow run (no GitHub release, no Play Store upload).
+
+### 🍎 iOS `.ipa` (unsigned)
+
+There is no Apple Developer account behind this repo, so the iOS job builds with `--no-sign`: it generates the Xcode project with `tauri ios init` (`gen/apple` is not committed, unlike `gen/android`, because generating it needs Xcode), archives with `--archive-only` to skip the export step that demands a signing identity, then packages the archive's app bundle as an `.ipa` by hand.
+
+That `.ipa` **cannot be installed by double-clicking**: it has to be re-signed first, e.g. with [Sideloadly](https://sideloadly.io) or [AltStore](https://altstore.io), or by opening the project in Xcode and running it on a connected device with a free personal team. The job is `continue-on-error`, so an iOS failure never blocks a release.
+
+To ship a properly installable build you need a paid Apple Developer account, and then either `--export-method release-testing` with a certificate + provisioning profile in secrets (devices listed in the profile), or `--export-method app-store-connect` with an App Store Connect API key for TestFlight.
 
 ### 🖋️ Sign `.apk`
 
@@ -147,7 +157,7 @@ keyAlias=typodown
 
 The Play Store distributes the `.aab` (Android App Bundle). The release workflow signs it with the upload keystore and uploads it to the **internal testing**&#x20;
 
-**track** via the Play Developer API; you then promote it to production from the Play Console. One-time setup:
+**track** via the Play Developer API; you then promote it to production from the Play Console. One-time setup
 
 1. **Create the app in the** **[Play Console](https://play.google.com/console/).** Use the package name `io.github.vemonet.typodown` (must match `bundle.identifier` in [`tauri.conf.json`](apps/typodown-app/src-tauri/tauri.conf.json)).
 2. **Do the first upload manually.** The Play Developer API cannot create an app or its first release. Build a bundle locally (`vp run app:aab`) and upload `app-universal-release.aab` under _Testing > Internal testing > Create new release_, then complete the required store listing, content rating, data-safety and target-audience forms until the app is in a releasable state. Later releases are automated.
@@ -164,7 +174,3 @@ Play requires a unique, increasing `versionCode` for every upload. Tauri derives
 #### Releasing
 
 Tag a release as usual (`vp run release`). Once the workflow finishes, the new build appears on the **internal** track in the Play Console; open the release there and **promote it to Production** (or a closed/open testing track) when you are ready to ship. To change the default track the workflow targets, edit the `track:` field in the _Publish to Google Play_ step of [`release.yml`](.github/workflows/release.yml).
-
-## ☑️ Todo
-
-- [x] Support local image link in HTML

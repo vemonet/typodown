@@ -37,3 +37,33 @@ test("indents a fenced code block nested in a list instead of its code", () => {
   view.destroy();
   parent.remove();
 });
+
+test("keeps bullets for list items containing fenced code blocks", () => {
+  const doc = [
+    "- [`rtk`](https://github.com/rtk-ai/rtk) to reduce tools token usage",
+    "",
+    "- ```Shell",
+    "  brew install rtk",
+    "  ```",
+    "",
+    "- ```Shell",
+    "  rtk init -g",
+    "  ```",
+  ].join("\n");
+  const parent = document.createElement("div");
+  document.body.append(parent);
+  const view = new EditorView({
+    parent,
+    state: EditorState.create({
+      doc,
+      extensions: [typodownMarkdown(), livePreview({ html: true })],
+    }),
+  });
+
+  expect(parent.querySelectorAll(".cm-td-bullet")).toHaveLength(3);
+  expect(parent.querySelectorAll(".cm-line.cm-td-fence-hidden")).toHaveLength(2);
+  expect(parent.textContent).not.toContain("```Shell");
+
+  view.destroy();
+  parent.remove();
+});

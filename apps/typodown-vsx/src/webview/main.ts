@@ -76,6 +76,9 @@ const editor = createTypodown(host, {
   value: "",
   theme: "dark",
   getClipboardText: readClipboard,
+  // VS Code webviews block window.open, so route Ctrl/⌘-clicked links through
+  // the extension host, which opens them with vscode.env.openExternal.
+  openLink: (url) => send({ type: "openLink", url }),
   onChange: (text) => {
     if (ready && !applying) send({ type: "edit", text });
   },
@@ -92,6 +95,14 @@ function applyTheme(): void {
     editor.wrapper.classList.remove("td-vscode");
     editor.setTheme(themeSetting);
   }
+
+  // Built-in themes scope their variables to the editor wrapper. Mirror the
+  // resolved surface colour onto the webview so the area around short
+  // documents always matches the selected editor theme.
+  const background = getComputedStyle(editor.wrapper).getPropertyValue("--td-bg").trim();
+  document.documentElement.style.backgroundColor = background;
+  document.body.style.backgroundColor = background;
+  host.style.backgroundColor = background;
 }
 
 function setContent(text: string): void {

@@ -1,6 +1,6 @@
 import { onMount, onCleanup, Show, type JSX, type Component } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
-import { FolderOpen } from "lucide-solid";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-solid";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -124,30 +124,23 @@ const App: Component = () => {
 };
 
 const LeftToggle: Component = () => {
-  const { toggleSidebar } = useSidebar();
-  return <SidebarToggleButton icon={FolderOpen} label="Toggle files" onClick={toggleSidebar} />;
-};
-
-interface SidebarToggleButtonProps {
-  icon: Component<{ class?: string }>;
-  label: string;
-  onClick: () => void;
-}
-
-const SidebarToggleButton: Component<SidebarToggleButtonProps> = (props) => {
-  const Icon = props.icon;
+  const { state, toggleSidebar } = useSidebar();
+  const expanded = () => state() === "expanded";
+  const label = () => (expanded() ? "Close file explorer" : "Open file explorer");
   return (
     <Tooltip>
       <TooltipTrigger
         as={Button}
         variant="ghost"
         size="icon-sm"
-        onClick={props.onClick}
-        aria-label={props.label}
+        onClick={toggleSidebar}
+        aria-label={label()}
       >
-        <Icon class="size-4" />
+        <Show when={expanded()} fallback={<PanelLeftOpen class="size-4" />}>
+          <PanelLeftClose class="size-4" />
+        </Show>
       </TooltipTrigger>
-      <TooltipContent>{props.label}</TooltipContent>
+      <TooltipContent>{label()}</TooltipContent>
     </Tooltip>
   );
 };
