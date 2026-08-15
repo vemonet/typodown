@@ -184,15 +184,18 @@ class CheckboxWidget extends WidgetType {
  consistent size, rather than relying on wildly-sized Unicode glyphs.
  */
 class BulletWidget extends WidgetType {
-  constructor(readonly level: number) {
+  constructor(
+    readonly level: number,
+    readonly extraClass = "",
+  ) {
     super();
   }
   eq(other: BulletWidget): boolean {
-    return other.level === this.level;
+    return other.level === this.level && other.extraClass === this.extraClass;
   }
   toDOM(): HTMLElement {
     const span = document.createElement("span");
-    span.className = `cm-td-bullet cm-td-bullet-${this.level % 3}`;
+    span.className = `cm-td-bullet cm-td-bullet-${this.level % 3} ${this.extraClass}`.trim();
     return span;
   }
 }
@@ -1390,10 +1393,14 @@ class DecoBuilder {
       }
 
       const active = this.on(openingLine.from, closingLine.to);
-      const alertClass = `cm-td-quote cm-td-alert cm-td-alert-${opening.alertKind}`;
+      const alertClass = `cm-td-quote cm-td-alert cm-td-directive cm-td-alert-${opening.alertKind}`;
       this.out.push(Decoration.line({ class: alertClass }).range(openingLine.from));
       for (let contentLine = lineNumber + 1; contentLine < closingLine.number; contentLine++) {
-        this.out.push(Decoration.line({ class: alertClass }).range(doc.line(contentLine).from));
+        this.out.push(
+          Decoration.line({ class: `${alertClass} cm-td-directive-content` }).range(
+            doc.line(contentLine).from,
+          ),
+        );
       }
       this.out.push(Decoration.line({ class: alertClass }).range(closingLine.from));
 
@@ -1482,12 +1489,14 @@ class DecoBuilder {
       const afterRun = runEnd < doc.lines ? doc.line(runEnd + 1) : null;
       const enters = (target: ReturnType<typeof doc.line> | null, name: string): boolean => {
         if (!target) return false;
-        for (let a: typeof node | null = tree.resolveInner(target.from, 1); a; a = a.parent) {
-          if (
-            (name === "heading" ? /^ATXHeading[1-6]$/.test(a.name) : a.name === name) &&
-            doc.lineAt(a.from).number === target.number
-          ) {
-            return true;
+        for (const pos of [target.from, target.to]) {
+          for (let a: typeof node | null = tree.resolveInner(pos, -1); a; a = a.parent) {
+            if (
+              (name === "heading" ? /^ATXHeading[1-6]$/.test(a.name) : a.name === name) &&
+              doc.lineAt(a.from).number === target.number
+            ) {
+              return true;
+            }
           }
         }
         return false;
@@ -1727,16 +1736,16 @@ class DecoBuilder {
     // level (see `buildBlocks`) instead of as styled/highlighted code lines.
     if (lang.toLowerCase() === "mermaid" && !active) return;
 
-    // The backticks are never shown. Usually the opening fence line can be
-    // dropped entirely -- including inside a blockquote, where the line holds
-    // nothing but the quote marker and the fence. A fence that starts a list
-    // item shares its line with the list marker (`- ```js`), though, so keep
-    // that line and hide only the fence. Otherwise hiding the line also hides
-    // the rendered bullet.
-    if (/^[\s>]*$/.test(prefix)) {
-      this.out.push(Decoration.line({ class: "cm-td-fence-hidden" }).range(openLine.from));
+    // The backticks are never shown. Drop an opening line that contains only
+    // container markers and the fence. When a fence is a list item's first
+    // block (`- ```js`), move its bullet to the first code-content line below
+    // so the hidden fence does not leave an empty row.
+    const fenceStartsListItem = /^\s*[-+*]\s+$/.test(prefix);
+    if (!/^[\s>]*$/.test(prefix) && !fenceStartsListItem) {
+      this.syntax(node.from, openLine.to, false);
     } else {
       this.syntax(node.from, openLine.to, false);
+      this.out.push(Decoration.line({ class: "cm-td-fence-hidden" }).range(openLine.from));
     }
     if (closeLine) {
       this.out.push(Decoration.line({ class: "cm-td-fence-hidden" }).range(closeLine.from));
@@ -1761,7 +1770,16 @@ class DecoBuilder {
         }
         this.syntax(line.from, prefixEnd, false);
       }
-      if (n === firstContent) cls.push("cm-td-code-top");
+      if (n === firstContent && !fenceStartsListItem) cls.push("cm-td-code-top");
+      if (n === firstContent && fenceStartsListItem) {
+        cls.push("cm-td-code-top", "cm-td-code-list-first");
+        this.out.push(
+          Decoration.widget({
+            widget: new BulletWidget(this.listLevel(node), "cm-td-fence-bullet"),
+            side: -1,
+          }).range(line.from),
+        );
+      }
       if (n === lastContent) cls.push("cm-td-code-bottom");
       this.out.push(Decoration.line({ class: cls.join(" "), attributes }).range(line.from));
     }
@@ -1945,6 +1963,8 @@ class DecoBuilder {
     const task = children.find((c) => c.name === "Task");
     if (!listMark) return;
     const ordered = /\d/.test(doc.sliceString(listMark.from, listMark.to));
+    const line = doc.lineAt(listMark.from);
+    if (/^\s+(?:`{3,}|~{3,})/.test(doc.sliceString(listMark.to, line.to))) return;
 
     // The space that separates the marker from the item's text is left in place
     // rather than swallowed by the widget, so the caret has a position between

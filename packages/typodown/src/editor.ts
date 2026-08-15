@@ -184,6 +184,19 @@ export class Typodown {
       search(),
       searchHighlighter,
       EditorView.lineWrapping,
+      EditorView.clipboardInputFilter.of((text) => normalizeQuoteMarkerSpaces(text)),
+      EditorView.inputHandler.of((view, from, to, text) => {
+        const line = view.state.doc.lineAt(from);
+        const before = view.state.sliceDoc(line.from, from);
+        const normalized = normalizeQuoteMarkerSpaces(before + text).slice(before.length);
+        if (normalized === text) return false;
+        view.dispatch({
+          changes: { from, to, insert: normalized },
+          selection: { anchor: from + normalized.length },
+          userEvent: "input",
+        });
+        return true;
+      }),
       autocompletion({
         override: [languageCompletions, alertCompletions, frontMatterCompletions, emojiCompletions],
         icons: false,
@@ -225,7 +238,7 @@ export class Typodown {
             !this.rawMarkdown &&
             (continueAlert(v) ||
               exitMarkupOnEmptyEnter(v) ||
-              insertNewlineContinueMarkup(v) ||
+              continueMarkup(v) ||
               insertParagraph(v)),
           shift: insertNewline,
         },
@@ -329,7 +342,10 @@ export class Typodown {
     );
 
     this.view = new EditorView({
-      state: EditorState.create({ doc: options.value ?? "", extensions }),
+      state: EditorState.create({
+        doc: normalizeQuoteMarkerSpaces(options.value ?? ""),
+        extensions,
+      }),
       parent: this.wrapper,
     });
     const prefs = options.persist
@@ -375,20 +391,38 @@ export class Typodown {
   setValue(value: string): void {
     const state = this.view.state;
     const oldDoc = state.doc.toString();
-    // Map the existing selection through the whole-document replacement so the
+    const nextValue = normalizeQuoteMarkerSpaces(value);
+    if (oldDoc === nextValue) return;
+    // Map the existing selection through the host-provided document update so the
     // caret stays where the user left it. Without this, CodeMirror's default
     // mapping drops the caret at position 0 (the start of the inserted text)
     // every time the host pushes an update -- e.g. VS Code's "format on save"
     // / "trim trailing whitespace on save" modifying the document -- yanking it
-    // to the top of the file. See `mapPosThroughReplacement` for the mapping.
+    // to the top of the file. The dispatched edit itself is reduced to its
+    // changed middle so CodeMirror can also preserve the current viewport.
+    // See `mapPosThroughReplacement` for the selection mapping.
     const ranges = state.selection.ranges.map((r) =>
       EditorSelection.range(
-        mapPosThroughReplacement(oldDoc, value, r.from),
-        mapPosThroughReplacement(oldDoc, value, r.to),
+        mapPosThroughReplacement(oldDoc, nextValue, r.from),
+        mapPosThroughReplacement(oldDoc, nextValue, r.to),
       ),
     );
+    const minLen = Math.min(oldDoc.length, nextValue.length);
+    let from = 0;
+    while (from < minLen && oldDoc[from] === nextValue[from]) from++;
+    let suffix = 0;
+    while (
+      suffix < minLen - from &&
+      oldDoc[oldDoc.length - 1 - suffix] === nextValue[nextValue.length - 1 - suffix]
+    ) {
+      suffix++;
+    }
     this.view.dispatch({
-      changes: { from: 0, to: oldDoc.length, insert: value },
+      changes: {
+        from,
+        to: oldDoc.length - suffix,
+        insert: nextValue.slice(from, nextValue.length - suffix),
+      },
       selection: EditorSelection.create(ranges, state.selection.mainIndex),
     });
     // clampCursorPastMarker only runs on selection-only transactions, so
@@ -1217,6 +1251,19 @@ export const exitMarkupOnEmptyEnter: Command = (view) => {
   return false;
 };
 
+/** Continue Markdown markup and repair the empty task left above the caret when
+ * Enter splits a task at the start of its text. The upstream command emits
+ * `- [ ]` without the separator required for it to remain a parsed task. */
+export const continueMarkup: Command = (view) => {
+  if (!insertNewlineContinueMarkup(view)) return false;
+  const doc = view.state.doc;
+  const current = doc.lineAt(view.state.selection.main.head);
+  const candidates = current.from > 0 ? [doc.lineAt(current.from - 1), current] : [current];
+  const emptyTask = candidates.find((line) => /^\s*[-+*] +\[[ xX]\]$/.test(line.text));
+  if (emptyTask) view.dispatch({ changes: { from: emptyTask.to, insert: " " } });
+  return true;
+};
+
 /** The atomic ranges from live-preview skip the caret over the *interior* of
  * hidden markers, but the line-start boundary (position 0 of a marker line, or
  * the first line which has no preceding newline to extend the range into) can
@@ -1272,6 +1319,16 @@ export const arrowLeftPastMarker: Command = (view) => {
 };
 
 // ---- helpers --------------------------------------------------------------
+
+/** Convert visually space-like no-break characters only within a line's
+ * leading blockquote marker run. Markdown accepts ASCII space or tab after
+ * `>`, while copied rich text often supplies U+00A0/U+202F and otherwise turns
+ * alert markers and fences into paragraph text. */
+export function normalizeQuoteMarkerSpaces(value: string): string {
+  return value.replace(/^([ \t]*(?:>[ \t\u00a0\u202f]?)+)/gm, (prefix) =>
+    prefix.replace(/[\u00a0\u202f]/g, " "),
+  );
+}
 
 /** Map a document offset through a full-document replacement so it lands at the
  * same logical spot. Offsets in the unchanged common prefix stay put; offsets in
@@ -1480,16 +1537,17 @@ function languageCompletions(context: CompletionContext): CompletionResult | nul
 /** Alert-kind autocomplete inside a blockquote's `[!...]` marker, e.g. typing
  * `> [!CAU` suggests CAUTION, the GFM alert kinds live-preview.ts renders
  * specially (note/tip/important/warning/caution). */
-function alertCompletions(context: CompletionContext): CompletionResult | null {
+export function alertCompletions(context: CompletionContext): CompletionResult | null {
   const line = context.state.doc.lineAt(context.pos);
   const before = line.text.slice(0, context.pos - line.from);
   const match = /^(\s*>\s?)\[!([A-Za-z]*)$/.exec(before);
   if (!match) return null;
   const from = line.from + match[1]!.length + 2;
   const query = match[2]!.toUpperCase();
+  const closing = context.state.sliceDoc(context.pos, context.pos + 1) === "]" ? "" : "]";
   const options = ALERT_KINDS.map((kind) => kind.toUpperCase())
     .filter((label) => label.startsWith(query))
-    .map((label) => ({ label, type: "keyword", apply: `${label}]` }));
+    .map((label) => ({ label, type: "keyword", apply: `${label}${closing}` }));
   if (options.length === 0) return null;
   return { from, to: context.pos, options, filter: false };
 }

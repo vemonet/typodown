@@ -2,7 +2,7 @@
 import { expect, test } from "vite-plus/test";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { typodownMarkdown } from "../src/editor.ts";
+import { normalizeQuoteMarkerSpaces, typodownMarkdown } from "../src/editor.ts";
 import { livePreview, quoteDepth } from "../src/live-preview.ts";
 
 function render(doc: string): { parent: HTMLElement; view: EditorView } {
@@ -93,6 +93,45 @@ test("list indentation inside a blockquote still indents the code block", () => 
   const code = lines(parent).find((l) => l.text.includes("echo"))!;
   expect(code.cls).toContain("cm-td-code-indented");
   expect(code.style).toContain("--cm-td-code-indent: 2ch");
+  view.destroy();
+  parent.remove();
+});
+
+test("no-break spaces in quote prefixes still produce alerts and fenced code", () => {
+  const nbsp = "\u00a0";
+  const source = [
+    `>${nbsp}[!WARNING]`,
+    `>${nbsp}`,
+    `>${nbsp}copied${nbsp}prose`,
+    `>${nbsp}`,
+    `>${nbsp}\`\`\`sh`,
+    `>${nbsp}echo${nbsp}hello`,
+    `>${nbsp}\`\`\``,
+  ].join("\n");
+  const normalized = normalizeQuoteMarkerSpaces(source);
+  expect(normalized).toContain("> [!WARNING]");
+  expect(normalized).toContain(`> copied${nbsp}prose`);
+
+  const { parent, view } = render(normalized);
+  const code = lines(parent).find((line) => line.text.includes("echo"))!;
+  expect(code.cls).toContain("cm-td-alert-warning");
+  expect(code.cls).toContain("cm-td-code");
+  expect(lines(parent).filter((line) => line.cls.includes("cm-td-fence-hidden"))).toHaveLength(2);
+  view.destroy();
+  parent.remove();
+});
+
+test("only internal directive paragraph gaps continue the gutter", () => {
+  const { parent, view } = render(":::warning\nfirst\n\nsecond\n:::\n");
+  const rendered = lines(parent);
+  const opening = rendered.find(
+    (line) => line.cls.includes("cm-td-directive") && !line.cls.includes("cm-td-directive-content"),
+  )!;
+  const second = rendered.find((line) => line.text.includes("second"))!;
+  expect(opening.cls).toContain("cm-td-directive");
+  expect(opening.cls).not.toContain("cm-td-directive-content");
+  expect(second.cls).toContain("cm-td-directive-content");
+  expect(second.cls).toContain("cm-td-para-gap");
   view.destroy();
   parent.remove();
 });

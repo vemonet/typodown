@@ -61,8 +61,14 @@ test("keeps bullets for list items containing fenced code blocks", () => {
   });
 
   expect(parent.querySelectorAll(".cm-td-bullet")).toHaveLength(3);
-  expect(parent.querySelectorAll(".cm-line.cm-td-fence-hidden")).toHaveLength(2);
+  expect(parent.querySelectorAll(".cm-line.cm-td-fence-hidden")).toHaveLength(4);
   expect(parent.textContent).not.toContain("```Shell");
+  const rendered = [...parent.querySelectorAll<HTMLElement>(".cm-line")];
+  const firstFenceItem = rendered.find((line) => line.textContent === "brew install rtk")!;
+  expect(firstFenceItem.classList).toContain("cm-td-code-top");
+  expect(firstFenceItem.classList).toContain("cm-td-code-list-first");
+  expect(firstFenceItem.classList).not.toContain("cm-td-para-gap");
+  expect(firstFenceItem.querySelector(".cm-td-fence-bullet")).not.toBeNull();
 
   view.destroy();
   parent.remove();

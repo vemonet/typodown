@@ -452,6 +452,13 @@
 .typodown .cm-line.cm-td-code-indented {
   margin-left: var(--cm-td-code-indent);
 }
+.typodown .cm-line.cm-td-code-list-first {
+  position: relative;
+}
+.typodown .cm-line.cm-td-code-list-first > .cm-td-fence-bullet {
+  position: absolute;
+  left: calc(-1 * var(--cm-td-code-indent));
+}
 /* The first content line always carries the block's top gap itself, as a
  * transparent border like `cm-td-para-gap`, so the space above a code block is
  * constant no matter what precedes it -- a paragraph, a heading, or another
@@ -624,12 +631,43 @@
   color: var(--td-muted);
   background: transparent;
 }
-/* A fenced code block inside a blockquote / alert: the quote keeps its accent
- * and gutter, and the code fill spans the quote's content width. The code
- * block's own side borders are dropped -- they are inset shadows on the same
- * box as the accent, so only one of the two can be drawn. */
+/* Paragraph separators become a transparent top border on the following line.
+ * Continue the quote gutter through that border so directive and quote accents
+ * do not break at an empty Markdown line. Fenced code owns its gutter below. */
+.typodown .cm-line.cm-td-directive-content.cm-td-para-gap:not(.cm-td-code) {
+  position: relative;
+}
+.typodown .cm-line.cm-td-directive-content.cm-td-para-gap:not(.cm-td-code)::before {
+  content: "";
+  position: absolute;
+  top: -0.7em;
+  bottom: 0;
+  left: 0;
+  width: 0.25em;
+  background: var(--td-alert-color, var(--td-border));
+}
+/* A fenced code block inside a blockquote / alert keeps both the quote accent
+ * and the code block edges on their shared line box. */
 .typodown .cm-line.cm-td-quote.cm-td-code {
   background-color: var(--td-code-block-bg);
+  background-clip: padding-box;
+  margin-left: calc(var(--td-quote-depth, 1) * 1em);
+  padding-left: 16px;
+  position: relative;
+  box-shadow:
+    inset 1px 0 0 var(--td-border-muted),
+    inset -1px 0 0 var(--td-border-muted),
+    var(--cm-td-code-top),
+    var(--cm-td-code-bottom);
+}
+.typodown .cm-line.cm-td-quote.cm-td-code::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -1em;
+  width: 0.25em;
+  background: var(--td-alert-color, var(--td-border));
 }
 /* An empty `>` line (paragraph separator inside a blockquote) collapses so it
  * doesn't take up vertical space, matching how blank paragraph separators are
