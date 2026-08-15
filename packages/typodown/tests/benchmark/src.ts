@@ -23,12 +23,22 @@ interface ActionSample {
   mutations: number;
 }
 
+interface ScrollSample {
+  step: number;
+  settleMs: number;
+  frames: number;
+  maxVisibleGapPx: number;
+  scrollCorrectionPx: number;
+}
+
 interface BenchmarkWindow extends Window {
   toggleBenchmark: {
     setup(engine: Engine, paragraphs: number): Promise<void>;
     run(iterations: number, warmup: number): Promise<ToggleSample[]>;
     setupLarge(engine: Engine, sections: number): Promise<void>;
+    setupScrollDocument(engine: Engine, markdown: string): Promise<void>;
     runLarge(iterations: number, warmup: number): Promise<ActionSample[]>;
+    runScroll(steps: number): Promise<ScrollSample[]>;
     stats(): { domNodes: number; textLength: number };
     destroy(): void;
   };
@@ -40,6 +50,7 @@ let destroyEditor: (() => void) | undefined;
 let moveCursor: ((showMarkers: boolean) => void) | undefined;
 let performLargeAction: ((action: LargeAction, position: DocumentPosition) => void) | undefined;
 let prepareLargePosition: ((position: DocumentPosition) => void) | undefined;
+let scrollTarget: HTMLElement | undefined;
 
 const POSITIONS: DocumentPosition[] = ["start", "middle", "end"];
 const LANGUAGES = [
@@ -124,6 +135,10 @@ function nextPaint(): Promise<void> {
   });
 }
 
+function nextFrame(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
 function setupTypodown(markdown: string): void {
   const editor = new Typodown(host, {
     value: markdown,
@@ -179,6 +194,7 @@ function setupLargeTypodown(markdown: string): void {
   prepareLargePosition = (position) => {
     view.dispatch({ selection: { anchor: offsets[position].idle }, scrollIntoView: true });
   };
+  scrollTarget = editor.wrapper.querySelector<HTMLElement>(".cm-scroller") ?? undefined;
   view.focus();
   destroyEditor = () => editor.destroy();
 }
@@ -298,6 +314,7 @@ function setupLargeMuya(markdown: string): void {
     target.paragraph.setCursor(target.idle, target.idle, true);
     target.paragraph.domNode?.scrollIntoView({ block: "center" });
   };
+  scrollTarget = host;
   destroyEditor = () => editor.destroy();
 }
 
@@ -319,6 +336,85 @@ async function setupLarge(engine: Engine, sections: number): Promise<void> {
   else setupLargeMuya(markdown);
   performLargeAction?.("render", "start");
   await nextPaint();
+}
+
+async function setupScrollDocument(engine: Engine, markdown: string): Promise<void> {
+  destroyEditor?.();
+  host.replaceChildren();
+  if (engine === "typodown") {
+    const editor = new Typodown(host, {
+      value: markdown,
+      outline: false,
+      toolbar: "hidden",
+      html: false,
+    });
+    scrollTarget = editor.wrapper.querySelector<HTMLElement>(".cm-scroller") ?? undefined;
+    editor.focus();
+    destroyEditor = () => editor.destroy();
+  } else {
+    const mount = document.createElement("div");
+    host.appendChild(mount);
+    const editor = new Muya(mount, {
+      markdown,
+      disableHtml: true,
+      math: false,
+      hideQuickInsertHint: true,
+    });
+    editor.init();
+    scrollTarget = host;
+    destroyEditor = () => editor.destroy();
+  }
+  await nextPaint();
+}
+
+function visibleGapPx(scroller: HTMLElement): number {
+  const viewport = scroller.getBoundingClientRect();
+  let largest = 0;
+  for (const gap of host.querySelectorAll<HTMLElement>(".cm-gap")) {
+    const rect = gap.getBoundingClientRect();
+    const overlap = Math.min(viewport.bottom, rect.bottom) - Math.max(viewport.top, rect.top);
+    largest = Math.max(largest, overlap);
+  }
+  return largest;
+}
+
+/** Measure viewport rendering itself, which the action benchmark deliberately
+ * excludes. A sample settles after two frames with no visible CodeMirror gap
+ * and no scroll correction, capped to avoid hanging on a regression. */
+async function runScroll(steps: number): Promise<ScrollSample[]> {
+  const scroller = scrollTarget;
+  if (!scroller) throw new Error("Large benchmark editor is not initialized");
+  scroller.scrollTop = 0;
+  await nextPaint();
+
+  const samples: ScrollSample[] = [];
+  for (let step = 1; step <= steps; step++) {
+    const target = ((scroller.scrollHeight - scroller.clientHeight) * step) / steps;
+    const started = performance.now();
+    scroller.scrollTop = target;
+    let frames = 0;
+    let stableFrames = 0;
+    let previousTop = scroller.scrollTop;
+    let maxVisibleGapPx = 0;
+    while (frames < 12 && stableFrames < 2) {
+      await nextFrame();
+      frames++;
+      const gap = visibleGapPx(scroller);
+      maxVisibleGapPx = Math.max(maxVisibleGapPx, gap);
+      const currentTop = scroller.scrollTop;
+      if (gap < 1 && Math.abs(currentTop - previousTop) < 1) stableFrames++;
+      else stableFrames = 0;
+      previousTop = currentTop;
+    }
+    samples.push({
+      step,
+      settleMs: performance.now() - started,
+      frames,
+      maxVisibleGapPx,
+      scrollCorrectionPx: Math.abs(scroller.scrollTop - target),
+    });
+  }
+  return samples;
 }
 
 async function toggle(showMarkers: boolean): Promise<ToggleSample> {
@@ -399,7 +495,9 @@ async function runLarge(iterations: number, warmup: number): Promise<ActionSampl
   setup,
   run,
   setupLarge,
+  setupScrollDocument,
   runLarge,
+  runScroll,
   stats: () => ({
     domNodes: host.querySelectorAll("*").length,
     textLength: host.textContent?.length ?? 0,

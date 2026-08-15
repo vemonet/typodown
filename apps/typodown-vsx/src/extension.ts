@@ -156,8 +156,7 @@ class TypodownEditorProvider implements vscode.CustomTextEditorProvider {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Typodown</title>
     <style>
-      html, body { height: 100%; margin: 0; padding: 0; }
-      #app { min-height: 100%; }
+      html, body, #app { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     </style>
   </head>
   <body>

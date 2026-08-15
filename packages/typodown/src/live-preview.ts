@@ -1297,8 +1297,10 @@ class DecoBuilder {
     return false;
   }
 
-  private line(pos: number, cls: string): void {
-    this.out.push(Decoration.line({ class: cls }).range(this.state.doc.lineAt(pos).from));
+  private line(pos: number, cls: string, attributes?: Record<string, string>): void {
+    this.out.push(
+      Decoration.line({ class: cls, attributes }).range(this.state.doc.lineAt(pos).from),
+    );
   }
 
   private mark(from: number, to: number, cls: string): void {
@@ -1313,6 +1315,10 @@ class DecoBuilder {
 
   private replaceWith(from: number, to: number, widget: WidgetType, block = false): void {
     this.out.push(Decoration.replace({ widget, block }).range(from, to));
+  }
+
+  private widget(pos: number, widget: WidgetType, side: -1 | 1): void {
+    this.out.push(Decoration.widget({ widget, side }).range(pos));
   }
 
   build(from: number, to: number): void {
@@ -1394,15 +1400,11 @@ class DecoBuilder {
 
       const active = this.on(openingLine.from, closingLine.to);
       const alertClass = `cm-td-quote cm-td-alert cm-td-directive cm-td-alert-${opening.alertKind}`;
-      this.out.push(Decoration.line({ class: alertClass }).range(openingLine.from));
+      this.line(openingLine.from, alertClass);
       for (let contentLine = lineNumber + 1; contentLine < closingLine.number; contentLine++) {
-        this.out.push(
-          Decoration.line({ class: `${alertClass} cm-td-directive-content` }).range(
-            doc.line(contentLine).from,
-          ),
-        );
+        this.line(doc.line(contentLine).from, `${alertClass} cm-td-directive-content`);
       }
-      this.out.push(Decoration.line({ class: alertClass }).range(closingLine.from));
+      this.line(closingLine.from, alertClass);
 
       if (active) {
         this.mark(openingLine.from, openingLine.to, "cm-td-mark");
@@ -1413,7 +1415,7 @@ class DecoBuilder {
           openingLine.to,
           new AlertLabelWidget(opening.alertKind, opening.label),
         );
-        this.out.push(Decoration.line({ class: "cm-td-directive-close" }).range(closingLine.from));
+        this.line(closingLine.from, "cm-td-directive-close");
         this.syntax(closingLine.from, closingLine.to, false);
       }
       lineNumber = closingLine.number + 1;
@@ -1510,14 +1512,10 @@ class DecoBuilder {
         // already on a blank line to add more space) and stays visible, or
         // that action would have no visible effect.
         if (openLine.number - 1 >= n) {
-          this.out.push(
-            Decoration.line({ class: "cm-td-blank-sep" }).range(doc.line(openLine.number - 1).from),
-          );
+          this.line(doc.line(openLine.number - 1).from, "cm-td-blank-sep");
         }
         if (openLine.number + 1 <= runEnd) {
-          this.out.push(
-            Decoration.line({ class: "cm-td-blank-sep" }).range(doc.line(openLine.number + 1).from),
-          );
+          this.line(doc.line(openLine.number + 1).from, "cm-td-blank-sep");
         }
         // Gaps go exactly where they would if the caret's line had text, so
         // typing the first character into the empty line never shifts the
@@ -1530,7 +1528,7 @@ class DecoBuilder {
         // no blank on a given side, the typed line would join the adjacent
         // paragraph, so that side gets no gap either.
         if (openLine.number - 1 === n) {
-          this.out.push(Decoration.line({ class: "cm-td-para-gap" }).range(openLine.from));
+          this.line(openLine.from, "cm-td-para-gap");
         }
         if (
           openLine.number + 1 === runEnd &&
@@ -1538,7 +1536,7 @@ class DecoBuilder {
           !enters(afterRun, "heading") &&
           !enters(afterRun, "FencedCode")
         ) {
-          this.out.push(Decoration.line({ class: "cm-td-para-gap" }).range(afterRun.from));
+          this.line(afterRun.from, "cm-td-para-gap");
         }
       } else {
         // No caret in the run: only its first line collapses (the one
@@ -1549,7 +1547,7 @@ class DecoBuilder {
         // sitting in this exact run (e.g. typing into one of several blank
         // lines shouldn't make the others disappear, and deleting back out
         // shouldn't make them "reappear" -- they were there the whole time).
-        this.out.push(Decoration.line({ class: "cm-td-blank-sep" }).range(line.from));
+        this.line(line.from, "cm-td-blank-sep");
       }
       // Headings and fenced code blocks carry their own constant top gap
       // (theme.css), so no paragraph gap is added before them -- their
@@ -1561,7 +1559,7 @@ class DecoBuilder {
         !enters(afterRun, "heading") &&
         !enters(afterRun, "FencedCode")
       ) {
-        this.out.push(Decoration.line({ class: "cm-td-para-gap" }).range(afterRun.from));
+        this.line(afterRun.from, "cm-td-para-gap");
       }
 
       n = runEnd + 1;
@@ -1645,8 +1643,8 @@ class DecoBuilder {
     const closeLine = doc.line(fm.close);
 
     // Hide the --- delimiter lines (same as fenced code fence lines).
-    this.out.push(Decoration.line({ class: "cm-td-fence-hidden" }).range(openLine.from));
-    this.out.push(Decoration.line({ class: "cm-td-fence-hidden" }).range(closeLine.from));
+    this.line(openLine.from, "cm-td-fence-hidden");
+    this.line(closeLine.from, "cm-td-fence-hidden");
 
     const firstContent = fm.open + 1;
     const lastContent = fm.close - 1;
@@ -1657,7 +1655,7 @@ class DecoBuilder {
       const cls = ["cm-td-code"];
       if (n === firstContent) cls.push("cm-td-fm-top");
       if (n === lastContent) cls.push("cm-td-code-bottom");
-      this.out.push(Decoration.line({ class: cls.join(" ") }).range(line.from));
+      this.line(line.from, cls.join(" "));
     }
 
     // Apply YAML syntax highlighting to the content between delimiters.
@@ -1718,7 +1716,6 @@ class DecoBuilder {
     const marks = node.node.getChildren("CodeMark");
     const info = node.node.getChild("CodeInfo");
     const codeParts = node.node.getChildren("CodeText");
-    const source = codeParts.map((part) => doc.sliceString(part.from, part.to)).join("");
     const openLine = doc.lineAt(node.from);
     // What sits between the line start and the fence: the enclosing containers'
     // prefixes -- blockquote markers, then list indentation.
@@ -1745,10 +1742,10 @@ class DecoBuilder {
       this.syntax(node.from, openLine.to, false);
     } else {
       this.syntax(node.from, openLine.to, false);
-      this.out.push(Decoration.line({ class: "cm-td-fence-hidden" }).range(openLine.from));
+      this.line(openLine.from, "cm-td-fence-hidden");
     }
     if (closeLine) {
-      this.out.push(Decoration.line({ class: "cm-td-fence-hidden" }).range(closeLine.from));
+      this.line(closeLine.from, "cm-td-fence-hidden");
     }
 
     // Content lines: the styled code area (background + rounded corners).
@@ -1773,24 +1770,16 @@ class DecoBuilder {
       if (n === firstContent && !fenceStartsListItem) cls.push("cm-td-code-top");
       if (n === firstContent && fenceStartsListItem) {
         cls.push("cm-td-code-top", "cm-td-code-list-first");
-        this.out.push(
-          Decoration.widget({
-            widget: new BulletWidget(this.listLevel(node), "cm-td-fence-bullet"),
-            side: -1,
-          }).range(line.from),
-        );
+        this.widget(line.from, new BulletWidget(this.listLevel(node), "cm-td-fence-bullet"), -1);
       }
       if (n === lastContent) cls.push("cm-td-code-bottom");
-      this.out.push(Decoration.line({ class: cls.join(" "), attributes }).range(line.from));
+      this.line(line.from, cls.join(" "), attributes);
     }
 
+    const source = codeParts.map((part) => doc.sliceString(part.from, part.to)).join("");
+
     if (firstContent <= lastContent && firstContent <= doc.lines) {
-      this.out.push(
-        Decoration.widget({
-          widget: new CopyButtonWidget(source),
-          side: 1,
-        }).range(doc.line(firstContent).to),
-      );
+      this.widget(doc.line(firstContent).to, new CopyButtonWidget(source), 1);
     }
 
     // The language selector floats just outside the block's corner while active
@@ -1799,12 +1788,7 @@ class DecoBuilder {
     if (active && lastContent >= firstContent && lastContent <= doc.lines) {
       const infoFrom = info ? info.from : marks[0]!.to;
       const infoTo = info ? info.to : openLine.to;
-      this.out.push(
-        Decoration.widget({
-          widget: new LanguageWidget(lang, infoFrom, infoTo),
-          side: 1,
-        }).range(doc.line(lastContent).to),
-      );
+      this.widget(doc.line(lastContent).to, new LanguageWidget(lang, infoFrom, infoTo), 1);
     }
 
     // Syntax highlighting of the code content.
@@ -1883,12 +1867,7 @@ class DecoBuilder {
       // Editing: show the raw markdown, and keep a preview of the image to the
       // right of it so it stays visible while you edit the source.
       this.mark(node.from, node.to, "cm-td-mark");
-      this.out.push(
-        Decoration.widget({
-          widget: new ImageWidget(src, m[1] ?? ""),
-          side: 1,
-        }).range(node.to),
-      );
+      this.widget(node.to, new ImageWidget(src, m[1] ?? ""), 1);
       return;
     }
     this.replaceWith(node.from, node.to, new ImageWidget(src, m[1] ?? ""));
@@ -1923,7 +1902,7 @@ class DecoBuilder {
         cls.push("cm-td-quote-empty");
       }
       const attributes = depth > 1 ? { style: `--td-quote-depth: ${depth}` } : undefined;
-      this.out.push(Decoration.line({ class: cls.join(" "), attributes }).range(line.from));
+      this.line(line.from, cls.join(" "), attributes);
     }
     // Always hide the "> " marker on each line; the raw marker is never shown
     // (Typora-style), even when the caret is on the line.
@@ -2087,7 +2066,7 @@ export function parseFootnoteDefinition(line: string): FootnoteDefinition | null
   return match ? { label: match[1]!, markerLength: match[0].length } : null;
 }
 
-// ---- inline / line decorations (ViewPlugin, viewport-only) ----------------
+// ---- inline decorations (ViewPlugin, viewport-only) -----------------------
 
 function inlinePlugin(
   config: LivePreviewConfig,

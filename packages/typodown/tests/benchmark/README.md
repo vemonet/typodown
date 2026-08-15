@@ -9,6 +9,10 @@ Each sample records synchronous editor work and time through the next two animat
 
 The same run also builds a 1,000-section mixed document containing headings, emphasis, links, inline code and math, lists, tasks, blockquotes, tables, HTML, and fenced code cycling through 20 languages. It measures marker reveal/render, paragraph edits, and code-block edits independently at the start, middle, and end of the file. Before each group, the target is scrolled into view and allowed to settle; viewport navigation is not included in the individual action duration.
 
+A separate scrolling pass jumps through that large document from top to bottom. It reports settling time and frames, visible CodeMirror spacer gaps, and scroll-position correction after layout measurement. This covers the blank viewport and scroll-jump behavior that the action timings intentionally exclude.
+
+The same scrolling pass runs against the repository's `test.md` torture fixture, which covers the VS Code reproduction case directly.
+
 ## Run
 
 ```sh
@@ -21,7 +25,7 @@ The default executable is `/opt/homebrew/bin/chromium`. Override it and the samp
 CHROMIUM_PATH=/path/to/chromium BENCH_ITERATIONS=100 BENCH_WARMUP=20 vp run benchmark
 ```
 
-The large workload can be scaled separately with `BENCH_LARGE_SECTIONS` and `BENCH_LARGE_ITERATIONS`.
+The large workload can be scaled separately with `BENCH_LARGE_SECTIONS`, `BENCH_LARGE_ITERATIONS`, and `BENCH_SCROLL_STEPS`.
 Set `BENCH_OUTPUT_DIR` to write the generated reports somewhere other than this directory.
 
 The console prints a compact table. Every run generates two committable reports:

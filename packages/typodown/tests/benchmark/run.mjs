@@ -1,5 +1,5 @@
 /* eslint-disable no-console -- This CLI prints benchmark tables and report paths. */
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -16,6 +16,7 @@ const iterations = Number(process.env.BENCH_ITERATIONS ?? 40);
 const warmup = Number(process.env.BENCH_WARMUP ?? 8);
 const largeSections = Number(process.env.BENCH_LARGE_SECTIONS ?? 1000);
 const largeIterations = Number(process.env.BENCH_LARGE_ITERATIONS ?? 10);
+const scrollSteps = Number(process.env.BENCH_SCROLL_STEPS ?? 20);
 
 function average(values) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -67,6 +68,22 @@ function summarizeActions(samples) {
     }
   }
   return summaries;
+}
+
+function summarizeScroll(samples) {
+  return {
+    settleMeanMs: average(samples.map((sample) => sample.settleMs)),
+    settleP95Ms: percentile(
+      samples.map((sample) => sample.settleMs),
+      0.95,
+    ),
+    framesP95: percentile(
+      samples.map((sample) => sample.frames),
+      0.95,
+    ),
+    maxVisibleGapPx: Math.max(...samples.map((sample) => sample.maxVisibleGapPx)),
+    maxScrollCorrectionPx: Math.max(...samples.map((sample) => sample.scrollCorrectionPx)),
+  };
 }
 
 function metricMap(metrics) {
@@ -137,6 +154,10 @@ try {
       { engine, sections: largeSections },
     );
     const setupMs = performance.now() - setupStarted;
+    const scrollSamples = await page.evaluate(
+      (steps) => window.toggleBenchmark.runScroll(steps),
+      scrollSteps,
+    );
     await cdp.send("HeapProfiler.collectGarbage");
     const before = metricMap((await cdp.send("Performance.getMetrics")).metrics);
     const samples = await page.evaluate(
@@ -151,6 +172,7 @@ try {
       engine,
       sections: largeSections,
       setupMs,
+      scroll: summarizeScroll(scrollSamples),
       actions: summarizeActions(samples),
       resources: {
         jsHeapMiB: after.JSHeapUsedSize / 1024 / 1024,
@@ -160,6 +182,24 @@ try {
         layoutMs: (after.LayoutDuration - before.LayoutDuration) * 1000,
         styleMs: (after.RecalcStyleDuration - before.RecalcStyleDuration) * 1000,
       },
+    });
+  }
+
+  const testMarkdown = await readFile(resolve(benchmarkDir, "../../../../test.md"), "utf8");
+  const testDocumentResults = [];
+  for (const engine of ["typodown", "muya"]) {
+    await page.evaluate(
+      async ({ engine: selectedEngine, markdown }) => {
+        await window.toggleBenchmark.setupScrollDocument(selectedEngine, markdown);
+      },
+      { engine, markdown: testMarkdown },
+    );
+    testDocumentResults.push({
+      engine,
+      bytes: Buffer.byteLength(testMarkdown),
+      scroll: summarizeScroll(
+        await page.evaluate((steps) => window.toggleBenchmark.runScroll(steps), scrollSteps),
+      ),
     });
   }
 
@@ -174,9 +214,11 @@ try {
       warmup,
       largeSections,
       largeIterations,
+      scrollSteps,
     },
     results,
     largeResults,
+    testDocumentResults,
   };
   await mkdir(outputDir, { recursive: true });
   await writeFile(resolve(outputDir, "results.json"), `${JSON.stringify(report, null, 2)}\n`);
@@ -194,7 +236,28 @@ try {
       "task ms": result.resources.taskMs.toFixed(1),
     })),
   );
+  console.log("\ntest.md scrolling:");
+  console.table(
+    testDocumentResults.map((result) => ({
+      engine: result.engine,
+      "scroll settle ms": result.scroll.settleMeanMs.toFixed(2),
+      "scroll p95 ms": result.scroll.settleP95Ms.toFixed(2),
+      "frames p95": result.scroll.framesP95,
+      "visible gap px": result.scroll.maxVisibleGapPx.toFixed(1),
+      "scroll correction px": result.scroll.maxScrollCorrectionPx.toFixed(1),
+    })),
+  );
   console.log(`\nLarge mixed document (${largeSections} sections):`);
+  console.table(
+    largeResults.map((result) => ({
+      engine: result.engine,
+      "scroll settle ms": result.scroll.settleMeanMs.toFixed(2),
+      "scroll p95 ms": result.scroll.settleP95Ms.toFixed(2),
+      "frames p95": result.scroll.framesP95,
+      "visible gap px": result.scroll.maxVisibleGapPx.toFixed(1),
+      "scroll correction px": result.scroll.maxScrollCorrectionPx.toFixed(1),
+    })),
+  );
   console.table(
     largeResults.flatMap((result) =>
       Object.entries(result.actions).map(([position, actions]) => ({

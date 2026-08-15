@@ -352,19 +352,19 @@ echo "fence inside a directive"
 Labels are inline markdown too.
 :::
 
-> [!WARNING]
+> [!WARNING]
 >
-> To run test of federated queries docker needs to be installed, and `$DOCKER_HOST` environment variable needs to be set, otherwise they will be skipped. On macOS with orbstack you can add this to your `~/.zshrc`:
+> To run test of federated queries docker needs to be installed, and `$DOCKER_HOST` environment variable needs to be set, otherwise they will be skipped. On macOS with orbstack you can add this to your `~/.zshrc`:
 >
-> ```sh
-> export DOCKER_HOST=unix:///Users/$(whoami)/.orbstack/run/docker.sock
-> ```
+> ```sh
+> export DOCKER_HOST=unix:///Users/$(whoami)/.orbstack/run/docker.sock
+> ```
 >
-> To stop and delete all running containers you can run:
+> To stop and delete all running containers you can run:
 >
-> ```sh
-> docker stop $(docker ps -a -q) && docker rm $(docker ps -a -q)
-> ```
+> ```sh
+> docker stop $(docker ps -a -q) && docker rm $(docker ps -a -q)
+> ```
 
 ## Nested fences
 

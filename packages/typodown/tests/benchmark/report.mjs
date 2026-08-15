@@ -42,6 +42,7 @@ export function renderMarkdownReport(report) {
     `| Warmup iterations | ${report.environment.warmup} |`,
     `| Large sections | ${report.environment.largeSections} |`,
     `| Large action iterations | ${report.environment.largeIterations} |`,
+    `| Scroll steps | ${report.environment.scrollSteps} |`,
     "",
     "## Marker transition scaling",
     "",
@@ -66,6 +67,36 @@ export function renderMarkdownReport(report) {
   for (const result of report.largeResults) {
     lines.push(
       `| ${result.engine} | ${fixed(result.setupMs, 1)} ms | ${fixed(result.resources.taskMs, 1)} ms | ${fixed(result.resources.layoutMs, 1)} ms | ${fixed(result.resources.styleMs, 1)} ms | ${fixed(result.resources.jsHeapMiB, 1)} MiB | ${result.resources.domNodes.toLocaleString("en-US")} |`,
+    );
+  }
+
+  lines.push(
+    "",
+    "## `test.md` scrolling",
+    "",
+    "The repository torture fixture is measured separately because its awkward nesting and fences reproduce the reported VS Code scenario.",
+    "",
+    "| Engine | Size | Mean settle | P95 settle | P95 frames | Max visible gap | Max scroll correction |",
+    "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+  );
+  for (const result of report.testDocumentResults) {
+    lines.push(
+      `| ${result.engine} | ${result.bytes.toLocaleString("en-US")} bytes | ${fixed(result.scroll.settleMeanMs)} ms | ${fixed(result.scroll.settleP95Ms)} ms | ${result.scroll.framesP95} | ${fixed(result.scroll.maxVisibleGapPx, 1)} px | ${fixed(result.scroll.maxScrollCorrectionPx, 1)} px |`,
+    );
+  }
+
+  lines.push(
+    "",
+    "## Large document scrolling",
+    "",
+    "Programmatic jumps from the top to the bottom of the document. Settle time includes animation frames until the scroll offset is stable and no CodeMirror spacer intersects the viewport.",
+    "",
+    "| Engine | Mean settle | P95 settle | P95 frames | Max visible gap | Max scroll correction |",
+    "| --- | ---: | ---: | ---: | ---: | ---: |",
+  );
+  for (const result of report.largeResults) {
+    lines.push(
+      `| ${result.engine} | ${fixed(result.scroll.settleMeanMs)} ms | ${fixed(result.scroll.settleP95Ms)} ms | ${result.scroll.framesP95} | ${fixed(result.scroll.maxVisibleGapPx, 1)} px | ${fixed(result.scroll.maxScrollCorrectionPx, 1)} px |`,
     );
   }
 
@@ -97,6 +128,7 @@ export function renderMarkdownReport(report) {
     "- The mixed fixture includes headings, emphasis, links, inline code and math, lists, tasks, blockquotes, tables, HTML, and fenced code cycling through 20 languages.",
     "- Action time measures synchronous editor work. Paint time and p95 values remain available in `results.json`.",
     "- Large-document targets are positioned at the start, middle, and end. Each target is scrolled into view before its action group.",
+    "- The scrolling test is separate from action timing and records blank virtual-viewport gaps, settling frames, and scroll correction.",
     "- JavaScript heap is measured after forced garbage collection. It is not peak process RSS.",
     "- Results depend on hardware, browser version, thermal state, and other system load. Compare runs made in similar environments.",
     "",

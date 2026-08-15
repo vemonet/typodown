@@ -29,9 +29,7 @@ const VSCODE_THEME_CSS = `
   --td-selection: var(--vscode-editor-selectionBackground);
 }
 
-/* Inset the editor surface so markdown lines don't stretch to the pane edges.
- * Applies regardless of theme setting. Padding (not margin) on the wrapper so
- * the editor background still fills the full width. */
+/* Inset the editor without creating a second scrolling surface. */
 .typodown {
   padding: 0 max(1.5rem, 4vw) 2rem;
 }`;

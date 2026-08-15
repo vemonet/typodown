@@ -165,6 +165,8 @@ export class Typodown {
 
     this.wrapper = document.createElement("div");
     this.wrapper.className = "typodown";
+    this.wrapper.style.minHeight = "0";
+    this.wrapper.style.overflow = "hidden";
     this.setTheme(options.theme ?? "auto");
     parent.appendChild(this.wrapper);
 
@@ -348,6 +350,10 @@ export class Typodown {
       }),
       parent: this.wrapper,
     });
+    // CodeMirror sets horizontal overflow in its base theme, which normally
+    // makes the other axis auto too. Set the scrolling axis explicitly so
+    // iframe/webview hosts cannot leave the editor clipped but unscrollable.
+    this.view.scrollDOM.style.overflowY = "auto";
     const prefs = options.persist
       ? createPrefs(options.persist === true ? "typodown" : options.persist)
       : undefined;
