@@ -1,4 +1,4 @@
-import { createSignal } from "solid-js";
+import { createSignal, untrack } from "solid-js";
 import { toast } from "solid-sonner";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -6,7 +6,6 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   type TreeNode,
   pickFolder,
-  pickMarkdownFile,
   readMarkdownTree,
   readFileContent,
   renamePath,
@@ -16,18 +15,15 @@ import {
   IS_TAURI,
 } from "./tauri";
 
-export type VaultMode = "folder" | "file" | null;
 /** Which surface the main pane shows: the editor or the link graph. */
 export type ViewMode = "editor" | "graph";
 
 const [vaultRoot, setVaultRoot] = createSignal<string | null>(null);
-const [vaultMode, setVaultMode] = createSignal<VaultMode>(null);
 const [view, setView] = createSignal<ViewMode>("editor");
 const [tree, setTree] = createSignal<TreeNode[]>([]);
 const [currentPath, setCurrentPath] = createSignal<string | null>(null);
 const [currentContent, setCurrentContent] = createSignal<string>("");
 const [dirty, setDirty] = createSignal<boolean>(false);
-const [loading, setLoading] = createSignal<boolean>(false);
 const [error, setError] = createSignal<string | null>(null);
 
 let unwatch: UnwatchFn | null = null;
@@ -70,13 +66,11 @@ function isContentUri(path: string): boolean {
 
 export const vault = {
   vaultRoot,
-  vaultMode,
   view,
   tree,
   currentPath,
   currentContent,
   dirty,
-  loading,
   error,
 };
 
@@ -94,7 +88,6 @@ export async function openFolder(): Promise<void> {
   try {
     const folder = await pickFolder();
     if (!folder) {
-      console.log("Folder picker cancelled");
       return;
     }
     await loadFolder(folder);
@@ -134,13 +127,11 @@ function baseName(path: string): string {
 }
 
 export async function loadFolder(folder: string): Promise<void> {
-  setLoading(true);
   setError(null);
   try {
     stopWatch();
     const nodes = await readMarkdownTree(folder);
     setVaultRoot(folder);
-    setVaultMode("folder");
     setTree(nodes);
     setCurrentPath(null);
     setCurrentContent("");
@@ -153,16 +144,7 @@ export async function loadFolder(folder: string): Promise<void> {
   } catch (err) {
     setError(String(err));
     toast.error("Failed to open folder", { description: String(err) });
-  } finally {
-    setLoading(false);
   }
-}
-
-export async function openSingleFile(): Promise<void> {
-  const file = await pickMarkdownFile();
-  if (!file) return;
-  await openFile(file);
-  await loadParentFolder(file);
 }
 
 /** When opening a single file, treat the parent folder as the vault root so
@@ -173,7 +155,6 @@ async function loadParentFolder(file: string): Promise<void> {
   try {
     const nodes = await readMarkdownTree(parent);
     setVaultRoot(parent);
-    setVaultMode("file");
     setTree(nodes);
     startWatch(parent);
     updateWindowTitle();
@@ -190,10 +171,7 @@ export async function openExternalFile(target: string): Promise<void> {
   await openFile(target);
   // content:// URIs are opaque single-document grants: we can't list the
   // parent folder without a separate SAF tree permission, so skip the tree.
-  if (target.startsWith("content://")) {
-    setVaultMode("file");
-    return;
-  }
+  if (target.startsWith("content://")) return;
   await loadParentFolder(target);
 }
 
@@ -202,7 +180,10 @@ export async function openExternalFile(target: string): Promise<void> {
 export async function initOpenWith(): Promise<void> {
   if (!IS_TAURI) return;
   try {
-    await listen<string>("open-file", (event) => void openExternalFile(event.payload));
+    await listen<string>(
+      "open-file",
+      (event) => void untrack(() => openExternalFile(event.payload)),
+    );
     const pending = await invoke<string | null>("take_pending_open_file");
     if (pending) await openExternalFile(pending);
   } catch (err) {
@@ -214,7 +195,6 @@ export async function initOpenWith(): Promise<void> {
 export async function openFile(path: string): Promise<void> {
   // Flush any pending save of the previous file before switching.
   flushSave();
-  setLoading(true);
   setError(null);
   try {
     const content = await readFileContent(path);
@@ -226,8 +206,6 @@ export async function openFile(path: string): Promise<void> {
   } catch (err) {
     setError(String(err));
     toast.error("Failed to open file", { description: String(err) });
-  } finally {
-    setLoading(false);
   }
 }
 
@@ -399,19 +377,6 @@ export async function copyFileToClipboard(path: string): Promise<void> {
   }
 }
 
-export function closeVault(): void {
-  flushSave();
-  stopWatch();
-  setVaultRoot(null);
-  setVaultMode(null);
-  setTree([]);
-  setCurrentPath(null);
-  setCurrentContent("");
-  lastSavedContent = null;
-  setDirty(false);
-  updateWindowTitle();
-}
-
 async function refreshTree(): Promise<void> {
   const root = vaultRoot();
   if (!root) return;
@@ -432,7 +397,7 @@ async function refreshTree(): Promise<void> {
 
 function startWatch(root: string): void {
   stopWatch();
-  void watchVault(root, () => void refreshTree()).then((fn) => {
+  void watchVault(root, () => void untrack(refreshTree)).then((fn) => {
     unwatch = fn;
   });
 }

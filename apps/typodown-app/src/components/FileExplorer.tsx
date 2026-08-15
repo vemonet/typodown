@@ -6,6 +6,7 @@ import {
   onMount,
   Show,
   type Component,
+  untrack,
 } from "solid-js";
 import { Dynamic, Portal } from "solid-js/web";
 import {
@@ -105,14 +106,7 @@ const FileExplorer: Component<FileExplorerProps> = (props) => {
   return (
     <div class="flex h-full flex-col text-sidebar-foreground">
       <div class="flex items-center gap-1.5 px-3 pb-2 pt-2">
-        <Show
-          when={vault.vaultRoot()}
-          // fallback={
-          //   <span class="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          //     Vault
-          //   </span>
-          // }
-        >
+        <Show when={vault.vaultRoot()}>
           <BookOpen class="size-3.5 shrink-0 text-muted-foreground" />
           <Tooltip>
             <TooltipTrigger as="span" class="truncate text-sm font-medium">
@@ -277,7 +271,6 @@ const ContextItem: Component<{
   label: string;
   onClick: () => void;
 }> = (props) => {
-  const Icon = props.icon;
   return (
     <button
       type="button"
@@ -289,7 +282,7 @@ const ContextItem: Component<{
         setCtxMenu(null);
       }}
     >
-      <Icon class="size-3.5 text-muted-foreground" />
+      <Dynamic component={props.icon} class="size-3.5 text-muted-foreground" />
       {props.label}
     </button>
   );
@@ -300,80 +293,81 @@ const TreeRow: Component<{
   depth: number;
   onOpenFile: (path: string) => void;
 }> = (props) => {
+  const node = untrack(() => props.node);
   const [open, setOpen] = createSignal(true);
-  const isActive = () => vault.currentPath() === props.node.path;
-
-  if (props.node.isDir) {
-    return (
-      <li>
-        <Collapsible open={open()} onOpenChange={setOpen} class="group/folder">
-          <Show
-            when={renaming() !== props.node.path}
-            fallback={<RenameInput node={props.node} depth={props.depth} indent={6} isDir />}
-          >
-            <CollapsibleTrigger
-              class="flex w-full items-center gap-1 rounded-md py-1 pr-2 text-sm transition-colors hover:bg-sidebar-accent/60"
-              style={{ "padding-left": `${props.depth * 12 + 6}px` }}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setCtxMenu({ x: e.clientX, y: e.clientY, path: props.node.path, isDir: true });
-              }}
-            >
-              <ChevronRight
-                class={cn(
-                  "size-3.5 shrink-0 text-muted-foreground transition-transform duration-150",
-                  open() && "rotate-90",
-                )}
-              />
-              <Show
-                when={open()}
-                fallback={<Folder class="size-4 shrink-0 text-muted-foreground" />}
-              >
-                <FolderOpen class="size-4 shrink-0 text-muted-foreground" />
-              </Show>
-              <span class="truncate">{props.node.name}</span>
-            </CollapsibleTrigger>
-          </Show>
-          <CollapsibleContent>
-            <ul>
-              <For each={props.node.children}>
-                {(child) => (
-                  <TreeRow node={child} depth={props.depth + 1} onOpenFile={props.onOpenFile} />
-                )}
-              </For>
-            </ul>
-          </CollapsibleContent>
-        </Collapsible>
-      </li>
-    );
-  }
+  const isActive = () => vault.currentPath() === node.path;
 
   return (
-    <li>
-      <Show
-        when={renaming() === props.node.path}
-        fallback={
-          <button
-            type="button"
-            class={cn(
-              "flex w-full items-center gap-1.5 rounded-md py-1 pr-2 text-left text-sm transition-colors hover:bg-sidebar-accent/60",
-              isActive() && "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
-            )}
-            style={{ "padding-left": `${props.depth * 12 + 24}px` }}
-            onClick={() => props.onOpenFile(props.node.path)}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setCtxMenu({ x: e.clientX, y: e.clientY, path: props.node.path, isDir: false });
-            }}
+    <>
+      {node.isDir ? (
+        <li>
+          <Collapsible open={open()} onOpenChange={setOpen} class="group/folder">
+            <Show
+              when={renaming() !== node.path}
+              fallback={<RenameInput node={node} depth={props.depth} indent={6} isDir />}
+            >
+              <CollapsibleTrigger
+                class="flex w-full items-center gap-1 rounded-md py-1 pr-2 text-sm transition-colors hover:bg-sidebar-accent/60"
+                style={{ "padding-left": `${props.depth * 12 + 6}px` }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setCtxMenu({ x: e.clientX, y: e.clientY, path: node.path, isDir: true });
+                }}
+              >
+                <ChevronRight
+                  class={cn(
+                    "size-3.5 shrink-0 text-muted-foreground transition-transform duration-150",
+                    open() && "rotate-90",
+                  )}
+                />
+                <Show
+                  when={open()}
+                  fallback={<Folder class="size-4 shrink-0 text-muted-foreground" />}
+                >
+                  <FolderOpen class="size-4 shrink-0 text-muted-foreground" />
+                </Show>
+                <span class="truncate">{node.name}</span>
+              </CollapsibleTrigger>
+            </Show>
+            <CollapsibleContent>
+              <ul>
+                <For each={node.children}>
+                  {(child) => (
+                    <TreeRow node={child} depth={props.depth + 1} onOpenFile={props.onOpenFile} />
+                  )}
+                </For>
+              </ul>
+            </CollapsibleContent>
+          </Collapsible>
+        </li>
+      ) : (
+        <li>
+          <Show
+            when={renaming() === node.path}
+            fallback={
+              <button
+                type="button"
+                class={cn(
+                  "flex w-full items-center gap-1.5 rounded-md py-1 pr-2 text-left text-sm transition-colors hover:bg-sidebar-accent/60",
+                  isActive() && "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
+                )}
+                style={{ "padding-left": `${props.depth * 12 + 24}px` }}
+                onClick={() => props.onOpenFile(node.path)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setCtxMenu({ x: e.clientX, y: e.clientY, path: node.path, isDir: false });
+                }}
+              >
+                <MarkdownFileIcon name={node.name} active={isActive()} />
+                <span class="truncate">{node.name}</span>
+              </button>
+            }
           >
-            <MarkdownFileIcon name={props.node.name} active={isActive()} />
-            <span class="truncate">{props.node.name}</span>
-          </button>
-        }
-      >
-        <RenameInput node={props.node} depth={props.depth} indent={24} />
-      </Show>
-    </li>
+            <RenameInput node={node} depth={props.depth} indent={24} />
+          </Show>
+        </li>
+      )}
+    </>
   );
 };
 

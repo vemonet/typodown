@@ -11,25 +11,16 @@ const buttonVariants = cva(
       variant: {
         default: "z-button-variant-default",
         outline: "z-button-variant-outline",
-        secondary: "z-button-variant-secondary",
         ghost: "z-button-variant-ghost",
-        destructive: "z-button-variant-destructive",
-        link: "z-button-variant-link",
       },
       size: {
-        default: "z-button-size-default",
-        xs: "z-button-size-xs",
         sm: "z-button-size-sm",
-        lg: "z-button-size-lg",
-        icon: "z-button-size-icon",
-        "icon-xs": "z-button-size-icon-xs",
         "icon-sm": "z-button-size-icon-sm",
-        "icon-lg": "z-button-size-icon-lg",
       },
     },
     defaultVariants: {
       variant: "default",
-      size: "default",
+      size: "sm",
     },
   },
 );

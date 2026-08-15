@@ -6,7 +6,6 @@ import {
   createSignal,
   onCleanup,
   type ParentProps,
-  untrack,
   useContext,
 } from "solid-js";
 
@@ -27,7 +26,6 @@ export type ColorModeContextValue = {
   colorMode: Accessor<ColorMode>;
   /** The concrete mode applied to the DOM ("light" | "dark"). */
   resolvedColorMode: Accessor<ResolvedColorMode>;
-  toggleColorMode: () => void;
   setColorMode: (mode: ColorMode) => void;
 };
 
@@ -80,14 +78,8 @@ export function ColorModeProvider(
     document.cookie = `${ZAIDAN_COLOR_MODE_COOKIE_KEY}=${mode}; path=/; max-age=31536000; SameSite=Lax`;
   };
 
-  const toggleColorMode = () => {
-    setColorMode(untrack(resolvedColorMode) === "dark" ? "light" : "dark");
-  };
-
   return (
-    <ColorModeContext.Provider
-      value={{ colorMode, resolvedColorMode, toggleColorMode, setColorMode }}
-    >
+    <ColorModeContext.Provider value={{ colorMode, resolvedColorMode, setColorMode }}>
       {props.children}
     </ColorModeContext.Provider>
   );

@@ -4,7 +4,6 @@ import {
   extractLinkTargets,
   normalizeId,
   parseFrontmatter,
-  parseFrontmatterType,
   resolveTarget,
   type GraphFile,
 } from "./graph.ts";
@@ -12,12 +11,6 @@ import {
 test("extractLinkTargets returns inline link targets, skipping images", () => {
   const md = "See [a](a.md) and [b](<b c.md> 'title'). Not ![img](pic.png).";
   expect(extractLinkTargets(md)).toEqual(["a.md", "b c.md"]);
-});
-
-test("parseFrontmatterType reads the OKF type field", () => {
-  expect(parseFrontmatterType("---\ntype: Articles\ntags: [x]\n---\n\n# Hi")).toBe("Articles");
-  expect(parseFrontmatterType('---\ntype: "References"\n---\n')).toBe("References");
-  expect(parseFrontmatterType("# No front matter")).toBeUndefined();
 });
 
 test("parseFrontmatter returns ordered key/value pairs, unquoted, arrays flattened", () => {
