@@ -16,7 +16,6 @@
     "jsxImportSource": "solid-js",
 
     "paths": {
-      "@vemonet/typodown": ["../../packages/typodown/src/index.ts"],
       "@/*": ["./src/*"]
     },
 

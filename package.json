@@ -8,7 +8,7 @@
   ],
   "type": "module",
   "scripts": {
-    "prepare": "vp config"
+    "prepare": "vp config && vp run @vemonet/typodown#build"
   },
   "devDependencies": {
     "@marktext/muya": "^0.2.5",

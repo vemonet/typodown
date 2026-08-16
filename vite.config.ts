@@ -53,7 +53,6 @@ export default defineConfig({
     ],
   },
   run: {
-    cache: true,
     tasks: {
       ready: { command: ["vp check", "vp run -r test", "vp run -r build"] },
       dev: {
@@ -64,6 +63,7 @@ export default defineConfig({
       },
       "demo:build": {
         command: "vp run @vemonet/typodown#demo:build && vp run typodown-pwa#build",
+        dependsOn: ["@vemonet/typodown#build"],
       },
 
       // VSCode extension (vsce runs vscode:prepublish, which bundles via build.mjs)

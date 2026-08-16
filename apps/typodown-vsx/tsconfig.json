@@ -10,10 +10,7 @@
     "esModuleInterop": true,
     "isolatedModules": true,
     "skipLibCheck": true,
-    "noEmit": true,
-    "paths": {
-      "@vemonet/typodown": ["../../packages/typodown/src/index.ts"]
-    }
+    "noEmit": true
   },
   "include": ["src"]
 }
