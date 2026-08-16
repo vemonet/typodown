@@ -467,9 +467,13 @@
 .typodown .cm-td-code-widget {
   position: relative;
   overflow: auto hidden;
+  border-top: 6px solid transparent;
   padding: 10px 16px;
-  border-radius: 6px;
+  /* The transparent top border provides the paragraph gap. Add its width to
+   * the vertical top radius so the visible padding edge still curves by 6px. */
+  border-radius: 6px 6px 6px 6px / 12px 12px 6px 6px;
   background: var(--td-code-block-bg);
+  background-clip: padding-box;
   box-shadow: inset 0 0 0 1px var(--td-border-muted);
   color: var(--td-code-fg);
   font-family: var(--td-mono);
@@ -519,10 +523,10 @@
 /* Active code uses the same vertical inset as the idle block widget. */
 .typodown .cm-td-code-top {
   --cm-td-code-top: inset 0 1px 0 var(--td-border-muted);
-  border-top: 0;
+  border-top: 6px solid transparent;
   background-clip: padding-box;
-  border-top-left-radius: 6px;
-  border-top-right-radius: 6px;
+  border-top-left-radius: 6px 12px;
+  border-top-right-radius: 6px 12px;
   padding-top: 10px;
   padding-right: 48px;
   position: relative;

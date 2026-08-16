@@ -47,6 +47,15 @@ test("keeps safe formatting HTML intact", () => {
   expect(sanitizeHtml('<a href="https://a.com">x</a>')).toContain('href="https://a.com"');
 });
 
+test("resolves relative image sources after sanitizing raw HTML", () => {
+  const out = sanitizeHtml(
+    '<img src="images/photo one.png" onerror="window.x=1">',
+    (src) => `https://local.test/notes/${src.replace(" ", "%20")}`,
+  );
+  expect(out).toContain('src="https://local.test/notes/images/photo%20one.png"');
+  expect(out.toLowerCase()).not.toContain("onerror");
+});
+
 // ---- renderCellHTML: table cells go through the same sanitizer --------------
 
 /** True if the HTML, once parsed into the DOM, carries any executable vector:
@@ -77,4 +86,14 @@ test("table cell with a javascript: link renders inert", () => {
 test("table cell strips <script> but keeps safe HTML", () => {
   expect(renderCellHTML("<b>bold</b>")).toBe("<b>bold</b>");
   expect(hasExecutableVector(renderCellHTML("<script>window.x=1</script>"))).toBe(false);
+});
+
+test("table cell resolves Markdown and HTML image sources", () => {
+  const resolve = (src: string) => `https://local.test/notes/${src}`;
+  expect(renderCellHTML("![alt](photo.png)", resolve)).toContain(
+    'src="https://local.test/notes/photo.png"',
+  );
+  expect(renderCellHTML('<img src="photo.png">', resolve)).toContain(
+    'src="https://local.test/notes/photo.png"',
+  );
 });

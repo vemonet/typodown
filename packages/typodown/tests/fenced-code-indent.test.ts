@@ -19,7 +19,7 @@ test("indents a fenced code block nested in a list instead of its code", () => {
 
   const codeBlock = parent.querySelector<HTMLElement>(".cm-td-code-widget")!;
   expect(codeBlock.style.marginLeft).toBe("2ch");
-  expect(Number.parseFloat(codeBlock.style.height)).toBeCloseTo(96.8);
+  expect(Number.parseFloat(codeBlock.style.height)).toBeCloseTo(102.8);
   expect(codeBlock.style.paddingBlock).toBe("10px");
   expect(codeBlock.querySelector(":scope > .cm-td-copy")).not.toBeNull();
   expect(codeBlock.textContent).toContain('"answer": 42');

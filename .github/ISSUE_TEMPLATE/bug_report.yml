@@ -25,6 +25,19 @@ body:
     # validations:
     #   required: true
 
+  - type: dropdown
+    id: impact
+    attributes:
+      label: How impactful is this issue?
+      description: Select the option that best describes how this issue affects you.
+      options:
+        - Makes the app unusable
+        - Painful, but a workaround exists
+        - Minor inconvenience
+        - Improvement request
+    validations:
+      required: true
+
   - type: textarea
     id: problem
     attributes:

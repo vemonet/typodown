@@ -256,7 +256,7 @@ class HeadingGapWidget extends WidgetType {
     return other.level === this.level && other.afterFrontMatter === this.afterFrontMatter;
   }
   get estimatedHeight(): number {
-    const base = this.level === 1 ? 24 : this.level === 3 ? 22 : 18;
+    const base = this.level === 1 ? 24 : this.level <= 3 ? 22 : 18;
     return base + (this.afterFrontMatter ? 8 : 0);
   }
   toDOM(): HTMLElement {
@@ -335,9 +335,8 @@ class HtmlWidget extends WidgetType {
   toDOM(): HTMLElement {
     const host = document.createElement(this.block ? "div" : "span");
     host.className = "cm-td-html";
-    // Sanitized: raw HTML can come from an untrusted file, so strip scripts,
-    // event handlers, and dangerous URIs before it reaches the DOM.
-    host.innerHTML = sanitizeHtml(this.html);
+    // The HTML was sanitized before constructing the widget.
+    host.innerHTML = this.html;
     return host;
   }
   // Let a click on <summary> toggle its <details> natively instead of moving
@@ -486,6 +485,7 @@ class CopyButtonWidget extends WidgetType {
 
 class CodeBlockWidget extends WidgetType {
   static readonly verticalPadding = 10;
+  static readonly topGap = 6;
   static readonly horizontalPadding = 16;
 
   readonly lines: number;
@@ -513,7 +513,7 @@ class CodeBlockWidget extends WidgetType {
     );
   }
   get estimatedHeight(): number {
-    return this.lines * 25.6 + CodeBlockWidget.verticalPadding * 2;
+    return this.lines * 25.6 + CodeBlockWidget.verticalPadding * 2 + CodeBlockWidget.topGap;
   }
   toDOM(view: EditorView): HTMLElement {
     const block = document.createElement("div");
@@ -619,27 +619,39 @@ class MermaidWidget extends WidgetType {
 class TableWidget extends WidgetType {
   readonly nRows: number;
   readonly nCols: number;
+  readonly imageBase: string;
   constructor(
     readonly source: string,
     readonly from: number,
+    readonly resolveImageSrc?: (src: string) => string,
   ) {
     super();
     const lines = source.split("\n").filter((l) => l.trim() !== "" && l.includes("|"));
     this.nRows = lines.length;
     this.nCols = lines.length > 0 ? splitCells(lines[0]!).length : 0;
+    try {
+      this.imageBase = resolveImageSrc?.(".") ?? "";
+    } catch {
+      this.imageBase = "";
+    }
   }
   // Preserve the DOM (and any in-progress cell editing) when only cell text
   // changed: same position, same row/column count. Structural edits (a row or
   // column added/removed) or a table that moved force a fresh widget, which
   // re-renders every cell from the document.
   eq(other: TableWidget): boolean {
-    return other.from === this.from && other.nRows === this.nRows && other.nCols === this.nCols;
+    return (
+      other.from === this.from &&
+      other.nRows === this.nRows &&
+      other.nCols === this.nCols &&
+      other.imageBase === this.imageBase
+    );
   }
   get estimatedHeight(): number {
     return this.nRows * 25.6;
   }
   toDOM(view: EditorView): HTMLElement {
-    return renderTable(this.source, view, this.from);
+    return renderTable(this.source, view, this.from, this.resolveImageSrc);
   }
   // Own the events: clicks/keys go to the contentEditable cells and the menu
   // button, CodeMirror must not try to move its own selection into them.
@@ -936,7 +948,7 @@ function emitNodeHTML(node: SyntaxNode, src: string): string {
       return `<a href="${escAttr(href)}">${text}</a>`;
     }
     case "Image": {
-      const marks = node.getChildren("ImageMark");
+      const marks = node.getChildren("LinkMark");
       let isrc = "";
       let alt = "";
       if (marks.length >= 3) {
@@ -956,6 +968,7 @@ function emitNodeHTML(node: SyntaxNode, src: string): string {
       return `<a href="${escAttr(sanitizeUrl(url))}">${esc(url)}</a>`;
     }
     case "HTMLTag":
+    case "HTMLBlock":
       // Render raw HTML in cells (like Typora). The cell is set via innerHTML,
       // so the tag is parsed by the browser. Text around it is escaped above.
       return src.slice(node.from, node.to);
@@ -967,10 +980,10 @@ function emitNodeHTML(node: SyntaxNode, src: string): string {
 /** Render a table cell's inline markdown (and raw HTML) to an HTML string,
  * suitable for `cell.innerHTML`. The result is sanitized (cells may contain
  * raw HTML from an untrusted file). Falls back to escaped text on parse error. */
-export function renderCellHTML(text: string): string {
+export function renderCellHTML(text: string, resolveImageSrc?: (src: string) => string): string {
   if (text === "") return "";
   try {
-    return sanitizeHtml(emitChildrenHTML(inlineParser.parse(text).topNode, text));
+    return sanitizeHtml(emitChildrenHTML(inlineParser.parse(text).topNode, text), resolveImageSrc);
   } catch {
     return esc(text);
   }
@@ -1229,7 +1242,12 @@ function onCellFocus(cell: HTMLElement, view: EditorView, from: number): void {
   placeCaretAtEnd(cell);
 }
 
-function onCellBlur(cell: HTMLElement, view: EditorView, from: number): void {
+function onCellBlur(
+  cell: HTMLElement,
+  view: EditorView,
+  from: number,
+  resolveImageSrc?: (src: string) => string,
+): void {
   // Skip if the cell wasn't in editing mode (e.g. a re-entrant blur fired by
   // the decoration rebuild, or a blur on a freshly-created cell that was never
   // focused). Without this guard the second blur reads the rendered
@@ -1245,7 +1263,7 @@ function onCellBlur(cell: HTMLElement, view: EditorView, from: number): void {
   // so the cell element is still alive: re-render it as formatted markdown.
   // Guard with isConnected in case the widget was rebuilt (eq=false) between
   // the dispatch above and now, which would detach this cell element.
-  if (cell.isConnected) cell.innerHTML = renderCellHTML(escapeCellPipes(raw));
+  if (cell.isConnected) cell.innerHTML = renderCellHTML(escapeCellPipes(raw), resolveImageSrc);
 }
 
 function onCellKeydown(e: KeyboardEvent, cell: HTMLElement): void {
@@ -1285,13 +1303,14 @@ function makeCell(
   view: EditorView,
   from: number,
   align: string,
+  resolveImageSrc?: (src: string) => string,
 ): HTMLElement {
   const cell = document.createElement(tag);
   cell.contentEditable = "plaintext-only";
   cell.dataset.row = String(docLineIdx);
   cell.dataset.col = String(colIdx);
   if (align) cell.style.textAlign = align;
-  cell.innerHTML = renderCellHTML(text);
+  cell.innerHTML = renderCellHTML(text, resolveImageSrc);
 
   // Debounced sync: write the cell's text to the document while typing, so the
   // document is always current (VSCode can save without needing to blur first).
@@ -1320,7 +1339,7 @@ function makeCell(
       clearTimeout(syncTimer);
       syncTimer = null;
     }
-    onCellBlur(cell, view, from);
+    onCellBlur(cell, view, from, resolveImageSrc);
   });
   cell.addEventListener("keydown", (e) => onCellKeydown(e, cell));
   // GFM cells can't span lines, so collapse pasted newlines to spaces and drop
@@ -1416,7 +1435,12 @@ function makeMenuButton(view: EditorView, from: number): HTMLElement {
   return btn;
 }
 
-function renderTable(source: string, view: EditorView, from: number): HTMLElement {
+function renderTable(
+  source: string,
+  view: EditorView,
+  from: number,
+  resolveImageSrc?: (src: string) => string,
+): HTMLElement {
   const wrap = document.createElement("div");
   wrap.className = "cm-td-table-wrap";
   const rows = source.split("\n").filter((l) => l.trim() !== "" && l.includes("|"));
@@ -1440,7 +1464,7 @@ function renderTable(source: string, view: EditorView, from: number): HTMLElemen
   const thead = document.createElement("thead");
   const htr = document.createElement("tr");
   headerCells.forEach((c, i) => {
-    htr.appendChild(makeCell("th", c, i, 0, view, from, align[i] ?? ""));
+    htr.appendChild(makeCell("th", c, i, 0, view, from, align[i] ?? "", resolveImageSrc));
   });
   thead.appendChild(htr);
   table.appendChild(thead);
@@ -1450,7 +1474,9 @@ function renderTable(source: string, view: EditorView, from: number): HTMLElemen
     const cs = splitCells(line);
     const docLineIdx = bodyIdx + 2; // skip header (0) + delimiter (1)
     headerCells.forEach((_, i) => {
-      tr.appendChild(makeCell("td", cs[i] ?? "", i, docLineIdx, view, from, align[i] ?? ""));
+      tr.appendChild(
+        makeCell("td", cs[i] ?? "", i, docLineIdx, view, from, align[i] ?? "", resolveImageSrc),
+      );
     });
     tbody.appendChild(tr);
   });
@@ -2257,7 +2283,12 @@ class DecoBuilder {
       /\/>\s*$/.test(raw) || /^<(br|hr|img|input|wbr|area|col|embed|source|track)\b/i.test(raw);
     if (standalone) {
       if (this.on(node.from, node.to)) this.mark(node.from, node.to, "cm-td-html-raw");
-      else this.replaceWith(node.from, node.to, new HtmlWidget(raw, false));
+      else
+        this.replaceWith(
+          node.from,
+          node.to,
+          new HtmlWidget(sanitizeHtml(raw, this.config.resolveImageSrc), false),
+        );
       return;
     }
     // An opening tag of a pair (e.g. <kbd>...</kbd>, <sub>...</sub>): render the
@@ -2274,7 +2305,10 @@ class DecoBuilder {
           this.replaceWith(
             node.from,
             spanTo,
-            new HtmlWidget(doc.sliceString(node.from, spanTo), false),
+            new HtmlWidget(
+              sanitizeHtml(doc.sliceString(node.from, spanTo), this.config.resolveImageSrc),
+              false,
+            ),
           );
         return;
       }
@@ -2544,7 +2578,11 @@ function buildBlocks(
         const last = doc.lineAt(node.to > node.from ? node.to - 1 : node.to);
         out.push(
           Decoration.replace({
-            widget: new TableWidget(doc.sliceString(first.from, last.to), first.from),
+            widget: new TableWidget(
+              doc.sliceString(first.from, last.to),
+              first.from,
+              config.resolveImageSrc,
+            ),
             block: true,
           }).range(first.from, last.to),
         );
@@ -2563,7 +2601,10 @@ function buildBlocks(
         const last = doc.lineAt(node.to > node.from ? node.to - 1 : node.to);
         out.push(
           Decoration.replace({
-            widget: new HtmlWidget(doc.sliceString(first.from, last.to), true),
+            widget: new HtmlWidget(
+              sanitizeHtml(doc.sliceString(first.from, last.to), config.resolveImageSrc),
+              true,
+            ),
             block: true,
           }).range(first.from, last.to),
         );
@@ -2641,7 +2682,7 @@ function buildBlocks(
       }
     },
   });
-  findLenientTables(state, occupied, out);
+  findLenientTables(state, occupied, out, config.resolveImageSrc);
   return { deco: RangeSet.of(out, true), sensitive };
 }
 
@@ -2654,6 +2695,7 @@ export function findLenientTables(
   state: EditorState,
   occupied: Array<[number, number]>,
   out: Range<Decoration>[],
+  resolveImageSrc?: (src: string) => string,
 ): void {
   const doc = state.doc;
   const inOccupied = (from: number, to: number): boolean =>
@@ -2692,7 +2734,7 @@ export function findLenientTables(
     const last = doc.line(end);
     out.push(
       Decoration.replace({
-        widget: new TableWidget(doc.sliceString(first.from, last.to), first.from),
+        widget: new TableWidget(doc.sliceString(first.from, last.to), first.from, resolveImageSrc),
         block: true,
       }).range(first.from, last.to),
     );

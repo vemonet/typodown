@@ -41,7 +41,7 @@ test("collapsed separators preserve heading and paragraph styling", () => {
   const heading = parent.querySelector<HTMLElement>(".cm-td-heading")!;
   expect(heading.textContent).toBe("Heading");
   expect(heading.classList).toContain("cm-td-h2");
-  expect(parent.querySelector(".cm-td-heading-gap")).not.toBeNull();
+  expect(parent.querySelector<HTMLElement>(".cm-td-heading-gap")?.style.height).toBe("22px");
   expect(parent.querySelector(".cm-td-paragraph-gap")).not.toBeNull();
 
   editor.destroy();

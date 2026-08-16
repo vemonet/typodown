@@ -60,18 +60,22 @@ jobs:
             platform: macos-latest
             rust_targets: aarch64-apple-darwin
             args: "--target aarch64-apple-darwin"
+            asset_name: Typodown-macos-arm64[setup][ext]
           - label: macOS x86_64
             platform: macos-latest
             rust_targets: x86_64-apple-darwin
             args: "--target x86_64-apple-darwin"
+            asset_name: Typodown-macos-x64[setup][ext]
           - label: Linux x86_64
             platform: ubuntu-22.04
             rust_targets: x86_64-unknown-linux-gnu
             args: ""
+            asset_name: Typodown-linux-x64[setup][ext]
           - label: Windows x86_64
             platform: windows-latest
             rust_targets: x86_64-pc-windows-msvc
             args: ""
+            asset_name: Typodown-windows-x64[setup][ext]
           # TODO: add linux arm64 and windows arm64 once tauri-action supports them
     runs-on: ${{ matrix.platform }}
     steps:
@@ -116,6 +120,7 @@ jobs:
         with:
           projectPath: ${{ env.APP_PATH }}
           releaseId: ${{ needs.create-release.outputs.release_id }}
+          assetNamePattern: ${{ matrix.asset_name }}
           args: ${{ matrix.args }}
 
       - name: Upload bundles to workflow run (dry run)
@@ -212,6 +217,12 @@ jobs:
         run: npm run tauri android build -- --apk --aab
         working-directory: ${{ env.APP_PATH }}
 
+      - name: Stage Android release asset
+        run: |
+          mkdir -p dist-artifacts
+          cp "${{ env.APP_PATH }}"/src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk \
+            dist-artifacts/Typodown-android.apk
+
       - name: Upload APK to release
         if: needs.create-release.outputs.release_id != ''
         uses: softprops/action-gh-release@v3.0.1
@@ -219,7 +230,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref_name }}
-          files: ${{ env.APP_PATH }}/src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk
+          files: dist-artifacts/Typodown-android.apk
 
       - name: Upload APK + AAB to workflow run (dry run)
         if: needs.create-release.outputs.release_id == ''
@@ -227,7 +238,7 @@ jobs:
         with:
           name: android
           path: |
-            ${{ env.APP_PATH }}/src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk
+            dist-artifacts/Typodown-android.apk
             ${{ env.AAB_PATH }}
           if-no-files-found: error
 
@@ -330,8 +341,7 @@ jobs:
             exit 1
           fi
           app=$(find "$archive/Products/Applications" -maxdepth 1 -name '*.app' | head -1)
-          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          out="$GITHUB_WORKSPACE/dist-artifacts/Typodown_${version}_ios_unsigned.ipa"
+          out="$GITHUB_WORKSPACE/dist-artifacts/Typodown-ios-unsigned.ipa"
           mkdir -p "$(dirname "$out")"
           staging=$(mktemp -d)
           mkdir "$staging/Payload"

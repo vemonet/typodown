@@ -40,9 +40,14 @@ class TypodownEditorProvider implements vscode.CustomTextEditorProvider {
     _token: vscode.CancellationToken,
   ): void {
     const webview = panel.webview;
+    const documentDirectory = vscode.Uri.joinPath(document.uri, "..");
     webview.options = {
       enableScripts: true,
-      localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, "dist")],
+      localResourceRoots: [
+        vscode.Uri.joinPath(this.context.extensionUri, "dist"),
+        documentDirectory,
+        ...(vscode.workspace.workspaceFolders?.map((folder) => folder.uri) ?? []),
+      ],
     };
     webview.html = this.render(webview);
 
@@ -83,7 +88,12 @@ class TypodownEditorProvider implements vscode.CustomTextEditorProvider {
     webview.onDidReceiveMessage((message: WebviewMessage) => {
       if (message.type === "ready") {
         syncedText = document.getText();
-        post({ type: "init", text: syncedText, theme: readTheme() });
+        post({
+          type: "init",
+          text: syncedText,
+          theme: readTheme(),
+          imageBaseUri: `${webview.asWebviewUri(documentDirectory).toString()}/`,
+        });
       } else if (message.type === "edit") {
         syncedText = message.text;
         applying++;

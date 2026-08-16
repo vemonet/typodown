@@ -20,6 +20,21 @@ const CONFIG: Parameters<typeof DOMPurify.sanitize>[1] = {
 
 /** Sanitize an HTML string for insertion via innerHTML. Returns a string with
  * scripts, event handlers, and dangerous URIs removed. */
-export function sanitizeHtml(html: string): string {
-  return DOMPurify.sanitize(html, CONFIG) as string;
+export function sanitizeHtml(html: string, resolveImageSrc?: (src: string) => string): string {
+  const sanitized = DOMPurify.sanitize(html, CONFIG) as string;
+  if (!resolveImageSrc) return sanitized;
+
+  const template = document.createElement("template");
+  template.innerHTML = sanitized;
+  for (const image of template.content.querySelectorAll("img[src]")) {
+    const src = image.getAttribute("src");
+    if (src === null) continue;
+    try {
+      image.setAttribute("src", resolveImageSrc(src));
+    } catch {
+      // A host resolver should not make otherwise valid HTML fail to render.
+    }
+  }
+  // Sanitize again because the host callback supplied the replacement URI.
+  return DOMPurify.sanitize(template.innerHTML, CONFIG) as string;
 }

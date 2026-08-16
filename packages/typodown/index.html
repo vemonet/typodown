@@ -355,10 +355,6 @@
         background: var(--page-block-bg);
         outline: none;
       }
-      .download-options a[aria-disabled="true"] {
-        pointer-events: none;
-        opacity: 0.5;
-      }
       .platform-icon {
         display: inline-flex;
         align-items: center;
@@ -756,7 +752,36 @@
             </svg>
           </summary>
           <div class="download-options" role="menu">
-            <a href="#" data-download="linux" aria-disabled="true" role="menuitem">
+            <a
+              href="https://github.com/vemonet/typodown/releases/latest/download/Typodown-linux-x64.deb"
+              role="menuitem"
+            >
+              <span class="platform-icon" aria-hidden="true">
+                <img src="/tux.svg" alt="" />
+              </span>
+              <span
+                ><span class="download-label">Linux</span
+                ><span class="download-detail">Debian package</span></span
+              >
+              <span class="download-extension">.deb</span>
+            </a>
+            <a
+              href="https://github.com/vemonet/typodown/releases/latest/download/Typodown-linux-x64.rpm"
+              role="menuitem"
+            >
+              <span class="platform-icon" aria-hidden="true">
+                <img src="/tux.svg" alt="" />
+              </span>
+              <span
+                ><span class="download-label">Linux</span
+                ><span class="download-detail">RPM package</span></span
+              >
+              <span class="download-extension">.rpm</span>
+            </a>
+            <a
+              href="https://github.com/vemonet/typodown/releases/latest/download/Typodown-linux-x64.AppImage"
+              role="menuitem"
+            >
               <span class="platform-icon" aria-hidden="true">
                 <img src="/tux.svg" alt="" />
               </span>
@@ -766,7 +791,10 @@
               >
               <span class="download-extension">.AppImage</span>
             </a>
-            <a href="#" data-download="mac-arm" aria-disabled="true" role="menuitem">
+            <a
+              href="https://github.com/vemonet/typodown/releases/latest/download/Typodown-macos-arm64.dmg"
+              role="menuitem"
+            >
               <span class="platform-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="currentColor">
                   <path
@@ -780,7 +808,10 @@
               >
               <span class="download-extension">.dmg</span>
             </a>
-            <a href="#" data-download="mac-intel" aria-disabled="true" role="menuitem">
+            <a
+              href="https://github.com/vemonet/typodown/releases/latest/download/Typodown-macos-x64.dmg"
+              role="menuitem"
+            >
               <span class="platform-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="currentColor">
                   <path
@@ -794,7 +825,10 @@
               >
               <span class="download-extension">.dmg</span>
             </a>
-            <a href="#" data-download="windows" aria-disabled="true" role="menuitem">
+            <a
+              href="https://github.com/vemonet/typodown/releases/latest/download/Typodown-windows-x64-setup.exe"
+              role="menuitem"
+            >
               <span class="platform-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="currentColor">
                   <path
@@ -806,7 +840,7 @@
                 ><span class="download-label">Windows</span
                 ><span class="download-detail">64-bit installer</span></span
               >
-              <span class="download-extension">.msi</span>
+              <span class="download-extension">.exe</span>
             </a>
           </div>
         </details>
@@ -837,7 +871,10 @@
             </svg>
           </summary>
           <div class="download-options" role="menu">
-            <a href="#" data-download="android" aria-disabled="true" role="menuitem">
+            <a
+              href="https://github.com/vemonet/typodown/releases/latest/download/Typodown-android.apk"
+              role="menuitem"
+            >
               <span class="platform-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="#3ddc84">
                   <path
@@ -851,7 +888,10 @@
               >
               <span class="download-extension">.apk</span>
             </a>
-            <a href="#" data-download="ios" aria-disabled="true" role="menuitem">
+            <a
+              href="https://github.com/vemonet/typodown/releases/latest/download/Typodown-ios-unsigned.ipa"
+              role="menuitem"
+            >
               <span class="platform-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="currentColor">
                   <path
@@ -1306,39 +1346,6 @@ Everything above is driven from a single markdown string. Edit freely and the so
           }, 1200);
         });
       }
-
-      const assetMatchers = {
-        linux: (name) => name.endsWith(".AppImage"),
-        "mac-arm": (name) => /(aarch64|arm64).*\.dmg$/i.test(name),
-        "mac-intel": (name) => /(x64|x86_64).*\.dmg$/i.test(name),
-        windows: (name) => name.endsWith(".msi"),
-        android: (name) => name.endsWith(".apk"),
-        ios: (name) => name.endsWith(".ipa"),
-      };
-      fetch("https://api.github.com/repos/vemonet/typodown/releases/latest", {
-        headers: { Accept: "application/vnd.github+json" },
-      })
-        .then((response) => {
-          if (!response.ok) throw new Error(`GitHub returned ${response.status}`);
-          return response.json();
-        })
-        .then((release) => {
-          for (const link of document.querySelectorAll("[data-download]")) {
-            const matcher = assetMatchers[link.dataset.download];
-            const asset = release.assets.find(({ name }) => matcher(name));
-            if (!asset) continue;
-            link.href = asset.browser_download_url;
-            link.removeAttribute("aria-disabled");
-            link.title = `Download ${asset.name} from ${release.name || release.tag_name}`;
-          }
-        })
-        .catch(() => {
-          for (const link of document.querySelectorAll("[data-download]")) {
-            link.href = "https://github.com/vemonet/typodown/releases/latest";
-            link.removeAttribute("aria-disabled");
-            link.title = "View the latest Typodown release";
-          }
-        });
 
       const downloadMenus = document.querySelectorAll(".download-menu");
       for (const menu of downloadMenus) {

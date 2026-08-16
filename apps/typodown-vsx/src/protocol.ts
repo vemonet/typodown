@@ -12,7 +12,7 @@ export type ThemeSetting =
 
 /** Host -> webview. */
 export type HostMessage =
-  | { type: "init"; text: string; theme: ThemeSetting }
+  | { type: "init"; text: string; theme: ThemeSetting; imageBaseUri: string }
   | { type: "update"; text: string }
   | { type: "theme"; theme: ThemeSetting }
   | { type: "clipboard"; text: string };

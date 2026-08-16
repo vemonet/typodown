@@ -177,7 +177,10 @@ export class Typodown {
     this.wrapper = document.createElement("div");
     this.wrapper.className = "typodown";
     this.wrapper.style.minHeight = "0";
-    this.wrapper.style.overflow = "hidden";
+    // Clip editor chrome without turning the wrapper into a scroll container.
+    // `overflow: hidden` captures sticky positioning, so the toolbar would
+    // scroll away with this non-scrolling wrapper in pages and webviews.
+    this.wrapper.style.overflow = "clip";
     this.setTheme(options.theme ?? "auto");
     parent.appendChild(this.wrapper);
 

@@ -53,6 +53,16 @@ const host = document.getElementById("app")!;
 let ready = false;
 let applying = false;
 let themeSetting: ThemeSetting = "editor";
+let imageBaseUri = "";
+
+function resolveImageSrc(src: string): string {
+  if (!imageBaseUri || !src || /^(?:[a-z][a-z\d+.-]*:|\/|#)/i.test(src)) return src;
+  try {
+    return new URL(src, imageBaseUri).toString();
+  } catch {
+    return src;
+  }
+}
 
 // VS Code webviews block navigator.clipboard, so read it from the extension
 // host (vscode.env.clipboard) via a request/response round-trip.
@@ -74,6 +84,7 @@ const editor = createTypodown(host, {
   value: "",
   theme: "dark",
   getClipboardText: readClipboard,
+  resolveImageSrc,
   // VS Code webviews block window.open, so route Ctrl/⌘-clicked links through
   // the extension host, which opens them with vscode.env.openExternal.
   openLink: (url) => send({ type: "openLink", url }),
@@ -113,6 +124,7 @@ window.addEventListener("message", (event: MessageEvent<HostMessage>) => {
   const message = event.data;
   if (message.type === "init") {
     themeSetting = message.theme;
+    imageBaseUri = message.imageBaseUri;
     applyTheme();
     setContent(message.text);
     ready = true;
