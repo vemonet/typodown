@@ -352,6 +352,10 @@
 .typodown .cm-td-paragraph-gap {
   height: 11.2px;
 }
+.typodown .cm-td-directive-gap {
+  background-image: linear-gradient(to right, var(--td-alert-color) 0 0.25em, transparent 0.25em);
+  background-repeat: no-repeat;
+}
 .typodown .cm-td-h1 {
   font-size: 2em;
   /* --td-heading-border, not --td-border-muted: in the dark palette the muted
@@ -667,16 +671,19 @@
 /* ---- blockquotes and alerts --------------------------------------------- */
 
 .typodown .cm-td-quote {
-  /* The left accent is an inset box-shadow rather than a border-left: it stays
-   * inside the padding box, so it does not poke up into the transparent top
-   * border used for the paragraph gap (which produced a little accent "spike"
-   * above the block). */
-  box-shadow: inset 0.25em 0 0 var(--td-alert-color, var(--td-border));
-  /* One gutter per nesting level (live-preview.ts sets the depth from the
-   * line's own `>` markers), so a quote inside a quote reads as nested. */
-  padding-left: calc(var(--td-quote-depth, 1) * 1em);
+  --td-quote-depth: 1;
+  --td-quote-outer-color: var(--td-alert-color, var(--td-border));
+  /* Compose one independent stripe per quote level. The first layer preserves
+   * an outer alert's colour; the repeating layer supplies every nested quote
+   * stripe without replacing or interrupting its parent. */
+  background-color: transparent;
+  background-image:
+    linear-gradient(to right, var(--td-quote-outer-color) 0 0.25em, transparent 0.25em),
+    repeating-linear-gradient(to right, var(--td-border) 0 0.25em, transparent 0.25em 1em);
+  background-repeat: no-repeat;
+  background-size: calc(var(--td-quote-depth) * 1em) 100%;
+  padding-left: calc(var(--td-quote-depth) * 1em);
   color: var(--td-muted);
-  background: transparent;
 }
 /* Paragraph separators become a transparent top border on the following line.
  * Continue the quote gutter through that border so directive and quote accents
@@ -697,8 +704,9 @@
  * and the code block edges on their shared line box. */
 .typodown .cm-line.cm-td-quote.cm-td-code {
   background-color: var(--td-code-block-bg);
+  background-image: none;
   background-clip: padding-box;
-  margin-left: calc(var(--td-quote-depth, 1) * 1em);
+  margin-left: calc(var(--td-quote-depth) * 1em);
   padding-left: 16px;
   position: relative;
   box-shadow:
@@ -712,9 +720,11 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -1em;
-  width: 0.25em;
-  background: var(--td-alert-color, var(--td-border));
+  left: calc(-1 * var(--td-quote-depth) * 1em);
+  width: calc(var(--td-quote-depth) * 1em);
+  background-image:
+    linear-gradient(to right, var(--td-quote-outer-color) 0 0.25em, transparent 0.25em),
+    repeating-linear-gradient(to right, var(--td-border) 0 0.25em, transparent 0.25em 1em);
 }
 /* An empty `>` line (paragraph separator inside a blockquote) collapses so it
  * doesn't take up vertical space, matching how blank paragraph separators are
@@ -727,10 +737,9 @@
 }
 .typodown .cm-td-alert {
   color: var(--td-fg);
-  background: transparent;
+  background-color: transparent;
 }
 .typodown .cm-line:has(.cm-td-alert-title) {
-  box-shadow: inset 0.25em 0 0 var(--td-alert-color);
   padding-left: 1em;
   color: var(--td-fg);
 }

@@ -246,17 +246,18 @@ class HrWidget extends WidgetType {
 }
 
 class HeadingGapWidget extends WidgetType {
-  constructor(readonly level: number) {
+  constructor(
+    readonly level: number,
+    readonly afterFrontMatter = false,
+  ) {
     super();
   }
   eq(other: HeadingGapWidget): boolean {
-    return other.level === this.level;
+    return other.level === this.level && other.afterFrontMatter === this.afterFrontMatter;
   }
   get estimatedHeight(): number {
-    if (this.level === 1) return 24;
-    if (this.level === 2) return 18;
-    if (this.level === 3) return 22;
-    return 18;
+    const base = this.level === 1 ? 24 : this.level === 3 ? 22 : 18;
+    return base + (this.afterFrontMatter ? 8 : 0);
   }
   toDOM(): HTMLElement {
     const gap = document.createElement("div");
@@ -267,8 +268,11 @@ class HeadingGapWidget extends WidgetType {
 }
 
 class ParagraphGapWidget extends WidgetType {
-  eq(): boolean {
-    return true;
+  constructor(readonly directiveKind: AlertKind | null = null) {
+    super();
+  }
+  eq(other: ParagraphGapWidget): boolean {
+    return other.directiveKind === this.directiveKind;
   }
   get estimatedHeight(): number {
     return 11.2;
@@ -276,6 +280,9 @@ class ParagraphGapWidget extends WidgetType {
   toDOM(): HTMLElement {
     const gap = document.createElement("div");
     gap.className = "cm-td-paragraph-gap";
+    if (this.directiveKind) {
+      gap.classList.add("cm-td-directive-gap", `cm-td-alert-${this.directiveKind}`);
+    }
     return gap;
   }
 }
@@ -2446,8 +2453,15 @@ function buildBlocks(
             }
             if (startsOwnGap) break;
           }
-          if (headingLevel != null) gapWidget = new HeadingGapWidget(headingLevel);
-          else if (!startsOwnGap) gapWidget = new ParagraphGapWidget();
+          if (headingLevel != null) {
+            const afterFrontMatter = frontMatter?.close === lineNumber - 1;
+            gapWidget = new HeadingGapWidget(headingLevel, afterFrontMatter);
+          } else if (!startsOwnGap) {
+            const directive = directiveContainers.find(
+              (container) => lineNumber > container.openingLine && runEnd < container.closingLine,
+            );
+            gapWidget = new ParagraphGapWidget(directive?.opening.alertKind ?? null);
+          }
         }
         out.push(
           Decoration.replace({ block: true, inclusiveEnd: false, widget: gapWidget }).range(
@@ -2495,7 +2509,14 @@ function buildBlocks(
           const depth = quoteDepth(line.text);
           const classes = ["cm-td-quote"];
           if (kind && depth <= 1) classes.push("cm-td-alert", `cm-td-alert-${kind}`);
-          const attributes = depth > 1 ? { style: `--td-quote-depth: ${depth}` } : undefined;
+          const styles: string[] = [];
+          if (depth > 1) styles.push(`--td-quote-depth: ${depth}`);
+          // Nested lines are not alert content themselves, but their first
+          // gutter still belongs to the outer alert and must keep its colour.
+          if (kind && depth > 1) {
+            styles.push(`--td-quote-outer-color: var(--td-${kind})`);
+          }
+          const attributes = styles.length > 0 ? { style: styles.join("; ") } : undefined;
           out.push(Decoration.line({ class: classes.join(" "), attributes }).range(line.from));
         }
       } else if (/^ATXHeading[1-6]$/.test(node.name)) {
@@ -2506,9 +2527,10 @@ function buildBlocks(
         const gapOwnedBySeparator =
           previous?.length === 0 && beforePrevious != null && beforePrevious.length > 0;
         if (headingLine.number > 1 && !gapOwnedBySeparator) {
+          const afterFrontMatter = frontMatter?.close === headingLine.number - 1;
           out.push(
             Decoration.widget({
-              widget: new HeadingGapWidget(level),
+              widget: new HeadingGapWidget(level, afterFrontMatter),
               block: true,
               side: 1,
             }).range(headingLine.from),

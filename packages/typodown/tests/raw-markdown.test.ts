@@ -130,6 +130,19 @@ test("a heading at the document start does not render a synthetic line above it"
   parent.remove();
 });
 
+test("the first heading has extra separation after frontmatter", () => {
+  const parent = document.createElement("div");
+  document.body.append(parent);
+  const editor = new Typodown(parent, {
+    value: "---\ntitle: Test\n---\n\n# Heading",
+  });
+
+  expect(parent.querySelector<HTMLElement>(".cm-td-heading-gap")?.style.height).toBe("32px");
+
+  editor.destroy();
+  parent.remove();
+});
+
 test("uses CodeMirror's geometry-backed caret layer", () => {
   const parent = document.createElement("div");
   document.body.append(parent);

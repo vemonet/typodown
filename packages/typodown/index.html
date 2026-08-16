@@ -1217,12 +1217,6 @@ Raw HTML renders in place, and reveals its source when the caret lands on it, ju
 
 Inline HTML like <kbd>Ctrl</kbd> + <kbd>K</kbd>, <span style="color: var(--td-caution);">colored text</span>, subscript H<sub>2</sub>O, and <small>small print</small> all work too.
 
-### Performance
-
-Measured editing actions complete in the **1-10 ms range**, comparable to [Muya](https://github.com/marktext/marktext/tree/develop/packages/muya). Typodown scales well on large documents because CodeMirror renders only the visible viewport and a small buffer, instead of mounting the entire document in the DOM.
-
-The desktop app is built with [Tauri](https://tauri.app), which is more lightweight than Electron (used by Typora and Marktext) and uses the system's webview instead of bundling Chromium. The app is ~10 MB on disk, compared to ~200 MB for an Electron app.
-
 ### Themes
 
 Available themes: \`light\`, \`dark\`, \`system\`, \`dracula\`, \`nord\`, \`solarized-light\`, \`solarized-dark\`
@@ -1249,7 +1243,13 @@ Define a custom theme:
 }
 \`\`\`
 
-[^1]: Footnotes are useful for citations and additional context. They appear at the bottom of the document.
+### Lightweight and scalable
+
+The desktop app is built with [Tauri](https://tauri.app), which is more lightweight than Electron (used by Typora and Marktext) and uses the system's webview instead of bundling Chromium. The app is ~20 MB on disk, compared to ~200 MB for an Electron app.
+
+Measured editing actions complete in the 1-10 ms range, comparable to [Muya](https://github.com/marktext/marktext/tree/develop/packages/muya). Typodown scales well on large documents because CodeMirror renders only the visible viewport and a small buffer, instead of mounting the entire document in the DOM.
+
+[^1]: Footnotes are useful for citations and additional context.
 
 ---
 

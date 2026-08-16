@@ -75,7 +75,22 @@ test("an alert's colour applies to its own level, not to quotes nested in it", (
   const { parent, view } = render("> [!WARNING]\n>\n> outer\n>\n> > inner\n");
   const rendered = lines(parent);
   expect(rendered.find((l) => l.text.includes("outer"))!.cls).toContain("cm-td-alert-warning");
-  expect(rendered.find((l) => l.text.includes("inner"))!.cls).not.toContain("cm-td-alert");
+  const inner = rendered.find((l) => l.text.includes("inner"))!;
+  expect(inner.cls).not.toContain("cm-td-alert");
+  expect(inner.style).toContain("--td-quote-outer-color: var(--td-warning)");
+  view.destroy();
+  parent.remove();
+});
+
+test("nested fences keep every parent quote gutter", () => {
+  const { parent, view } = render(
+    "> outer\n> > inner\n> > ```js\n> > const nested = true\n> > ```\n",
+  );
+  const code = lines(parent).find((line) => line.text.includes("const nested"))!;
+  expect(code.cls).toContain("cm-td-code");
+  expect(code.cls).toContain("cm-td-quote");
+  expect(code.style).toContain("--td-quote-depth: 2");
+
   view.destroy();
   parent.remove();
 });
@@ -164,6 +179,9 @@ test("nested blocks keep a directive's decoration while idle", () => {
   view.dispatch({ selection: { anchor: source.length } });
 
   expect(parent.querySelector(".cm-td-code-widget")).toBeNull();
+  const gaps = [...parent.querySelectorAll<HTMLElement>(".cm-td-directive-gap")];
+  expect(gaps.length).toBeGreaterThan(0);
+  expect(gaps.every((gap) => gap.classList.contains("cm-td-alert-warning"))).toBe(true);
   for (const text of ["one", "quoted inside a directive", "fence inside a directive"]) {
     const line = lines(parent).find((candidate) =>
       text === "one" ? candidate.text.trim() === text : candidate.text.includes(text),
