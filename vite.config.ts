@@ -125,6 +125,7 @@ export default defineConfig({
       // Release process
       changelog: {
         command: "git cliff -o CHANGELOG.md --tag v$(npm pkg get version | tr -d '\"')",
+        cache: false,
       },
       release: {
         command: [
@@ -134,6 +135,7 @@ export default defineConfig({
           "npm run vsx:publish -w typodown",
           "git push --follow-tags",
         ],
+        cache: false,
       },
     },
   },
