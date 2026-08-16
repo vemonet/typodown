@@ -31,6 +31,11 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "../typodown-app/src"),
+      "@vemonet/typodown/style.css": path.resolve(
+        __dirname,
+        "../../packages/typodown/src/theme.css",
+      ),
+      "@vemonet/typodown": path.resolve(__dirname, "../../packages/typodown/src/index.ts"),
     },
   },
   server: {
