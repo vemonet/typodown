@@ -1,7 +1,7 @@
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
-  base: process.env.DEMO_BASE ?? "/typodown/",
+  base: process.env.DEMO_BASE ?? "/",
   server: {
     port: 5183,
     strictPort: true,

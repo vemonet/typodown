@@ -1,4 +1,4 @@
-// Retire the old /typodown/editor/ PWA after its move to /typodown/vault/.
+// Retire the old /editor/ PWA after its move to /vault/.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {

@@ -56,7 +56,7 @@ Additionally the app enables a **graph view** built from files using the [Open K
 
 ### 🌐 Progressive Web App
 
-[Open Typodown Vault](https://vemonet.github.io/typodown/vault/) to edit a local folder directly in your browser, with the same file explorer, editor and graph view as the desktop app. It can also be installed as a PWA for a standalone app experience.
+[Open Typodown Vault](https://typodown.app/vault/) to edit a local folder directly in your browser, with the same file explorer, editor and graph view as the desktop app. It can also be installed as a PWA for a standalone app experience.
 
 > [!WARNING]
 > Typodown Vault requires a Chromium-based browser because it uses the [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/Window/showDirectoryPicker) to read and write your selected folder. Firefox and Safari are not currently supported. Your files remain local and are not uploaded.

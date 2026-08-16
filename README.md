@@ -5,7 +5,7 @@
 
 **Seamless open-source markdown editing, inspired by [Typora](https://typora.io). Available everywhere you write.**
 
-[⚡️ Website](https://vemonet.github.io/typodown) · [🧩 VSCode extension](https://marketplace.visualstudio.com/items?itemName=vemonet.typodown) · [🖥️ Desktop & Android app](https://github.com/vemonet/typodown/releases) · [📦 npm package](https://www.npmjs.com/package/@vemonet/typodown)
+[⚡️ Website](https://typodown.app) · [🧩 VSCode extension](https://marketplace.visualstudio.com/items?itemName=vemonet.typodown) · [🖥️ Desktop & Android app](https://github.com/vemonet/typodown/releases) · [📦 npm package](https://www.npmjs.com/package/@vemonet/typodown)
 
 </div>
 
@@ -38,7 +38,7 @@ Typodown ships in various forms:
 
 > Contributions welcome, especially if someone with an iOS developer account wants to help ship the iOS app.
 
-See the [website](https://vemonet.github.io/typodown) for more details.
+See the [website](https://typodown.app) for more details.
 
 ## Development
 

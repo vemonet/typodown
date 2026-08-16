@@ -1,6 +1,6 @@
-// Retire the briefly deployed root-scoped PWA. Browsers that registered the
-// old /typodown/sw.js will update to this worker, unregister it, and reload
-// their open pages. The real PWA now lives under /typodown/vault/.
+// Retire the briefly deployed root-scoped PWA. Browsers that registered it
+// will update to this worker, unregister it, and reload their open pages. The
+// real PWA lives under /vault/.
 self.addEventListener("install", () => self.skipWaiting());
 
 self.addEventListener("activate", (event) => {

@@ -7,7 +7,7 @@ Seamless open-source markdown editing, inspired by [Typora](https://typora.io).
 
 The markdown source is the single source of truth: there is no separate preview pane, the styled text is rendered inline and edited directly. Move the caret into a heading, bold run, code span or link and its raw markdown markers (`#`, `**`, `` ` ``) reveal for just that construct, exactly the Typora feel, as an embeddable component.
 
-**[⚡️ Live demo →](https://vemonet.github.io/typodown)**
+**[⚡️ Live demo →](https://typodown.app)**
 
 ## Features
 

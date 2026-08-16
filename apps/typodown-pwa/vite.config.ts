@@ -5,7 +5,7 @@ import { VitePWA } from "vite-plugin-pwa";
 import solid from "vite-plugin-solid";
 
 export default defineConfig({
-  base: process.env.PWA_BASE ?? "/typodown/vault/",
+  base: process.env.PWA_BASE ?? "/vault/",
   plugins: [
     solid(),
     tailwindcss(),
@@ -18,8 +18,8 @@ export default defineConfig({
         theme_color: "#0a0a0a",
         background_color: "#0a0a0a",
         display: "standalone",
-        scope: "/typodown/vault/",
-        start_url: "/typodown/vault/",
+        scope: "/vault/",
+        start_url: "/vault/",
         icons: [
           { src: "icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
           { src: "icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },

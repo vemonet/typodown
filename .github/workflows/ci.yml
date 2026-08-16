@@ -43,7 +43,11 @@ jobs:
   deploy:
     name: ⚡️ Deploy to GitHub Pages
     needs: test
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7.0.0
       - uses: actions/setup-node@v6.4.0
@@ -58,6 +62,9 @@ jobs:
 
       - name: Build demo
         run: vp run demo:build
+        env:
+          DEMO_BASE: /
+          PWA_BASE: /vault/
 
       - uses: actions/upload-pages-artifact@v5.0.0
         with:
