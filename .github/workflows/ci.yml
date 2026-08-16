@@ -15,17 +15,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: ✅ Run tests
+  check:
+    name: ✅ Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.0
-      - uses: actions/setup-node@v6.4.0
+      - uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: 24
-          cache: npm
+          node-version: "lts"
       - name: Install dependencies
         run: vp i
+      - name: Check
+        run: vp check
       - name: Run tests
         run: vp test
       - name: Run benchmark
@@ -42,7 +43,7 @@ jobs:
 
   deploy:
     name: ⚡️ Deploy to GitHub Pages
-    needs: test
+    needs: check
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
@@ -50,10 +51,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7.0.0
-      - uses: actions/setup-node@v6.4.0
+      - uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: 24
-          cache: npm
+          node-version: "lts"
       - name: Setup Pages
         uses: actions/configure-pages@v6.0.0
 

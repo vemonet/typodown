@@ -9,7 +9,6 @@ permissions:
 
 env:
   APP_PATH: apps/typodown-app
-  VITE_PLUS_VERSION: "0.2.0"
 
 jobs:
   # Create a draft GitHub release with the generated changelog. Build jobs
@@ -79,11 +78,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7.0.0
 
-      - name: Setup Node
-        uses: actions/setup-node@v6.4.0
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: 24
-          cache: npm
+          node-version: "lts"
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -105,9 +103,6 @@ jobs:
             librsvg2-dev \
             patchelf \
             libgtk-3-dev
-
-      - name: Install Vite+
-        run: npm install -g vite-plus@${{ env.VITE_PLUS_VERSION }}
 
       - name: Install dependencies
         run: vp i
@@ -158,11 +153,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7.0.0
 
-      - name: Setup Node
-        uses: actions/setup-node@v6.4.0
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: 24
-          cache: npm
+          node-version: "lts"
 
       - name: Setup Java
         uses: actions/setup-java@v5.5.0
@@ -185,9 +179,6 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: ${{ env.APP_PATH }}/src-tauri
-
-      - name: Install Vite+
-        run: npm install -g vite-plus@${{ env.VITE_PLUS_VERSION }}
 
       - name: Install dependencies
         run: vp i
@@ -285,11 +276,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7.0.0
 
-      - name: Setup Node
-        uses: actions/setup-node@v6.4.0
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: 24
-          cache: npm
+          node-version: "lts"
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -305,9 +295,6 @@ jobs:
       # through XcodeGen. CocoaPods is already on the runner image.
       - name: Install XcodeGen
         run: brew install xcodegen
-
-      - name: Install Vite+
-        run: npm install -g vite-plus@${{ env.VITE_PLUS_VERSION }}
 
       - name: Install dependencies
         run: vp i
