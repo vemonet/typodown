@@ -124,13 +124,15 @@ export default defineConfig({
 
       // Release process
       changelog: {
-        command: "git cliff -o CHANGELOG.md --tag v$(npm pkg get version | tr -d '\"')\"",
+        command: "git cliff -o CHANGELOG.md --tag v$(npm pkg get version | tr -d '\"')",
       },
       release: {
         command: [
-          'bumpp -r --all --commit --tag --push --execute "vp run changelog"',
+          "vp run ready",
+          'bumpp -r --all --git-check --commit --tag --no-push --execute "vp run changelog"',
           "npm publish -w @vemonet/typodown",
           "npm run vsx:publish -w typodown",
+          "git push --follow-tags",
         ],
       },
     },

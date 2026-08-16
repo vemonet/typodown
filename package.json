@@ -8,7 +8,8 @@
   ],
   "type": "module",
   "scripts": {
-    "prepare": "vp config && vp run @vemonet/typodown#build"
+    "prepare": "vp config && vp run @vemonet/typodown#build",
+    "version": "node scripts/sync-version.ts"
   },
   "devDependencies": {
     "@marktext/muya": "^0.2.5",
