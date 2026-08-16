@@ -144,7 +144,7 @@ function setupTypodown(markdown: string): void {
     value: markdown,
     outline: false,
     toolbar: "hidden",
-    html: false,
+    html: true,
   });
   const view = (editor as unknown as { view: { dispatch(spec: object): void; focus(): void } })
     .view;
@@ -163,7 +163,7 @@ function setupLargeTypodown(markdown: string): void {
     value: markdown,
     outline: false,
     toolbar: "hidden",
-    html: false,
+    html: true,
   });
   const view = (
     editor as unknown as {
@@ -226,8 +226,8 @@ function setupMuya(markdown: string): void {
   host.appendChild(mount);
   const editor = new Muya(mount, {
     markdown,
-    disableHtml: true,
-    math: false,
+    disableHtml: false,
+    math: true,
     hideQuickInsertHint: true,
   });
   editor.init();
@@ -252,8 +252,8 @@ function setupLargeMuya(markdown: string): void {
   host.appendChild(mount);
   const editor = new Muya(mount, {
     markdown,
-    disableHtml: true,
-    math: false,
+    disableHtml: false,
+    math: true,
     hideQuickInsertHint: true,
   });
   editor.init();
@@ -334,7 +334,6 @@ async function setupLarge(engine: Engine, sections: number): Promise<void> {
   const markdown = largeFixture(sections);
   if (engine === "typodown") setupLargeTypodown(markdown);
   else setupLargeMuya(markdown);
-  performLargeAction?.("render", "start");
   await nextPaint();
 }
 
@@ -346,7 +345,7 @@ async function setupScrollDocument(engine: Engine, markdown: string): Promise<vo
       value: markdown,
       outline: false,
       toolbar: "hidden",
-      html: false,
+      html: true,
     });
     scrollTarget = editor.wrapper.querySelector<HTMLElement>(".cm-scroller") ?? undefined;
     editor.focus();
@@ -356,8 +355,8 @@ async function setupScrollDocument(engine: Engine, markdown: string): Promise<vo
     host.appendChild(mount);
     const editor = new Muya(mount, {
       markdown,
-      disableHtml: true,
-      math: false,
+      disableHtml: false,
+      math: true,
       hideQuickInsertHint: true,
     });
     editor.init();

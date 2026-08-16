@@ -85,6 +85,25 @@ test("filter leaves a plain paragraph line alone", () => {
   expect(clampAt("foo", 0)).toBe(0);
 });
 
+test("filter skips a single blank paragraph separator", () => {
+  const doc = "Par1\n\nPar2";
+  expect(clampAt(doc, 5)).toBe(6);
+  expect(clampAt("Par1\n\n# Heading", 5)).toBe(6);
+
+  const state = EditorState.create({
+    doc,
+    extensions: [typodownMarkdown(), clampCursorPastMarker],
+    selection: { anchor: doc.length },
+  });
+  const tr = state.update({ selection: EditorSelection.cursor(5, -1) });
+  expect(tr.selection!.main.head).toBe(4);
+});
+
+test("filter leaves intentional extra blank lines and code blanks editable", () => {
+  expect(clampAt("Par1\n\n\nPar2", 5)).toBe(5);
+  expect(clampAt("```\none\n\ntwo\n```", 8)).toBe(8);
+});
+
 test("filter leaves non-empty selections alone", () => {
   const s = EditorState.create({
     doc: "- foo",

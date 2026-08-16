@@ -17,6 +17,7 @@ import {
   type TransactionSpec,
 } from "@codemirror/state";
 import {
+  drawSelection,
   EditorView,
   keymap,
   placeholder as placeholderExt,
@@ -32,7 +33,12 @@ import {
   type CompletionResult,
 } from "@codemirror/autocomplete";
 import { search } from "@codemirror/search";
-import { defaultHighlightStyle, syntaxHighlighting, syntaxTree } from "@codemirror/language";
+import {
+  defaultHighlightStyle,
+  ensureSyntaxTree,
+  syntaxHighlighting,
+  syntaxTree,
+} from "@codemirror/language";
 import {
   insertNewlineContinueMarkup,
   deleteMarkupBackward,
@@ -40,7 +46,12 @@ import {
   markdownLanguage,
 } from "@codemirror/lang-markdown";
 import { GFM } from "@lezer/markdown";
-import { livePreview, ALERT_KINDS, markerEndOnLine } from "./live-preview.ts";
+import {
+  livePreview,
+  ALERT_KINDS,
+  markerEndOnLine,
+  paragraphSeparatorTarget,
+} from "./live-preview.ts";
 import { openInsertTableDialog, insertTable } from "./menu.ts";
 import { createOutline, scrollToLine as scrollViewToLine, type OutlineHandle } from "./outline.ts";
 import { createPrefs } from "./prefs.ts";
@@ -177,6 +188,11 @@ export class Typodown {
         clampCursorPastMarker,
       ]),
       history(),
+      // Browser-native contenteditable carets can be painted at stale DOM
+      // boundaries when live-preview rebuilds syntax spans around the cursor.
+      // CodeMirror's layer uses document coordinates, so the caret stays on
+      // the edited code line while preserving the actual selection state.
+      drawSelection(),
       // Match highlighting + find/replace commands. The built-in bottom-docked
       // panel is never opened; our floating panel (search.ts) drives this state
       // and Mod-f (below) opens it, so the package's searchKeymap is left out.
@@ -343,11 +359,17 @@ export class Typodown {
       }),
     );
 
+    let state = EditorState.create({
+      doc: normalizeQuoteMarkerSpaces(options.value ?? ""),
+      extensions,
+    });
+    // Block replacements determine document height. Complete the initial
+    // parse before rebuilding state fields so off-screen geometry is known
+    // before the first viewport is displayed.
+    ensureSyntaxTree(state, state.doc.length, 100);
+    state = state.update({}).state;
     this.view = new EditorView({
-      state: EditorState.create({
-        doc: normalizeQuoteMarkerSpaces(options.value ?? ""),
-        extensions,
-      }),
+      state,
       parent: this.wrapper,
     });
     // CodeMirror sets horizontal overflow in its base theme, which normally
@@ -565,9 +587,8 @@ export class Typodown {
    *
    * Live preview reveals a construct's raw syntax when the caret enters it and
    * re-hides the one the caret left, and either can add or remove whole lines:
-   * the ``` fences of a code block, the --- of the front matter, the blank line
-   * separating two paragraphs (hidden as `cm-td-blank-sep`, a full line tall
-   * once the caret is on it). When that happens *above* the press, the caret
+   * the ``` fences of a code block, the --- of the front matter, or editable
+   * extra blank lines. When that happens *above* the press, the caret
    * lands on the right document position, but the text around it has already
    * moved up or down by a line or two -- so the caret shows up somewhere other
    * than where the click was, typically up and to the left, since a line that
@@ -1276,9 +1297,10 @@ export const continueMarkup: Command = (view) => {
  * still be reached -- by Home, a click on the bullet, or arrow motion. This
  * filter clamps any empty caret that lands before the marker end to the content
  * start, so it is impossible for the caret to sit left of (or inside) the
- * hidden bullet / checkbox / quote marker. Selections (non-empty ranges) are
- * left untouched, and doc-changing transactions are skipped (the dedicated
- * commands already land the caret past the marker).
+ * hidden bullet / checkbox / quote marker. It also skips the source-only blank
+ * line used as the normal paragraph separator. Selections (non-empty ranges)
+ * are left untouched, and doc-changing transactions are skipped (the
+ * dedicated commands already land the caret at an editable position).
  */
 export const clampCursorPastMarker = EditorState.transactionFilter.of(
   (tr: Transaction): TransactionSpec | Transaction => {
@@ -1288,6 +1310,15 @@ export const clampCursorPastMarker = EditorState.transactionFilter.of(
     if (!main.empty || sel.ranges.length > 1) return tr;
     const pos = main.head;
     const state = tr.startState;
+    const direction = pos < state.selection.main.head ? -1 : 1;
+    const separatorTarget = paragraphSeparatorTarget(state, pos, main.assoc || direction);
+    if (separatorTarget != null) {
+      return {
+        selection: EditorSelection.cursor(separatorTarget, main.assoc),
+        effects: tr.effects,
+        scrollIntoView: tr.scrollIntoView,
+      };
+    }
     const line = state.doc.lineAt(pos);
     const markEnd = markerEndOnLine(state, line);
     if (markEnd == null || pos >= markEnd) return tr;

@@ -1,7 +1,7 @@
 // Live-preview decorations: the "Typora magic".
 //
-// A ViewPlugin walks the Lezer syntax tree over the visible viewport on every
-// doc/selection change and produces a DecorationSet that:
+// State fields walk the Lezer syntax tree on document/selection changes and
+// produce DecorationSets that:
 //   - styles constructs (heading sizes, bold/italic, code, links, quotes),
 //   - hides the raw markdown syntax marks (`**`, `#`, backticks, `[...](...)`)
 //     unless the selection is on that construct, then it reveals them, so the
@@ -31,6 +31,7 @@ import {
 import { syntaxTree } from "@codemirror/language";
 import type { SyntaxNode, SyntaxNodeRef } from "@lezer/common";
 import { GFM, parser } from "@lezer/markdown";
+import katex from "katex";
 import { LANGUAGE_SUGGESTIONS, tokenize } from "./highlight.ts";
 import { sanitizeHtml } from "./sanitize.ts";
 
@@ -136,6 +137,32 @@ export function markerEndOnLine(
   return null;
 }
 
+/** Move a caret off the source-only blank line separating two paragraphs.
+ * Multiple consecutive blank lines remain addressable because they represent
+ * intentional extra vertical space rather than the normal paragraph gap. */
+export function paragraphSeparatorTarget(
+  state: EditorState,
+  pos: number,
+  assoc: number,
+): number | null {
+  const line = state.doc.lineAt(pos);
+  if (
+    line.length !== 0 ||
+    pos !== line.from ||
+    line.number <= 1 ||
+    line.number >= state.doc.lines
+  ) {
+    return null;
+  }
+  const previous = state.doc.line(line.number - 1);
+  const next = state.doc.line(line.number + 1);
+  if (previous.length === 0 || next.length === 0) return null;
+  if (insideCodeBlock(syntaxTree(state), line.from)) return null;
+  const frontMatter = parseFrontMatter(state.doc);
+  if (frontMatter && line.number > frontMatter.open && line.number < frontMatter.close) return null;
+  return assoc < 0 ? previous.to : next.from;
+}
+
 /** How many blockquote levels a line's leading marker run opens (`> > x` -> 2).
  * 0 when the line has no marker, which happens on a lazy continuation line
  * inside a quote; such a line renders at the outermost level. */
@@ -194,10 +221,17 @@ class BulletWidget extends WidgetType {
     return other.level === this.level && other.extraClass === this.extraClass;
   }
   toDOM(): HTMLElement {
-    const span = document.createElement("span");
-    span.className = `cm-td-bullet cm-td-bullet-${this.level % 3} ${this.extraClass}`.trim();
-    return span;
+    return createBullet(this.level, this.extraClass);
   }
+}
+
+function createBullet(level: number, extraClass = ""): HTMLElement {
+  const marker = document.createElement("span");
+  marker.className = `cm-td-list-marker cm-td-bullet ${extraClass}`.trim();
+  const shape = document.createElement("span");
+  shape.className = `cm-td-bullet-shape cm-td-bullet-${level % 3}`;
+  marker.appendChild(shape);
+  return marker;
 }
 
 class HrWidget extends WidgetType {
@@ -208,6 +242,41 @@ class HrWidget extends WidgetType {
     const hr = document.createElement("span");
     hr.className = "cm-td-hr";
     return hr;
+  }
+}
+
+class HeadingGapWidget extends WidgetType {
+  constructor(readonly level: number) {
+    super();
+  }
+  eq(other: HeadingGapWidget): boolean {
+    return other.level === this.level;
+  }
+  get estimatedHeight(): number {
+    if (this.level === 1) return 24;
+    if (this.level === 2) return 18;
+    if (this.level === 3) return 22;
+    return 18;
+  }
+  toDOM(): HTMLElement {
+    const gap = document.createElement("div");
+    gap.className = "cm-td-heading-gap";
+    gap.style.height = `${this.estimatedHeight}px`;
+    return gap;
+  }
+}
+
+class ParagraphGapWidget extends WidgetType {
+  eq(): boolean {
+    return true;
+  }
+  get estimatedHeight(): number {
+    return 11.2;
+  }
+  toDOM(): HTMLElement {
+    const gap = document.createElement("div");
+    gap.className = "cm-td-paragraph-gap";
+    return gap;
   }
 }
 
@@ -289,8 +358,6 @@ function ensureKatexCss(version: string): void {
   document.head.appendChild(link);
 }
 
-// Renders lazily: `katex` is only imported the first time a math construct is
-// actually idle (not being edited), matching the mermaid pattern.
 class MathWidget extends WidgetType {
   constructor(
     readonly source: string,
@@ -304,18 +371,11 @@ class MathWidget extends WidgetType {
   toDOM(): HTMLElement {
     const host = document.createElement(this.display ? "div" : "span");
     host.className = this.display ? "cm-td-math cm-td-math-block" : "cm-td-math";
-    void import("katex")
-      .then(({ default: katex, version }) => {
-        ensureKatexCss(version);
-        host.innerHTML = katex.renderToString(this.source, {
-          displayMode: this.display,
-          throwOnError: false,
-        });
-      })
-      .catch((error: unknown) => {
-        host.classList.add("cm-td-math-error");
-        host.textContent = error instanceof Error ? error.message : String(error);
-      });
+    ensureKatexCss(katex.version);
+    host.innerHTML = katex.renderToString(this.source, {
+      displayMode: this.display,
+      throwOnError: false,
+    });
     return host;
   }
   ignoreEvent(): boolean {
@@ -385,6 +445,19 @@ function createCopyButton(source: string): HTMLButtonElement {
   return button;
 }
 
+function renderedCharacterWidth(code: HTMLElement, fallback: number): number {
+  const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+  for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+    if (!text.textContent) continue;
+    const range = document.createRange();
+    range.setStart(text, 0);
+    range.setEnd(text, 1);
+    const width = range.getBoundingClientRect?.().width ?? 0;
+    if (width > 0) return width;
+  }
+  return fallback;
+}
+
 class CopyButtonWidget extends WidgetType {
   constructor(readonly source: string) {
     super();
@@ -404,6 +477,102 @@ class CopyButtonWidget extends WidgetType {
   }
 }
 
+class CodeBlockWidget extends WidgetType {
+  static readonly verticalPadding = 10;
+  static readonly horizontalPadding = 16;
+
+  readonly lines: number;
+  constructor(
+    readonly source: string,
+    readonly language: string,
+    readonly contentFrom: number,
+    lineCount: number,
+    readonly indent: number,
+    readonly quoted: boolean,
+    readonly listBullet: boolean,
+  ) {
+    super();
+    this.lines = Math.max(1, lineCount);
+  }
+  eq(other: CodeBlockWidget): boolean {
+    return (
+      other.source === this.source &&
+      other.language === this.language &&
+      other.contentFrom === this.contentFrom &&
+      other.lines === this.lines &&
+      other.indent === this.indent &&
+      other.quoted === this.quoted &&
+      other.listBullet === this.listBullet
+    );
+  }
+  get estimatedHeight(): number {
+    return this.lines * 25.6 + CodeBlockWidget.verticalPadding * 2;
+  }
+  toDOM(view: EditorView): HTMLElement {
+    const block = document.createElement("div");
+    block.className = `cm-td-code-widget${this.quoted ? " cm-td-code-widget-quoted" : ""}`;
+    block.style.height = `${this.estimatedHeight}px`;
+    block.style.paddingBlock = `${CodeBlockWidget.verticalPadding}px`;
+    if (this.indent > 0) block.style.marginLeft = `${this.indent}ch`;
+    const code = document.createElement("code");
+    let offset = 0;
+    for (const token of tokenize(this.source, this.language)) {
+      if (token.from > offset) code.append(this.source.slice(offset, token.from));
+      const span = document.createElement("span");
+      span.className = `cm-td-tok-${token.type}`;
+      span.textContent = this.source.slice(token.from, token.to);
+      code.append(span);
+      offset = token.to;
+    }
+    if (offset < this.source.length) code.append(this.source.slice(offset));
+    block.append(code, createCopyButton(this.source));
+    block.addEventListener("mousedown", (event) => {
+      if ((event.target as HTMLElement).closest("button")) return;
+      event.preventDefault();
+      const rect = block.getBoundingClientRect();
+      const lineHeight = Number.parseFloat(getComputedStyle(block).lineHeight) || 25.6;
+      const lineNumber = Math.max(
+        0,
+        Math.min(
+          this.lines - 1,
+          Math.floor((event.clientY - rect.top - CodeBlockWidget.verticalPadding) / lineHeight),
+        ),
+      );
+      let lineOffset = 0;
+      for (let line = 0; line < lineNumber; line++) {
+        lineOffset = this.source.indexOf("\n", lineOffset) + 1;
+      }
+      const lineBreak = this.source.indexOf("\n", lineOffset);
+      const lineLength = (lineBreak < 0 ? this.source.length : lineBreak) - lineOffset;
+      const characterWidth = renderedCharacterWidth(code, view.defaultCharacterWidth);
+      const column = Math.max(
+        0,
+        Math.min(
+          lineLength,
+          Math.round(
+            (event.clientX - rect.left - CodeBlockWidget.horizontalPadding) / characterWidth,
+          ),
+        ),
+      );
+      view.dispatch({
+        selection: { anchor: this.contentFrom + lineOffset + column },
+        scrollIntoView: true,
+      });
+      view.focus();
+    });
+    if (!this.listBullet) return block;
+
+    const frame = document.createElement("div");
+    frame.className = "cm-td-code-widget-frame";
+    const bullet = createBullet(0, "cm-td-code-widget-bullet");
+    frame.append(bullet, block);
+    return frame;
+  }
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
 // Renders lazily: `mermaid` is a large dependency, so it is only imported the
 // first time a mermaid code block is actually idle (not being edited).
 class MermaidWidget extends WidgetType {
@@ -413,9 +582,13 @@ class MermaidWidget extends WidgetType {
   eq(other: MermaidWidget): boolean {
     return other.source === this.source;
   }
+  get estimatedHeight(): number {
+    return Math.max(200, this.source.split("\n").length * 60);
+  }
   toDOM(): HTMLElement {
     const host = document.createElement("div");
     host.className = "cm-td-mermaid";
+    host.style.minHeight = `${this.estimatedHeight}px`;
     const diagram = document.createElement("div");
     diagram.className = "cm-td-mermaid-diagram";
     host.append(createCopyButton(this.source), diagram);
@@ -455,6 +628,9 @@ class TableWidget extends WidgetType {
   eq(other: TableWidget): boolean {
     return other.from === this.from && other.nRows === this.nRows && other.nCols === this.nCols;
   }
+  get estimatedHeight(): number {
+    return this.nRows * 25.6;
+  }
   toDOM(view: EditorView): HTMLElement {
     return renderTable(this.source, view, this.from);
   }
@@ -466,6 +642,28 @@ class TableWidget extends WidgetType {
 }
 
 const LANG_DATALIST_ID = "cm-td-langs";
+
+type FenceInfo = {
+  language: string;
+  languageFrom: number;
+  languageTo: number;
+};
+
+/** CommonMark treats the first whitespace-delimited info-string token as the
+ * language. Keep later tokens intact: they are commonly used for a filename,
+ * title, or other renderer metadata. */
+function parseFenceInfo(value: string, from: number): FenceInfo {
+  const start = value.search(/\S/);
+  if (start < 0) return { language: "", languageFrom: from, languageTo: from + value.length };
+  const rest = value.slice(start);
+  const whitespace = rest.search(/\s/);
+  const length = whitespace < 0 ? rest.length : whitespace;
+  return {
+    language: rest.slice(0, length),
+    languageFrom: from + start,
+    languageTo: from + start + length,
+  };
+}
 
 // The language selector for an active code block. It is absolutely positioned
 // so it floats just outside the block's corner without changing the block's
@@ -1219,6 +1417,11 @@ function renderTable(source: string, view: EditorView, from: number): HTMLElemen
     wrap.textContent = source;
     return wrap;
   }
+  // The Markdown delimiter row disappears in the rendered table. Reuse its
+  // line-height as outer breathing room, minus the one collapsed border added
+  // by each visible row, so the widget preserves the source block's height.
+  const renderedRows = rows.length - 1;
+  wrap.style.paddingBlock = `${Math.max(0, (24.6 - renderedRows) / 2)}px`;
   const align = splitCells(rows[1]!).map((c) => {
     const l = c.startsWith(":");
     const r = c.endsWith(":");
@@ -1262,6 +1465,40 @@ interface DocumentFeatures {
   footnotes: boolean;
 }
 
+interface DirectiveContainer {
+  openingLine: number;
+  closingLine: number;
+  opening: NonNullable<ReturnType<typeof parseDirectiveOpening>>;
+}
+
+function insideCodeBlock(tree: ReturnType<typeof syntaxTree>, pos: number): boolean {
+  for (let node: SyntaxNode | null = tree.resolveInner(pos, 1); node; node = node.parent) {
+    if (/FencedCode|CodeBlock/.test(node.name)) return true;
+  }
+  return false;
+}
+
+function findDirectiveContainers(
+  doc: Text,
+  tree: ReturnType<typeof syntaxTree>,
+): DirectiveContainer[] {
+  const containers: DirectiveContainer[] = [];
+  for (let lineNumber = 1; lineNumber <= doc.lines; lineNumber++) {
+    const opening = parseDirectiveOpening(doc.line(lineNumber).text);
+    if (!opening || insideCodeBlock(tree, doc.line(lineNumber).from)) continue;
+
+    for (let candidate = lineNumber + 1; candidate <= doc.lines; candidate++) {
+      const line = doc.line(candidate);
+      if (/^\s*:::\s*$/.test(line.text) && !insideCodeBlock(tree, line.from)) {
+        containers.push({ openingLine: lineNumber, closingLine: candidate, opening });
+        lineNumber = candidate;
+        break;
+      }
+    }
+  }
+  return containers;
+}
+
 /** Features whose decorators require a whole-document line scan. Cache these
  * per document so a selection-only update can skip both scans when their
  * opening syntax is absent. False positives are harmless; false negatives
@@ -1278,6 +1515,7 @@ class DecoBuilder {
   readonly out: Range<Decoration>[] = [];
   private readonly selections;
   private readonly fm: { open: number; close: number } | null;
+  private readonly directives: DirectiveContainer[];
   private fmApplied = false;
   private directivesApplied = false;
   private footnotesApplied = false;
@@ -1288,6 +1526,9 @@ class DecoBuilder {
   ) {
     this.selections = state.selection.ranges;
     this.fm = parseFrontMatter(state.doc);
+    this.directives = features.directives
+      ? findDirectiveContainers(state.doc, syntaxTree(state))
+      : [];
   }
 
   private on(from: number, to: number): boolean {
@@ -1375,36 +1616,12 @@ class DecoBuilder {
 
   private directiveContainers(): void {
     const doc = this.state.doc;
-    const tree = syntaxTree(this.state);
-    let lineNumber = 1;
-    while (lineNumber <= doc.lines) {
-      const openingLine = doc.line(lineNumber);
-      const opening = parseDirectiveOpening(openingLine.text);
-      if (!opening || this.insideCodeBlock(tree, openingLine.from)) {
-        lineNumber++;
-        continue;
-      }
-
-      let closingLine: ReturnType<typeof doc.line> | null = null;
-      for (let candidate = lineNumber + 1; candidate <= doc.lines; candidate++) {
-        const line = doc.line(candidate);
-        if (/^\s*:::\s*$/.test(line.text) && !this.insideCodeBlock(tree, line.from)) {
-          closingLine = line;
-          break;
-        }
-      }
-      if (!closingLine) {
-        lineNumber++;
-        continue;
-      }
+    for (const container of this.directives) {
+      const openingLine = doc.line(container.openingLine);
+      const closingLine = doc.line(container.closingLine);
+      const { opening } = container;
 
       const active = this.on(openingLine.from, closingLine.to);
-      const alertClass = `cm-td-quote cm-td-alert cm-td-directive cm-td-alert-${opening.alertKind}`;
-      this.line(openingLine.from, alertClass);
-      for (let contentLine = lineNumber + 1; contentLine < closingLine.number; contentLine++) {
-        this.line(doc.line(contentLine).from, `${alertClass} cm-td-directive-content`);
-      }
-      this.line(closingLine.from, alertClass);
 
       if (active) {
         this.mark(openingLine.from, openingLine.to, "cm-td-mark");
@@ -1418,26 +1635,21 @@ class DecoBuilder {
         this.line(closingLine.from, "cm-td-directive-close");
         this.syntax(closingLine.from, closingLine.to, false);
       }
-      lineNumber = closingLine.number + 1;
     }
   }
 
   private insideCodeBlock(tree: ReturnType<typeof syntaxTree>, pos: number): boolean {
-    for (let node: SyntaxNode | null = tree.resolveInner(pos, 1); node; node = node.parent) {
-      if (/FencedCode|CodeBlock/.test(node.name)) return true;
-    }
-    return false;
+    return insideCodeBlock(tree, pos);
   }
 
   // A run of one or more blank lines between two content lines is the Markdown
   // paragraph separator, however many raw blank lines it happens to contain
   // (Enter always adds a full "\n\n", so splitting between two already-blank-
   // line-separated paragraphs produces a 3-line run, not just 2). Rather than
-  // show the run as a stack of empty lines, every line in it collapses
-  // (`display:none`) except one: the line the caret is on, if any, which stays
-  // open so it can be edited, or otherwise the whole run collapses and the
-  // paragraph gap becomes padding on the next content line. Blank lines inside
-  // a fenced code block are left alone entirely.
+  // show the run as a stack of empty lines, a single separator is always
+  // layout-only. In a longer run the line under the caret stays open so the
+  // intentional extra space can be edited. Blank lines inside fenced code are
+  // left alone entirely.
   private collapseBlankSeparators(
     from: number,
     to: number,
@@ -1476,6 +1688,12 @@ class DecoBuilder {
       }
       if (inBlock) {
         n = runEnd + 1;
+        continue;
+      }
+
+      if (n === runEnd) {
+        this.line(line.from, "cm-td-blank-sep");
+        n++;
         continue;
       }
 
@@ -1549,19 +1767,6 @@ class DecoBuilder {
         // shouldn't make them "reappear" -- they were there the whole time).
         this.line(line.from, "cm-td-blank-sep");
       }
-      // Headings and fenced code blocks carry their own constant top gap
-      // (theme.css), so no paragraph gap is added before them -- their
-      // spacing stays the same whether or not a blank line precedes them.
-      if (
-        !openLine &&
-        n === runEnd &&
-        afterRun &&
-        !enters(afterRun, "heading") &&
-        !enters(afterRun, "FencedCode")
-      ) {
-        this.line(afterRun.from, "cm-td-para-gap");
-      }
-
       n = runEnd + 1;
     }
   }
@@ -1579,7 +1784,7 @@ class DecoBuilder {
     const name = node.name;
 
     if (/^ATXHeading[1-6]$/.test(name)) {
-      this.heading(node, Number(name.slice(-1)));
+      this.heading(node);
       return;
     }
     switch (name) {
@@ -1649,13 +1854,16 @@ class DecoBuilder {
     const firstContent = fm.open + 1;
     const lastContent = fm.close - 1;
     if (firstContent > lastContent) return; // empty front matter
+    const lineHeight = 25.6 - 10 / (lastContent - firstContent + 1);
 
     for (let n = firstContent; n <= lastContent; n++) {
       const line = doc.line(n);
-      const cls = ["cm-td-code"];
+      const cls = ["cm-td-code", "cm-td-fm"];
       if (n === firstContent) cls.push("cm-td-fm-top");
       if (n === lastContent) cls.push("cm-td-code-bottom");
-      this.line(line.from, cls.join(" "));
+      this.line(line.from, cls.join(" "), {
+        style: `--cm-td-fm-line-height: ${lineHeight}px`,
+      });
     }
 
     // Apply YAML syntax highlighting to the content between delimiters.
@@ -1673,20 +1881,31 @@ class DecoBuilder {
     return out;
   }
 
-  private heading(node: SyntaxNodeRef, level: number): void {
+  private heading(node: SyntaxNodeRef): void {
     const line = this.state.doc.lineAt(node.from);
-    this.line(node.from, `cm-td-heading cm-td-h${level}`);
     const marks = this.children(node).filter((c) => c.name === "HeaderMark");
     const opening = marks[0];
     if (!opening) return;
+    const level = Number(node.name.slice(-1));
     // Reveal the "## " only when the caret is at the start of the line.
     let markEnd = opening.to;
     while (this.state.doc.sliceString(markEnd, markEnd + 1) === " ") markEnd++;
-    const active = this.on(line.from, markEnd);
-    this.syntax(opening.from, markEnd, active);
-    // Closing "###" of a "### foo ###" heading.
     const closing = marks[1];
-    if (closing) this.syntax(closing.from, closing.to, active);
+    this.mark(markEnd, closing?.from ?? node.to, `cm-td-heading cm-td-h${level}`);
+    const active = this.on(line.from, markEnd);
+    if (active) {
+      this.mark(opening.from, markEnd, `cm-td-heading cm-td-h${level} cm-td-mark`);
+    } else {
+      this.syntax(opening.from, markEnd, false);
+    }
+    // Closing "###" of a "### foo ###" heading.
+    if (closing) {
+      if (active) {
+        this.mark(closing.from, closing.to, `cm-td-heading cm-td-h${level} cm-td-mark`);
+      } else {
+        this.syntax(closing.from, closing.to, false);
+      }
+    }
   }
 
   private emphasis(node: SyntaxNodeRef, cls: string): void {
@@ -1728,10 +1947,20 @@ class DecoBuilder {
     const indent = prefix.replace(/^.*>[ \t]?/, "").length;
     const closeLine = marks.length >= 2 ? doc.lineAt(marks[marks.length - 1]!.from) : null;
     const active = this.on(node.from, node.to);
-    const lang = info ? doc.sliceString(info.from, info.to).trim() : "";
+    const fenceInfo = parseFenceInfo(
+      info ? doc.sliceString(info.from, info.to) : "",
+      info?.from ?? 0,
+    );
+    const lang = fenceInfo.language;
     // While idle, a mermaid block renders as a diagram widget at the block
     // level (see `buildBlocks`) instead of as styled/highlighted code lines.
-    if (lang.toLowerCase() === "mermaid" && !active) return;
+    const insideDirective = this.directives.some(
+      (container) =>
+        openLine.number > container.openingLine && openLine.number < container.closingLine,
+    );
+    if (lang.toLowerCase() === "mermaid" && !active && !prefix.includes(">") && !insideDirective) {
+      return;
+    }
 
     // The backticks are never shown. Drop an opening line that contains only
     // container markers and the fence. When a fence is a list item's first
@@ -1786,8 +2015,8 @@ class DecoBuilder {
     // (a point widget on the last content line, absolutely positioned), so it
     // never adds a row to the block.
     if (active && lastContent >= firstContent && lastContent <= doc.lines) {
-      const infoFrom = info ? info.from : marks[0]!.to;
-      const infoTo = info ? info.to : openLine.to;
+      const infoFrom = info ? fenceInfo.languageFrom : marks[0]!.to;
+      const infoTo = info ? fenceInfo.languageTo : openLine.to;
       this.widget(doc.line(lastContent).to, new LanguageWidget(lang, infoFrom, infoTo), 1);
     }
 
@@ -1890,19 +2119,12 @@ class DecoBuilder {
     const kind = alertMatch ? (alertMatch[1]!.toLowerCase() as AlertKind) : null;
     for (let n = startLine; n <= endLine; n++) {
       const line = doc.line(n);
-      const depth = quoteDepth(line.text);
-      const cls = ["cm-td-quote"];
-      // The alert's colour and icon belong to the quote the `[!KIND]` marker
-      // opened, not to quotes nested inside it (those get the plain accent).
-      if (kind && depth <= 1) cls.push("cm-td-alert", `cm-td-alert-${kind}`);
       // An empty `>` line is a paragraph separator inside the blockquote.
       // Collapse it (unless the caret is on it) so it doesn't take up a line,
       // the same way blank paragraph separators are collapsed.
       if (/^\s*(?:> ?)+\s*$/.test(line.text) && !this.on(line.from, line.to)) {
-        cls.push("cm-td-quote-empty");
+        this.line(line.from, "cm-td-quote-empty");
       }
-      const attributes = depth > 1 ? { style: `--td-quote-depth: ${depth}` } : undefined;
-      this.line(line.from, cls.join(" "), attributes);
     }
     // Always hide the "> " marker on each line; the raw marker is never shown
     // (Typora-style), even when the caret is on the line.
@@ -1966,7 +2188,7 @@ class DecoBuilder {
 
     if (ordered) {
       // Keep the ordered number visible; just style it faint.
-      this.mark(listMark.from, listMark.to, "cm-td-list-mark");
+      this.mark(listMark.from, listMark.to, "cm-td-list-marker cm-td-list-mark");
     } else {
       // Replace "-" with a rendered bullet whose style cycles with nesting. The
       // raw marker is never shown, even when the caret is on the line.
@@ -2005,6 +2227,23 @@ class DecoBuilder {
     if (/^<!--[\s\S]*-->$/.test(raw)) {
       this.mark(node.from, node.to, "cm-td-comment");
       return;
+    }
+    if (/^<\/kbd\s*>$/i.test(raw)) return;
+    if (/^<kbd(?:\s[^>]*)?>$/i.test(raw)) {
+      const rest = doc.sliceString(node.to, Math.min(doc.length, node.to + 2000));
+      const closeAt = rest.toLowerCase().indexOf("</kbd>");
+      if (closeAt >= 0) {
+        const closeFrom = node.to + closeAt;
+        const closeTo = closeFrom + 6;
+        if (this.on(node.from, closeTo)) {
+          this.mark(node.from, closeTo, "cm-td-html-raw");
+        } else {
+          this.syntax(node.from, node.to, false);
+          this.mark(node.to, closeFrom, "cm-td-kbd");
+          this.syntax(closeFrom, closeTo, false);
+        }
+        return;
+      }
     }
     // Self-contained tags (void and self-closing) render on their own.
     const standalone =
@@ -2066,7 +2305,7 @@ export function parseFootnoteDefinition(line: string): FootnoteDefinition | null
   return match ? { label: match[1]!, markerLength: match[0].length } : null;
 }
 
-// ---- inline decorations (ViewPlugin, viewport-only) -----------------------
+// ---- inline decorations ---------------------------------------------------
 
 function inlinePlugin(
   config: LivePreviewConfig,
@@ -2081,12 +2320,17 @@ function inlinePlugin(
         this.treeLen = syntaxTree(view.state).length;
         this.decorations = this.build(view);
       }
-      update(u: ViewUpdate): void {
-        const treeLen = syntaxTree(u.view.state).length;
-        if (u.docChanged || u.selectionSet || u.viewportChanged || treeLen !== this.treeLen) {
-          if (u.docChanged) this.features = documentFeatures(u.view.state);
+      update(update: ViewUpdate): void {
+        const treeLen = syntaxTree(update.state).length;
+        if (
+          update.docChanged ||
+          update.selectionSet ||
+          update.viewportChanged ||
+          treeLen !== this.treeLen
+        ) {
+          if (update.docChanged) this.features = documentFeatures(update.state);
           this.treeLen = treeLen;
-          this.decorations = this.build(u.view);
+          this.decorations = this.build(update.view);
         }
       }
       build(view: EditorView): DecorationSet {
@@ -2095,7 +2339,7 @@ function inlinePlugin(
         return RangeSet.of(builder.out, true);
       }
     },
-    { decorations: (v) => v.decorations },
+    { decorations: (value) => value.decorations },
   );
 }
 
@@ -2130,9 +2374,147 @@ function buildBlocks(
   const claim = (from: number, to: number): void => {
     occupied.push([from, to]);
   };
-  syntaxTree(state).iterate({
+  const tree = syntaxTree(state);
+  const directiveContainers = findDirectiveContainers(doc, tree);
+  const frontMatter = parseFrontMatter(doc);
+  const hideLine = (line: ReturnType<typeof doc.line>, widget?: WidgetType): void => {
+    if (line.to > line.from) {
+      out.push(Decoration.replace({ block: true, widget }).range(line.from, line.to));
+    }
+  };
+  for (const container of directiveContainers) {
+    const alertClass = `cm-td-quote cm-td-alert cm-td-directive cm-td-alert-${container.opening.alertKind}`;
+    for (
+      let lineNumber = container.openingLine;
+      lineNumber <= container.closingLine;
+      lineNumber++
+    ) {
+      const contentClass =
+        lineNumber > container.openingLine && lineNumber < container.closingLine
+          ? `${alertClass} cm-td-directive-content`
+          : alertClass;
+      out.push(Decoration.line({ class: contentClass }).range(doc.line(lineNumber).from));
+    }
+  }
+  for (let lineNumber = 2; lineNumber < doc.lines; ) {
+    const line = doc.line(lineNumber);
+    if (line.length !== 0) {
+      lineNumber++;
+      continue;
+    }
+    let runEnd = lineNumber;
+    while (runEnd < doc.lines && doc.line(runEnd + 1).length === 0) runEnd++;
+    const node = tree.resolveInner(line.from, 1);
+    let insideBlock = false;
+    for (let ancestor: typeof node | null = node; ancestor; ancestor = ancestor.parent) {
+      if (/FencedCode|CodeBlock|Table|HTMLBlock/.test(ancestor.name)) {
+        insideBlock = true;
+        break;
+      }
+    }
+    const insideFrontMatter =
+      frontMatter && lineNumber > frontMatter.open && lineNumber < frontMatter.close;
+    if (!insideBlock && !insideFrontMatter) {
+      const singleSeparator = runEnd === lineNumber;
+      const touched = touches(state, line.from, doc.line(runEnd).to);
+      if (!singleSeparator) {
+        sensitive.push({ from: line.from, to: doc.line(runEnd).to, touched });
+      }
+      if (singleSeparator || !touched) {
+        const following = runEnd < doc.lines ? doc.line(runEnd + 1) : null;
+        let gapWidget: ParagraphGapWidget | HeadingGapWidget | undefined;
+        if (singleSeparator && following) {
+          let startsOwnGap = false;
+          let headingLevel: number | null = null;
+          for (const pos of [following.from, following.to]) {
+            for (
+              let block: SyntaxNode | null = tree.resolveInner(pos, -1);
+              block;
+              block = block.parent
+            ) {
+              if (doc.lineAt(block.from).number !== following.number) continue;
+              const heading = /^ATXHeading([1-6])$/.exec(block.name);
+              if (heading) {
+                startsOwnGap = true;
+                headingLevel = Number(heading[1]);
+                break;
+              }
+              if (block.name === "FencedCode") {
+                startsOwnGap = true;
+                break;
+              }
+            }
+            if (startsOwnGap) break;
+          }
+          if (headingLevel != null) gapWidget = new HeadingGapWidget(headingLevel);
+          else if (!startsOwnGap) gapWidget = new ParagraphGapWidget();
+        }
+        out.push(
+          Decoration.replace({ block: true, inclusiveEnd: false, widget: gapWidget }).range(
+            line.from,
+            doc.line(line.number + 1).from,
+          ),
+        );
+      }
+    }
+    lineNumber = runEnd + 1;
+  }
+  for (let lineNumber = 1; lineNumber < doc.lines; lineNumber++) {
+    const line = doc.line(lineNumber);
+    if (!/^\s*(?:> ?)+\s*$/.test(line.text)) continue;
+    const node = tree.resolveInner(line.from, 1);
+    let insideCode = false;
+    for (let ancestor: typeof node | null = node; ancestor; ancestor = ancestor.parent) {
+      if (/FencedCode|CodeBlock/.test(ancestor.name)) {
+        insideCode = true;
+        break;
+      }
+    }
+    if (insideCode) continue;
+    const touched = touches(state, line.from, line.to);
+    sensitive.push({ from: line.from, to: line.to, touched });
+    if (!touched) hideLine(line);
+  }
+  if (frontMatter) {
+    hideLine(doc.line(frontMatter.open));
+    hideLine(doc.line(frontMatter.close));
+  }
+  tree.iterate({
     enter: (node) => {
-      if (node.name === "Table") {
+      if (node.name === "Blockquote") {
+        for (let ancestor = node.node.parent; ancestor; ancestor = ancestor.parent) {
+          if (ancestor.name === "Blockquote") return;
+        }
+        const startLine = doc.lineAt(node.from).number;
+        const endLine = doc.lineAt(node.to > node.from ? node.to - 1 : node.to).number;
+        const firstText = doc.sliceString(node.from, doc.line(startLine).to);
+        const alertMatch = /^\s*>\s?\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i.exec(firstText);
+        const kind = alertMatch ? alertMatch[1]!.toLowerCase() : null;
+        for (let lineNumber = startLine; lineNumber <= endLine; lineNumber++) {
+          const line = doc.line(lineNumber);
+          const depth = quoteDepth(line.text);
+          const classes = ["cm-td-quote"];
+          if (kind && depth <= 1) classes.push("cm-td-alert", `cm-td-alert-${kind}`);
+          const attributes = depth > 1 ? { style: `--td-quote-depth: ${depth}` } : undefined;
+          out.push(Decoration.line({ class: classes.join(" "), attributes }).range(line.from));
+        }
+      } else if (/^ATXHeading[1-6]$/.test(node.name)) {
+        const level = Number(node.name.slice(-1));
+        const headingLine = doc.lineAt(node.from);
+        const previous = headingLine.number > 1 ? doc.line(headingLine.number - 1) : null;
+        const beforePrevious = headingLine.number > 2 ? doc.line(headingLine.number - 2) : null;
+        const gapOwnedBySeparator =
+          previous?.length === 0 && beforePrevious != null && beforePrevious.length > 0;
+        if (headingLine.number > 1 && !gapOwnedBySeparator) {
+          out.push(
+            Decoration.widget({
+              widget: new HeadingGapWidget(level),
+              block: true,
+              side: 1,
+            }).range(headingLine.from),
+          );
+        }
+      } else if (node.name === "Table") {
         claim(node.from, node.to);
         // Tables are always rendered as an editable grid widget; cell editing
         // happens inside the widget, so the caret never needs the raw source.
@@ -2166,18 +2548,51 @@ function buildBlocks(
       } else if (node.name === "FencedCode") {
         claim(node.from, node.to);
         const info = node.node.getChild("CodeInfo");
-        const lang = info ? doc.sliceString(info.from, info.to).trim().toLowerCase() : "";
-        if (lang !== "mermaid") return;
+        const lang = parseFenceInfo(
+          info ? doc.sliceString(info.from, info.to) : "",
+          info?.from ?? 0,
+        ).language.toLowerCase();
+        const openLine = doc.lineAt(node.from);
+        const prefix = doc.sliceString(openLine.from, node.from);
+        const marks = node.node.getChildren("CodeMark");
+        const closeLine = marks.length >= 2 ? doc.lineAt(marks[marks.length - 1]!.from) : null;
         const touched = touches(state, node.from, node.to);
         sensitive.push({ from: node.from, to: node.to, touched });
-        if (touched) return;
-        const codeText = node.node.getChild("CodeText");
-        const source = codeText ? doc.sliceString(codeText.from, codeText.to) : "";
+        let insideQuote = false;
+        for (let ancestor = node.node.parent; ancestor; ancestor = ancestor.parent) {
+          if (ancestor.name === "Blockquote") {
+            insideQuote = true;
+            break;
+          }
+        }
+        const insideDirective = directiveContainers.some(
+          (container) =>
+            openLine.number > container.openingLine && openLine.number < container.closingLine,
+        );
+        if (touched || insideQuote || insideDirective) {
+          if (/^[\s>]*$/.test(prefix) || /^\s*[-+*]\s+$/.test(prefix)) hideLine(openLine);
+          if (closeLine) hideLine(closeLine);
+          return;
+        }
         const first = doc.lineAt(node.from);
         const last = doc.lineAt(node.to > node.from ? node.to - 1 : node.to);
+        const firstContent = openLine.number < doc.lines ? doc.line(openLine.number + 1) : openLine;
+        const codeParts = node.node.getChildren("CodeText");
+        const source = codeParts.map((part) => doc.sliceString(part.from, part.to)).join("");
         out.push(
           Decoration.replace({
-            widget: new MermaidWidget(source),
+            widget:
+              lang === "mermaid"
+                ? new MermaidWidget(source)
+                : new CodeBlockWidget(
+                    source,
+                    lang,
+                    codeParts[0]?.from ?? firstContent.from,
+                    Math.max(1, (closeLine?.number ?? last.number + 1) - openLine.number - 1),
+                    prefix.replace(/^.*>[ \t]?/, "").replace(/^\s*[-+*]\s+/, "").length,
+                    prefix.includes(">"),
+                    /^\s*[-+*]\s+$/.test(prefix),
+                  ),
             block: true,
           }).range(first.from, last.to),
         );
@@ -2281,6 +2696,42 @@ export function blockField(config: LivePreviewConfig): StateField<BlockFieldValu
     }),
     update(value, tr) {
       const treeLen = syntaxTree(tr.state).length;
+      if (tr.docChanged) {
+        let simpleInlineEdit = true;
+        tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+          const line = tr.startState.doc.lineAt(fromA);
+          if (
+            inserted.lines > 1 ||
+            tr.startState.doc.sliceString(fromA, toA).includes("\n") ||
+            fromA - line.from < 4 ||
+            value.sensitive.some((range) => fromA <= range.to && toA >= range.from)
+          ) {
+            simpleInlineEdit = false;
+            return;
+          }
+          for (
+            let node: SyntaxNode | null = syntaxTree(tr.startState).resolveInner(fromA, 1);
+            node;
+            node = node.parent
+          ) {
+            if (/FencedCode|CodeBlock|Table|HTMLBlock|MathBlock/.test(node.name)) {
+              simpleInlineEdit = false;
+              break;
+            }
+          }
+        });
+        if (simpleInlineEdit) {
+          return {
+            deco: value.deco.map(tr.changes),
+            treeLen,
+            sensitive: value.sensitive.map((range) => ({
+              from: tr.changes.mapPos(range.from, 1),
+              to: tr.changes.mapPos(range.to, -1),
+              touched: range.touched,
+            })),
+          };
+        }
+      }
       if (!tr.docChanged && treeLen === value.treeLen) {
         // Selection-only transaction (positions are unchanged): the widgets
         // only differ when the caret entered or left a selection-sensitive

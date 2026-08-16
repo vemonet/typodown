@@ -41,7 +41,7 @@ test("nested blockquotes are decorated once, with their own depth", () => {
   // One `cm-td-quote` per line -- the inner blockquote must not re-decorate the
   // lines its parent already covers (which left them all at the same depth).
   expect(quoted.map((l) => l.cls.split(" ").filter((c) => c === "cm-td-quote").length)).toEqual([
-    1, 1, 1,
+    1, 1,
   ]);
   const inner = quoted.find((l) => l.text.includes("inner"))!;
   expect(inner.style).toContain("--td-quote-depth: 2");
@@ -60,6 +60,17 @@ test("hides the quote marker on a nested list line inside an alert", () => {
   parent.remove();
 });
 
+test("keeps the alert accent on its title line", () => {
+  const { parent, view } = render("> [!TIP]\n> Helpful text\n");
+  view.dispatch({ selection: { anchor: view.state.doc.length } });
+  const title = parent.querySelector<HTMLElement>(".cm-td-alert-title")!;
+  expect(title.dataset.label).toBe("Tip");
+  expect(title.closest(".cm-line")).not.toBeNull();
+
+  view.destroy();
+  parent.remove();
+});
+
 test("an alert's colour applies to its own level, not to quotes nested in it", () => {
   const { parent, view } = render("> [!WARNING]\n>\n> outer\n>\n> > inner\n");
   const rendered = lines(parent);
@@ -69,29 +80,28 @@ test("an alert's colour applies to its own level, not to quotes nested in it", (
   parent.remove();
 });
 
-test("a fenced code block inside a blockquote drops its fence lines and is not re-indented", () => {
+test("a fenced code block inside a blockquote keeps the quote decoration in both states", () => {
   const { parent, view } = render('> [!NOTE]\n>\n> ```sh\n> echo "hi"\n> ```\n');
-  const rendered = lines(parent);
-  const code = rendered.find((l) => l.text.includes("echo"))!;
-  // Both the quote and the code block style the line: the quote keeps its
-  // accent and gutter, the code block its fill.
-  expect(code.cls).toContain("cm-td-quote");
+  expect(parent.querySelector(".cm-td-code-widget")).toBeNull();
+  let code = lines(parent).find((line) => line.text.includes('echo "hi"'))!;
   expect(code.cls).toContain("cm-td-code");
-  // The `> ` marker is the quote's own gutter, not code indentation, so the
-  // block must not be shifted right by it.
-  expect(code.cls).not.toContain("cm-td-code-indented");
-  // Both fence lines are dropped from layout; the opening one used to survive
-  // as an empty quoted line, leaving a gap above the block.
-  const fences = rendered.filter((l) => l.cls.includes("cm-td-fence-hidden"));
-  expect(fences).toHaveLength(2);
+  expect(code.cls).toContain("cm-td-quote");
+  expect(code.cls).toContain("cm-td-alert-note");
+
+  view.dispatch({ selection: { anchor: view.state.doc.toString().indexOf("echo") } });
+  code = lines(parent).find((line) => line.text.includes('echo "hi"'))!;
+  expect(code.cls).toContain("cm-td-code");
+  expect(code.cls).toContain("cm-td-quote");
+  expect(code.cls).toContain("cm-td-alert-note");
   view.destroy();
   parent.remove();
 });
 
 test("list indentation inside a blockquote still indents the code block", () => {
   const { parent, view } = render("> - item\n>\n>   ```sh\n>   echo hi\n>   ```\n");
-  const code = lines(parent).find((l) => l.text.includes("echo"))!;
-  expect(code.cls).toContain("cm-td-code-indented");
+  const code = lines(parent).find((line) => line.text.includes("echo hi"))!;
+  expect(code.cls).toContain("cm-td-code");
+  expect(code.cls).toContain("cm-td-quote");
   expect(code.style).toContain("--cm-td-code-indent: 2ch");
   view.destroy();
   parent.remove();
@@ -113,25 +123,57 @@ test("no-break spaces in quote prefixes still produce alerts and fenced code", (
   expect(normalized).toContain(`> copied${nbsp}prose`);
 
   const { parent, view } = render(normalized);
-  const code = lines(parent).find((line) => line.text.includes("echo"))!;
-  expect(code.cls).toContain("cm-td-alert-warning");
+  const code = lines(parent).find((line) => line.text.includes(`echo${nbsp}hello`))!;
   expect(code.cls).toContain("cm-td-code");
-  expect(lines(parent).filter((line) => line.cls.includes("cm-td-fence-hidden"))).toHaveLength(2);
+  expect(code.cls).toContain("cm-td-quote");
+  expect(lines(parent).filter((line) => line.cls.includes("cm-td-fence-hidden"))).toHaveLength(0);
   view.destroy();
   parent.remove();
 });
 
-test("only internal directive paragraph gaps continue the gutter", () => {
+test("keeps the directive opening when its blank separator is collapsed", () => {
   const { parent, view } = render(":::warning\nfirst\n\nsecond\n:::\n");
   const rendered = lines(parent);
   const opening = rendered.find(
     (line) => line.cls.includes("cm-td-directive") && !line.cls.includes("cm-td-directive-content"),
   )!;
-  const second = rendered.find((line) => line.text.includes("second"))!;
   expect(opening.cls).toContain("cm-td-directive");
   expect(opening.cls).not.toContain("cm-td-directive-content");
-  expect(second.cls).toContain("cm-td-directive-content");
-  expect(second.cls).toContain("cm-td-para-gap");
+  expect(rendered.some((line) => line.text.includes("second"))).toBe(true);
+  view.destroy();
+  parent.remove();
+});
+
+test("nested blocks keep a directive's decoration while idle", () => {
+  const source = [
+    ":::warning Directive with a label wrapping other blocks",
+    "A directive container holding a list, a quote and a fence:",
+    "",
+    "- one",
+    "- two",
+    "",
+    "> quoted inside a directive",
+    "",
+    "```sh",
+    'echo "fence inside a directive"',
+    "```",
+    "",
+    ":::",
+  ].join("\n");
+  const { parent, view } = render(source);
+  view.dispatch({ selection: { anchor: source.length } });
+
+  expect(parent.querySelector(".cm-td-code-widget")).toBeNull();
+  for (const text of ["one", "quoted inside a directive", "fence inside a directive"]) {
+    const line = lines(parent).find((candidate) =>
+      text === "one" ? candidate.text.trim() === text : candidate.text.includes(text),
+    )!;
+    expect(line.cls, text).toContain("cm-td-directive-content");
+    expect(line.cls, text).toContain("cm-td-alert-warning");
+  }
+  const fence = lines(parent).find((line) => line.text.includes("fence inside a directive"))!;
+  expect(fence.cls).toContain("cm-td-code");
+
   view.destroy();
   parent.remove();
 });

@@ -323,10 +323,12 @@
 .typodown .cm-cursor {
   border-left-color: var(--td-fg);
 }
-/* Native selection (no drawSelection layer) so the highlight hugs the actual
- * glyphs instead of filling the whole line width. */
+/* Keep native selection styled for browser fallbacks and raw DOM operations. */
 .typodown .cm-content ::selection {
   background: var(--td-selection);
+}
+.typodown .cm-selectionBackground {
+  background: var(--td-selection) !important;
 }
 .typodown .cm-placeholder {
   color: var(--td-faint);
@@ -342,36 +344,45 @@
  * with it when a blank line happens to also be present. */
 .typodown .cm-td-heading {
   font-weight: 600;
-  line-height: 1.25;
-  padding-top: 0.75em;
+  line-height: 25.6px;
+}
+.typodown .cm-line:has(.cm-td-heading) {
+  height: 25.6px;
+}
+.typodown .cm-td-paragraph-gap {
+  height: 11.2px;
 }
 .typodown .cm-td-h1 {
   font-size: 2em;
-  padding-bottom: 0.3em;
   /* --td-heading-border, not --td-border-muted: in the dark palette the muted
    * border sits almost on top of the background and the rule vanishes. */
-  border-bottom: 1px solid var(--td-heading-border);
 }
 .typodown .cm-td-h2 {
   font-size: 1.5em;
-  padding-bottom: 0.3em;
-  border-bottom: 1px solid var(--td-heading-border);
+}
+.typodown .cm-td-h1 {
+  position: relative;
+  top: -12px;
+}
+.typodown .cm-td-h2 {
+  position: relative;
+  top: -7px;
+}
+.typodown .cm-line:has(.cm-td-h1),
+.typodown .cm-line:has(.cm-td-h2) {
+  box-shadow: inset 0 -1px 0 var(--td-heading-border);
 }
 .typodown .cm-td-h3 {
   font-size: 1.25em;
-  padding-top: 1.1em;
 }
 .typodown .cm-td-h4 {
   font-size: 1em;
-  padding-top: 1.1em;
 }
 .typodown .cm-td-h5 {
   font-size: 0.875em;
-  padding-top: 1.1em;
 }
 .typodown .cm-td-h6 {
   font-size: 0.85em;
-  padding-top: 1.1em;
   color: var(--td-muted);
 }
 
@@ -439,14 +450,56 @@
   --cm-td-code-top: inset 0 0 0 transparent;
   --cm-td-code-bottom: inset 0 0 0 transparent;
   background: var(--td-code-block-bg);
+  color: var(--td-code-fg);
   font-family: var(--td-mono);
-  font-size: 0.9em;
+  font-size: 1em;
   padding: 0 16px;
   box-shadow:
     inset 1px 0 0 var(--td-border-muted),
     inset -1px 0 0 var(--td-border-muted),
     var(--cm-td-code-top),
     var(--cm-td-code-bottom);
+}
+.typodown .cm-td-code-widget {
+  position: relative;
+  overflow: auto hidden;
+  padding: 10px 16px;
+  border-radius: 6px;
+  background: var(--td-code-block-bg);
+  box-shadow: inset 0 0 0 1px var(--td-border-muted);
+  color: var(--td-code-fg);
+  font-family: var(--td-mono);
+  line-height: 25.6px;
+  white-space: pre;
+}
+.typodown .cm-td-code-widget > code {
+  display: block;
+  margin: 0;
+  padding: 0;
+  color: inherit;
+  background: none;
+  font: inherit;
+}
+.typodown .cm-td-code-widget > .cm-td-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+}
+.typodown .cm-td-code-widget-quoted {
+  margin-left: 1em;
+  box-shadow:
+    -1em 0 0 -0.75em var(--td-border),
+    inset 0 0 0 1px var(--td-border-muted);
+}
+.typodown .cm-td-code-widget-frame {
+  position: relative;
+  padding-left: 1.25em;
+}
+.typodown .cm-td-code-widget-frame > .cm-td-code-widget-bullet {
+  position: absolute;
+  left: 0;
+  top: 0.7em;
 }
 /* Container indentation belongs to the rendered block, not its code text. */
 .typodown .cm-line.cm-td-code-indented {
@@ -459,21 +512,13 @@
   position: absolute;
   left: calc(-1 * var(--cm-td-code-indent));
 }
-/* The first content line always carries the block's top gap itself, as a
- * transparent border like `cm-td-para-gap`, so the space above a code block is
- * constant no matter what precedes it -- a paragraph, a heading, or another
- * code block whose closing fence line is display:none (live-preview.ts skips
- * adding paragraph gaps before fenced code, same as it does for headings).
- * The corner radius is elliptical: the vertical radius is inflated by the
- * border width so the *inner* curve -- the one the padding-box background and
- * inset shadows actually follow -- stays a round 6px instead of being
- * flattened square by the thick top border. */
+/* Active code uses the same vertical inset as the idle block widget. */
 .typodown .cm-td-code-top {
   --cm-td-code-top: inset 0 1px 0 var(--td-border-muted);
-  border-top: 0.7em solid transparent;
+  border-top: 0;
   background-clip: padding-box;
-  border-top-left-radius: 6px calc(0.7em + 6px);
-  border-top-right-radius: 6px calc(0.7em + 6px);
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
   padding-top: 10px;
   padding-right: 48px;
   position: relative;
@@ -488,9 +533,11 @@
   /* Anchor for the floating language selector. */
   position: relative;
 }
-
 /* Front matter top: like cm-td-code-top but no paragraph gap border, since
  * YAML front matter is always at position 0 of the document. */
+.typodown .cm-td-fm {
+  line-height: var(--cm-td-fm-line-height);
+}
 .typodown .cm-td-fm-top {
   --cm-td-code-top: inset 0 1px 0 var(--td-border-muted);
   border-top-left-radius: 6px;
@@ -682,19 +729,29 @@
   color: var(--td-fg);
   background: transparent;
 }
-.typodown .cm-td-alert-note {
+.typodown .cm-line:has(.cm-td-alert-title) {
+  box-shadow: inset 0.25em 0 0 var(--td-alert-color);
+  padding-left: 1em;
+  color: var(--td-fg);
+}
+.typodown .cm-td-alert-note,
+.typodown .cm-line:has(.cm-td-alert-note) {
   --td-alert-color: var(--td-note);
 }
-.typodown .cm-td-alert-tip {
+.typodown .cm-td-alert-tip,
+.typodown .cm-line:has(.cm-td-alert-tip) {
   --td-alert-color: var(--td-tip);
 }
-.typodown .cm-td-alert-important {
+.typodown .cm-td-alert-important,
+.typodown .cm-line:has(.cm-td-alert-important) {
   --td-alert-color: var(--td-important);
 }
-.typodown .cm-td-alert-warning {
+.typodown .cm-td-alert-warning,
+.typodown .cm-line:has(.cm-td-alert-warning) {
   --td-alert-color: var(--td-warning);
 }
-.typodown .cm-td-alert-caution {
+.typodown .cm-td-alert-caution,
+.typodown .cm-line:has(.cm-td-alert-caution) {
   --td-alert-color: var(--td-caution);
 }
 .typodown .cm-td-alert-title {
@@ -735,18 +792,23 @@
 
 /* ---- lists -------------------------------------------------------------- */
 
-/* Bullets are CSS shapes at one fixed size so disc / circle / square all read
- * consistently (Unicode bullet glyphs vary wildly in size). The shape cycles
- * with nesting depth, GitHub-style. */
-/* The gap to the item's text is mostly the source's own space character, which
- * live-preview.ts deliberately leaves visible; the margin here only tops it up.
- */
-.typodown .cm-td-bullet {
-  display: inline-block;
+/* Unordered and ordered markers share a fixed gutter, so `- item` and
+ * `1. item` start their text at the same position. The source's own space after
+ * the marker remains editable. */
+.typodown .cm-td-list-marker {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25em;
+  vertical-align: middle;
+}
+.typodown .cm-td-bullet-shape {
+  box-sizing: border-box;
+  display: block;
   width: 0.4em;
   height: 0.4em;
-  margin-right: 0.35em;
-  vertical-align: middle;
+  flex: none;
   color: var(--td-fg);
 }
 .typodown .cm-td-bullet-0 {
@@ -761,7 +823,9 @@
   background: currentColor;
 }
 .typodown .cm-td-list-mark {
+  justify-content: flex-end;
   color: var(--td-muted);
+  white-space: nowrap;
 }
 .typodown .cm-td-task-box {
   margin: 0 0.15em 0 0;
@@ -798,7 +862,7 @@
   /* The table is a block widget, so line-level paragraph gaps don't reach it;
    * give it its own vertical breathing room (padding is inside the widget box,
    * which CodeMirror measures, so it doesn't drift coordinates). */
-  padding: 0.4em 0;
+  padding: 0;
 }
 .typodown .cm-td-table {
   border-collapse: collapse;
@@ -806,7 +870,7 @@
 .typodown .cm-td-table th,
 .typodown .cm-td-table td {
   border: 1px solid var(--td-border);
-  padding: 6px 13px;
+  padding: 0 13px;
   /* Cells are contentEditable plaintext; keep the caret inside the cell and
    * let typing flow naturally without the editor's monospace/line-height. */
   outline: none;
@@ -1316,7 +1380,8 @@
 .typodown .cm-td-html img {
   max-width: 100%;
 }
-.typodown .cm-td-html kbd {
+.typodown .cm-td-html kbd,
+.typodown .cm-td-kbd {
   display: inline-block;
   font-family: var(--td-mono);
   font-size: 0.85em;

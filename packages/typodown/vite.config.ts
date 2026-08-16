@@ -26,7 +26,7 @@ export default defineConfig({
       globalName: "Typodown",
       platform: "browser",
       minify: true,
-      deps: { alwaysBundle: [/^@codemirror\//, /^@lezer\//] },
+      deps: { alwaysBundle: [/^@codemirror\//, /^@lezer\//, /^dompurify$/, /^katex$/] },
       outputOptions: { codeSplitting: false },
       dts: false,
       clean: false,
