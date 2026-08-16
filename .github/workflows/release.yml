@@ -108,10 +108,8 @@ jobs:
         run: vp i
 
       # On a tag push releaseId is set, so bundles are uploaded to the draft
-      # release. On a dry run releaseId is empty, so tauri-action only builds
-      # and exposes the paths via its artifactPaths output.
+      # release. Workflow artifacts are also kept for manual dry runs.
       - name: Build desktop bundles
-        id: tauri
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -120,21 +118,18 @@ jobs:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
 
-      - name: Stage bundles for upload (dry run)
-        if: needs.create-release.outputs.release_id == ''
-        shell: bash
-        run: |
-          mkdir -p dist-artifacts
-          echo '${{ steps.tauri.outputs.artifactPaths }}' | jq -r '.[]' | while read -r p; do
-            cp -r "$p" dist-artifacts/
-          done
-
       - name: Upload bundles to workflow run (dry run)
         if: needs.create-release.outputs.release_id == ''
         uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.rust_targets }}
-          path: dist-artifacts/*
+          path: |
+            ${{ env.APP_PATH }}/src-tauri/target/**/release/bundle/**/*.dmg
+            ${{ env.APP_PATH }}/src-tauri/target/**/release/bundle/**/*.msi
+            ${{ env.APP_PATH }}/src-tauri/target/**/release/bundle/**/*-setup.exe
+            ${{ env.APP_PATH }}/src-tauri/target/**/release/bundle/**/*.AppImage
+            ${{ env.APP_PATH }}/src-tauri/target/**/release/bundle/**/*.deb
+            ${{ env.APP_PATH }}/src-tauri/target/**/release/bundle/**/*.rpm
           if-no-files-found: error
 
   # Build a signed universal Android APK.
@@ -168,7 +163,12 @@ jobs:
         uses: android-actions/setup-android@v4.0.1
 
       - name: Install Android NDK
-        run: sdkmanager "ndk;27.2.12479018"
+        run: |
+          sdkmanager "ndk;27.2.12479018"
+          td_ndk_home="$ANDROID_SDK_ROOT/ndk/27.2.12479018"
+          test -f "$td_ndk_home/source.properties"
+          echo "NDK_HOME=$td_ndk_home" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$td_ndk_home" >> "$GITHUB_ENV"
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -209,8 +209,6 @@ jobs:
           echo "Set Android app version to $v"
 
       - name: Build signed APK and AAB
-        env:
-          NDK_HOME: ${{ env.ANDROID_NDK_ROOT }}
         run: npm run tauri android build -- --apk --aab
         working-directory: ${{ env.APP_PATH }}
 
