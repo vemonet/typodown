@@ -62,7 +62,19 @@
 
 /* Named editor themes also provide the app surface colours. Keeping these on
  * the root makes the Tauri shell and PWA chrome blend into the editor instead
- * of retaining the generic light/dark background. */
+ * of retaining the generic light/dark background.
+ *
+ * The plain light/dark themes need this just as much. The shadcn dark palette's
+ * --background is a near-pure black (#0a0a0a) while the editor's dark surface is
+ * #161819, so the file explorer and the margins around the centred text column
+ * read as a black slab next to a lighter editor. Light mode never showed it
+ * because both surfaces are already #ffffff. `data-color-mode` is set to the
+ * *resolved* mode by color-mode.tsx, so "dark" covers system-dark too. */
+:root[data-color-mode="dark"] {
+  --background: #161819;
+  --foreground: #e6edf3;
+}
+
 :root[data-color-mode="dracula"] {
   --background: #282a36;
   --foreground: #f8f8f2;

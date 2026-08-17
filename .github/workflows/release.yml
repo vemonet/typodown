@@ -111,6 +111,16 @@ jobs:
       - name: Install dependencies
         run: vp i
 
+      # There is no Apple Developer account behind this repo, so the app cannot
+      # be signed with a Developer ID nor notarized. Ad-hoc signing ("-") is the
+      # next best thing: it produces a valid, self-contained signature.
+      # Set through the env rather than tauri.conf.json so local builds are
+      # unaffected. Swap in a real identity + APPLE_ID/APPLE_PASSWORD/
+      # APPLE_TEAM_ID secrets here if an Apple account ever exists.
+      - name: Enable ad-hoc code signing (macOS)
+        if: startsWith(matrix.platform, 'macos')
+        run: echo "APPLE_SIGNING_IDENTITY=-" >> "$GITHUB_ENV"
+
       # On a tag push releaseId is set, so bundles are uploaded to the draft
       # release. Workflow artifacts are also kept for manual dry runs.
       - name: Build desktop bundles
@@ -122,6 +132,22 @@ jobs:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           assetNamePattern: ${{ matrix.asset_name }}
           args: ${{ matrix.args }}
+
+      # Fail loudly if the ad-hoc signature did not stick: a bundle that ships
+      # unsigned is the exact thing this is meant to prevent, and the symptom
+      # only shows up on a user's machine after download.
+      - name: Verify the macOS signature
+        if: startsWith(matrix.platform, 'macos')
+        working-directory: ${{ env.APP_PATH }}/src-tauri
+        run: |
+          set -euo pipefail
+          app=$(find "target/${{ matrix.rust_targets }}/release/bundle/macos" -maxdepth 1 -name '*.app' | head -1)
+          if [ -z "$app" ]; then
+            echo "::error::No .app bundle found"
+            exit 1
+          fi
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign --display --verbose=2 "$app"
 
       - name: Upload bundles to workflow run (dry run)
         if: needs.create-release.outputs.release_id == ''

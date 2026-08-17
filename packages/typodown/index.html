@@ -1112,6 +1112,14 @@ Open a folder of markdown files, with a file explorer tree on the left. You can 
 
 Additionally the app enables a **graph view** built from files using the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf): see how your notes link to each other, and jump to any node.
 
+On macOS the app is only ad-hoc signed, not notarized (that requires a paid Apple Developer account), so macOS will refuse to open it on the first try. After dragging it to your Applications folder, **right-click the app → Open**, then confirm in the dialog. You only need to do this once.
+
+If macOS still says the app is damaged, clear the download quarantine flag from a terminal:
+
+\`\`\`sh
+xattr -dr com.apple.quarantine /Applications/Typodown.app
+\`\`\`
+
 ### 🌐 Progressive Web App
 
 [Open Typodown Vault](https://typodown.app/vault/) to edit a local folder directly in your browser, with the same file explorer, editor and graph view as the desktop app. It can also be installed as a PWA for a standalone app experience.
@@ -1283,7 +1291,7 @@ Define a custom theme:
 
 ### Lightweight and scalable
 
-The desktop app is built with [Tauri](https://tauri.app), which is more lightweight than Electron (used by most alternatives) and uses the system's webview instead of bundling Chromium. The app is ~20 MB on disk, compared to ~200 MB for an Electron app.
+The desktop app is built with [Tauri](https://tauri.app), which is more lightweight than Electron (used by most alternatives) and uses the system's webview instead of bundling Chromium. The app is ~10 MB on disk, compared to ~200 MB for an Electron app.
 
 Measured editing actions complete in the 1-10 ms range, comparable to alternatives. Typodown scales well on large documents because CodeMirror renders only the visible viewport and a small buffer, instead of mounting the entire document in the DOM.
 

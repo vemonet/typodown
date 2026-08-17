@@ -13,13 +13,13 @@
 
 ---
 
-Typodown blends reading and writing markdown into one continuous experience. Markdown renders where you type: no preview pane to keep in sync, no mode to toggle, no markup cluttering the page.
+Markdown renders where you type: no preview pane, no markup cluttering the page. Reading and writing blend into one continuous experience.
 
 Move your caret into a heading, **bold term**, `code span` or [link](/) and only its raw markers surface for the moment you edit them, then settle back into place as you move on. The content stays central, the syntax stays out of the way.
 
 ## Features
 
-- **Seamless markdown editing.** WYSIWYG, edit rendered markdown directly. No preview to keep in sync.
+- **Seamless markdown editing.** WYSIWYG, edit rendered markdown directly.
 - **Syntax reveals under the cursor.** Raw markers appear only for the construct you are editing, everything else stays rendered.
 - **GitHub Flavored Markdown.** GFM alerts (`> [!NOTE]`), task lists, editable tables, images, links, YAML front matter and arbitrary HTML.
 - **LaTeX math and Mermaid diagrams.** Inline `$...$` and block `$$...$$` rendered with KaTeX.
