@@ -2,6 +2,21 @@
 
 All notable changes to Typodown.
 
+## [0.0.2] - 2026-08-17
+
+### Documentation
+
+- Improve landing page
+
+### Features
+
+- Add pdf and html exports to the tauri app (@vemonet)
+
+### Miscellaneous
+
+- Improve benchmark, improve codeblock copy button (@vemonet)
+- Sign .dmg (@vemonet)
+
 ## [0.0.1] - 2026-08-16
 
 ### Bug Fixes
@@ -30,7 +45,8 @@ All notable changes to Typodown.
 - Fix aliases (@vemonet)
 - Fix windows build (@vemonet)
 - Improve release process (@vemonet)
-- Fix release process
+- Fix release process (@vemonet)
+- Release v0.0.1 (@vemonet)
 
 ### Performance
 
