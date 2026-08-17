@@ -24,9 +24,9 @@ export function renderMarkdownReport(report) {
   const largeTypodown = engineResult(report.largeResults, "typodown");
   const largeMuya = engineResult(report.largeResults, "muya");
   lines.push(
-    `The large mixed document contains ${largeTypodown.sections.toLocaleString("en-US")} sections. Typodown used ${largeTypodown.resources.domNodes.toLocaleString("en-US")} DOM nodes versus ${largeMuya.resources.domNodes.toLocaleString("en-US")} for Muya (${ratio(largeTypodown.resources.domNodes, largeMuya.resources.domNodes)} fewer), and ${fixed(largeTypodown.resources.jsHeapMiB, 1)} MiB retained JavaScript heap versus ${fixed(largeMuya.resources.jsHeapMiB, 1)} MiB.`,
+    `The large mixed document contains ${largeTypodown.sections.toLocaleString("en-US")} sections. Typodown used ${largeTypodown.resources.domNodes.toLocaleString("en-US")} DOM nodes versus ${largeMuya.resources.domNodes.toLocaleString("en-US")} for [Muya](https://github.com/marktext/marktext/tree/develop/packages/muya) (${ratio(largeTypodown.resources.domNodes, largeMuya.resources.domNodes)} fewer), and ${fixed(largeTypodown.resources.jsHeapMiB, 1)} MiB retained JavaScript heap versus ${fixed(largeMuya.resources.jsHeapMiB, 1)} MiB.`,
     "",
-    `Across the measured large-document action batch, Typodown used ${fixed(largeTypodown.resources.taskMs, 1)} ms of Chromium task time versus ${fixed(largeMuya.resources.taskMs, 1)} ms for Muya (${ratio(largeTypodown.resources.taskMs, largeMuya.resources.taskMs)} less).`,
+    `Across the measured large-document action batch, Typodown used ${fixed(largeTypodown.resources.taskMs, 1)} ms of Chromium task time versus ${fixed(largeMuya.resources.taskMs, 1)} ms for [Muya](https://github.com/marktext/marktext/tree/develop/packages/muya) (${ratio(largeTypodown.resources.taskMs, largeMuya.resources.taskMs)} less).`,
     "",
     "## Environment",
     "",

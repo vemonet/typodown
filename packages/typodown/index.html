@@ -1291,9 +1291,12 @@ Define a custom theme:
 
 ### Lightweight and scalable
 
-The desktop app is built with [Tauri](https://tauri.app), which is more lightweight than Electron (used by most alternatives) and uses the system's webview instead of bundling Chromium. The app is ~10 MB on disk, compared to ~200 MB for an Electron app.
+The desktop/smartphone app is built with:
 
-Measured editing actions complete in the 1-10 ms range, comparable to alternatives. Typodown scales well on large documents because CodeMirror renders only the visible viewport and a small buffer, instead of mounting the entire document in the DOM.
+- [x] [Tauri](https://tauri.app), which is more lightweight than Electron, used by most alternatives, and uses the system's webview instead of bundling Chromium. The app is ~10 MB on disk, compared to ~200 MB for an Electron app.
+- [x] [SolidJS](https://www.solidjs.com).
+
+[Measured actions](https://github.com/vemonet/typodown/blob/main/packages/typodown/tests/benchmark/RESULTS.md) complete in the 1-30 ms range, comparable to alternatives. Typodown scales well on large documents because [CodeMirror](https://codemirror.net) renders only the visible viewport and a small buffer, instead of mounting the entire document in the DOM.
 
 [^1]: Footnotes are useful for citations and additional context.
 

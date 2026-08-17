@@ -4,9 +4,9 @@ Generated: 2026-08-16T21:35:41.847Z
 
 ## Summary
 
-The large mixed document contains 1,000 sections. Typodown used 702 DOM nodes versus 139,622 for Muya (198.9x fewer), and 28.0 MiB retained JavaScript heap versus 39.4 MiB.
+The large mixed document contains 1,000 sections. Typodown used 702 DOM nodes versus 139,622 for [Muya](https://github.com/marktext/marktext/tree/develop/packages/muya) (198.9x fewer), and 28.0 MiB retained JavaScript heap versus 39.4 MiB.
 
-Across the measured large-document action batch, Typodown used 10759.0 ms of Chromium task time versus 17318.7 ms for Muya (1.6x less).
+Across the measured large-document action batch, Typodown used 10759.0 ms of Chromium task time versus 17318.7 ms for [Muya](https://github.com/marktext/marktext/tree/develop/packages/muya) (1.6x less).
 
 ## Environment
 
