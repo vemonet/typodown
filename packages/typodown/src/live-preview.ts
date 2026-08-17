@@ -451,6 +451,15 @@ function createCopyButton(source: string): HTMLButtonElement {
   return button;
 }
 
+function pinToHorizontalScroll(element: HTMLElement, scroller: HTMLElement): () => void {
+  const update = (): void => {
+    element.style.transform = `translateX(${scroller.scrollLeft}px)`;
+  };
+  update();
+  scroller.addEventListener("scroll", update, { passive: true });
+  return () => scroller.removeEventListener("scroll", update);
+}
+
 function renderedCharacterWidth(code: HTMLElement, fallback: number): number {
   const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
   for (let text = walker.nextNode(); text; text = walker.nextNode()) {
@@ -465,18 +474,24 @@ function renderedCharacterWidth(code: HTMLElement, fallback: number): number {
 }
 
 class CopyButtonWidget extends WidgetType {
+  private unpin?: () => void;
+
   constructor(readonly source: string) {
     super();
   }
   eq(other: CopyButtonWidget): boolean {
     return other.source === this.source;
   }
-  toDOM(): HTMLElement {
+  toDOM(view: EditorView): HTMLElement {
     const wrap = document.createElement("span");
     wrap.className = "cm-td-copy-wrap";
     wrap.contentEditable = "false";
     wrap.appendChild(createCopyButton(this.source));
+    this.unpin = pinToHorizontalScroll(wrap, view.scrollDOM);
     return wrap;
+  }
+  destroy(): void {
+    this.unpin?.();
   }
   ignoreEvent(): boolean {
     return true;
@@ -532,7 +547,9 @@ class CodeBlockWidget extends WidgetType {
       offset = token.to;
     }
     if (offset < this.source.length) code.append(this.source.slice(offset));
-    block.append(code, createCopyButton(this.source));
+    const copyButton = createCopyButton(this.source);
+    block.append(code, copyButton);
+    pinToHorizontalScroll(copyButton, block);
     block.addEventListener("mousedown", (event) => {
       if ((event.target as HTMLElement).closest("button")) return;
       event.preventDefault();
@@ -2764,25 +2781,43 @@ export function blockField(config: LivePreviewConfig): StateField<BlockFieldValu
         let simpleInlineEdit = true;
         tr.changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
           const line = tr.startState.doc.lineAt(fromA);
-          if (
-            inserted.lines > 1 ||
-            tr.startState.doc.sliceString(fromA, toA).includes("\n") ||
-            fromA - line.from < 4 ||
-            value.sensitive.some((range) => fromA <= range.to && toA >= range.from)
-          ) {
+          const overlapsSensitive = value.sensitive.some(
+            (range) => fromA <= range.to && toA >= range.from,
+          );
+          if (inserted.lines > 1 || tr.startState.doc.sliceString(fromA, toA).includes("\n")) {
             simpleInlineEdit = false;
             return;
           }
+          let activeFencedCodeEdit = false;
           for (
             let node: SyntaxNode | null = syntaxTree(tr.startState).resolveInner(fromA, 1);
             node;
             node = node.parent
           ) {
-            if (/FencedCode|CodeBlock|Table|HTMLBlock|MathBlock/.test(node.name)) {
+            if (node.name === "FencedCode") {
+              // Editing ordinary text in an already active fence cannot change
+              // any block replacement. Map the existing document-wide block
+              // decorations and let the viewport decorator re-highlight the
+              // changed code. Idle fences still rebuild so their CodeBlockWidget
+              // receives the new source, while delimiter edits resolve outside
+              // CodeText and take the structural path below.
+              const codeText = node
+                .getChildren("CodeText")
+                .find((part) => fromA >= part.from && toA <= part.to);
+              const activeFence = value.sensitive.some(
+                (range) => range.touched && fromA >= range.from && toA <= range.to,
+              );
+              activeFencedCodeEdit = Boolean(codeText && activeFence);
+              if (!activeFencedCodeEdit) simpleInlineEdit = false;
+              break;
+            }
+            if (/CodeBlock|Table|HTMLBlock|MathBlock/.test(node.name)) {
               simpleInlineEdit = false;
               break;
             }
           }
+          if (fromA - line.from < 4 && !activeFencedCodeEdit) simpleInlineEdit = false;
+          if (overlapsSensitive && !activeFencedCodeEdit) simpleInlineEdit = false;
         });
         if (simpleInlineEdit) {
           return {

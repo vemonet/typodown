@@ -74,6 +74,24 @@ test("renders history, formatting, utility and toggle groups", () => {
   wrapper.remove();
 });
 
+test("reveals a show button while the toolbar is hidden", () => {
+  const { wrapper, view, handle } = mount();
+  const bar = wrapper.querySelector<HTMLElement>(".cm-td-toolbar")!;
+  const show = wrapper.querySelector<HTMLButtonElement>(".cm-td-toolbar-show")!;
+
+  buttons(wrapper)["Hide toolbar"]!.click();
+  expect(bar.style.display).toBe("none");
+  expect(show.style.display).toBe("");
+
+  show.click();
+  expect(bar.style.display).toBe("");
+  expect(show.style.display).toBe("none");
+
+  handle.destroy();
+  view.destroy();
+  wrapper.remove();
+});
+
 test("undo and redo track the history depth", () => {
   const { wrapper, view, handle } = mount();
   const { Undo, Redo } = buttons(wrapper);

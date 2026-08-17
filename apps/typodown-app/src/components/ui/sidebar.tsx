@@ -88,7 +88,7 @@ const Sidebar: Component<SidebarProps> = (props) => {
 
   return (
     <div
-      class="group peer hidden text-sidebar-foreground md:block"
+      class="group peer block text-sidebar-foreground"
       data-state={state()}
       data-collapsible={state() === "collapsed" ? local.collapsible : ""}
       data-variant={local.variant}
@@ -97,12 +97,12 @@ const Sidebar: Component<SidebarProps> = (props) => {
     >
       <div
         data-slot="sidebar-gap"
-        class="relative z-sidebar-gap w-(--sidebar-width) bg-transparent group-data-[collapsible=offcanvas]:w-0 group-data-[side=right]:rotate-180"
+        class="relative z-sidebar-gap hidden w-(--sidebar-width) bg-transparent group-data-[collapsible=offcanvas]:w-0 group-data-[side=right]:rotate-180 md:block"
       />
       <div
         data-slot="sidebar-container"
         class={cn(
-          "fixed inset-y-0 top-2 z-10 hidden w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
+          "fixed inset-y-0 top-2 z-40 flex w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:z-10",
           local.side === "left"
             ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
             : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",

@@ -31,6 +31,8 @@ import { IS_TAURI } from "@/lib/tauri";
  * the overlay titlebar. */
 const IS_MOBILE_OS = /android|iphone|ipad/i.test(navigator.userAgent);
 
+const IS_SMALL_SCREEN = window.matchMedia("(max-width: 767px)").matches;
+
 /** Android replaces the auto-save with an explicit Save button in the editor
  * toolbar (cloud SAF writes on every keystroke churn conflict copies on the
  * provider). */
@@ -81,26 +83,22 @@ const App: Component = () => {
       </Show>
 
       <div class="flex flex-1 overflow-hidden">
-        {/* Left: floating file explorer. Hidden on mobile, where opening a
-         * folder from the filesystem is not supported. The document outline
-         * lives in the editor itself (the Typodown library renders its own
-         * right-docked outline panel + toggle). */}
-        <SidebarProvider style={{ "--sidebar-width": "17rem" } as JSX.CSSProperties}>
-          <Show when={!IS_MOBILE_OS}>
-            <Sidebar variant="floating" collapsible="offcanvas" class="pt-6">
-              <SidebarContent>
-                <FileExplorer />
-              </SidebarContent>
-            </Sidebar>
-          </Show>
+        {/* Left: floating file explorer on desktop and an off-canvas drawer on
+         * small screens. */}
+        <SidebarProvider
+          defaultOpen={!IS_SMALL_SCREEN}
+          style={{ "--sidebar-width": "17rem" } as JSX.CSSProperties}
+        >
+          <MobileSidebarBackdrop />
+          <Sidebar variant="floating" collapsible="offcanvas" class="pt-6">
+            <SidebarContent>
+              <FileExplorer />
+            </SidebarContent>
+          </Sidebar>
           <SidebarInset class="relative flex flex-col overflow-hidden">
             {/* The file-explorer toggle floats in the editor margin instead of
              * taking a full row. */}
-            <Show when={!IS_MOBILE_OS}>
-              <div class="absolute left-1.5 top-1.5 z-30 rounded-md bg-background/60 backdrop-blur-sm">
-                <LeftToggle />
-              </div>
-            </Show>
+            <LeftToggle />
             <div class="z-sidebar-inset flex-1 overflow-hidden">
               <Show
                 when={vault.view() === "graph"}
@@ -128,20 +126,39 @@ const LeftToggle: Component = () => {
   const expanded = () => state() === "expanded";
   const label = () => (expanded() ? "Close file explorer" : "Open file explorer");
   return (
-    <Tooltip>
-      <TooltipTrigger
-        as={Button}
-        variant="ghost"
-        size="icon-sm"
+    <div
+      class="file-explorer-toggle absolute left-1.5 top-1.5 z-50 rounded-md bg-background/60 backdrop-blur-sm"
+      data-expanded={expanded()}
+    >
+      <Tooltip>
+        <TooltipTrigger
+          as={Button}
+          variant="ghost"
+          size="icon-sm"
+          onClick={toggleSidebar}
+          aria-label={label()}
+        >
+          <Show when={expanded()} fallback={<PanelLeftOpen class="size-4" />}>
+            <PanelLeftClose class="size-4" />
+          </Show>
+        </TooltipTrigger>
+        <TooltipContent>{label()}</TooltipContent>
+      </Tooltip>
+    </div>
+  );
+};
+
+const MobileSidebarBackdrop: Component = () => {
+  const { state, toggleSidebar } = useSidebar();
+  return (
+    <Show when={state() === "expanded"}>
+      <button
+        type="button"
+        class="fixed inset-0 z-30 hidden bg-black/20 max-md:block"
+        aria-label="Close file explorer"
         onClick={toggleSidebar}
-        aria-label={label()}
-      >
-        <Show when={expanded()} fallback={<PanelLeftOpen class="size-4" />}>
-          <PanelLeftClose class="size-4" />
-        </Show>
-      </TooltipTrigger>
-      <TooltipContent>{label()}</TooltipContent>
-    </Tooltip>
+      />
+    </Show>
   );
 };
 

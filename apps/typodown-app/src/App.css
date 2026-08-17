@@ -171,6 +171,15 @@
   left: 3rem;
 }
 
+/* On small screens the file explorer overlays the editor. Keep its toggle at
+ * the drawer's right edge while open so it remains visible and does not cover
+ * the vault name. */
+@media (max-width: 767px) {
+  .file-explorer-toggle[data-expanded="true"] {
+    left: calc(var(--sidebar-width) - 2.75rem);
+  }
+}
+
 /* In the app the wrapper has a fixed height (only the CodeMirror scroller
  * scrolls), so sticky positioning never engages; take the toolbar anchor out
  * of the flow and pin it inside the wrapper's 2.5rem top padding instead. */

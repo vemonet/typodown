@@ -31,10 +31,10 @@ body:
       label: How impactful is this issue?
       description: Select the option that best describes how this issue affects you.
       options:
-        - Makes the app unusable
-        - Painful, but a workaround exists
-        - Minor inconvenience
         - Improvement request
+        - Minor inconvenience
+        - Painful, but a workaround exists
+        - Makes the app unusable
     validations:
       required: true
 

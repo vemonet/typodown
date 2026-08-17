@@ -30,8 +30,8 @@
   --td-caution: #cf222e;
 
   --td-font:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji";
+    "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial,
+    sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   --td-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
   --syn-keyword: #cf222e;
@@ -593,14 +593,16 @@
   height: 28px;
   padding: 0;
   color: var(--td-muted);
-  background: var(--td-code-block-bg);
+  background: color-mix(in srgb, var(--td-code-block-bg) 72%, transparent);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   border: 1px solid var(--td-border-muted);
   border-radius: 6px;
   cursor: pointer;
 }
 .typodown .cm-td-copy:hover {
   color: var(--td-fg);
-  background: var(--td-bg);
+  background: color-mix(in srgb, var(--td-bg) 82%, transparent);
 }
 .typodown .cm-td-copy:focus-visible {
   outline: 2px solid var(--td-link);
@@ -1061,10 +1063,9 @@
 .cm-td-toolbar-show {
   position: absolute;
   top: 0;
-  /* Float in the margin left of the text column. The offset is measured by
-   * toolbar.ts (as much as 2.75rem, less when the host page leaves less room
-   * before the viewport edge); hosts can override `left` to reposition. */
-  left: var(--td-toolbar-show-left, -2.75rem);
+  /* Keep the reveal control inside the editor because the wrapper clips
+   * overflow. Hosts can still move it to avoid their own floating controls. */
+  left: 8px;
   display: flex;
   align-items: center;
   justify-content: center;

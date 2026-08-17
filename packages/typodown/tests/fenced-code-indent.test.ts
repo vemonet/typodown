@@ -22,10 +22,18 @@ test("indents a fenced code block nested in a list instead of its code", () => {
   expect(Number.parseFloat(codeBlock.style.height)).toBeCloseTo(102.8);
   expect(codeBlock.style.paddingBlock).toBe("10px");
   expect(codeBlock.querySelector(":scope > .cm-td-copy")).not.toBeNull();
+  const copyButton = codeBlock.querySelector<HTMLElement>(":scope > .cm-td-copy")!;
+  codeBlock.scrollLeft = 120;
+  codeBlock.dispatchEvent(new Event("scroll"));
+  expect(copyButton.style.transform).toBe("translateX(120px)");
   expect(codeBlock.textContent).toContain('"answer": 42');
   expect(codeBlock.querySelector(".cm-td-tok-property")?.textContent).toBe('"answer"');
 
   view.dispatch({ selection: { anchor: doc.indexOf("answer") } });
+  const activeCopy = parent.querySelector<HTMLElement>(".cm-td-copy-wrap")!;
+  view.scrollDOM.scrollLeft = 80;
+  view.scrollDOM.dispatchEvent(new Event("scroll"));
+  expect(activeCopy.style.transform).toBe("translateX(80px)");
   expect(selectCodeContent(view)).toBe(true);
   const selected = view.state.sliceDoc(
     view.state.selection.main.from,

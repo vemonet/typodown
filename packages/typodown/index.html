@@ -707,8 +707,8 @@
       <img src="/logo.png" width="88" height="88" alt="Typodown" class="hero-logo" />
       <h1>Seamless markdown editing,<br />everywhere you write.</h1>
       <p class="hero-sub">
-        Typodown blends reading and writing into one continuous experience. Markdown renders where
-        you type: no preview pane, no markup cluttering the page.
+        In <b>Typodown</b>, Markdown renders where you type: no preview pane, no markup cluttering
+        the page. Reading and writing blend into one continuous experience.
       </p>
       <p class="hero-sub">
         Open-source & cross-platform, inspired by
@@ -1069,14 +1069,12 @@ Markdown renders where you type. Move your caret into a **bold term**, \`code sp
 
 ## Why?
 
-[**Typora**](https://typora.io) nailed markdown editing: you edit the rendered document directly. But Typora is a closed-source desktop app, so that experience stops at its window.
+[**Typora**](https://typora.io) nailed markdown editing: you edit the rendered document directly. But Typora is a closed-source desktop app, so that experience stops at its electron window.
 
 [**Marktext**](https://marktext.me/) came up with a really good open-source alternative to Typora. However, as a long time Typora user, a few things were not feeling right:
 
 - Marktext is not as minimalist as Typora. It has a different design philosophy where it shows all available actions on the screen. Which might be good for some users, but not zen enough for me.
-  - Every time I click a different line, a button moves in the left margin; every time I highlight some characters, a toolbar pops on top of the selection. Too many unnecessary movements on the screen to me.
-  - Codeblocks \`\`\` could be always hidden, no need to reveal them; frontmatter does not need a "front matter delimiter" written all around it, etc.
-- Despite 10+ themes I could not find a good imitation of GitHub style markdown rendering, which is arguably the style developers are the most exposed to. And custom CSS seems to have its limitations (I could not figure out how to make the \`<hr>\` a plain line instead of the default dotted line)
+- Despite many themes I could not find a good imitation of GitHub style markdown rendering, which is arguably the style developers are the most exposed to, and custom CSS seems to have its limitations.
 
 **Typodown** brings Typora's editing experience to the open-source world, the web, VSCode and smartphones, with a minimalist design, GitHub style rendering, and more.
 
@@ -1285,9 +1283,9 @@ Define a custom theme:
 
 ### Lightweight and scalable
 
-The desktop app is built with [Tauri](https://tauri.app), which is more lightweight than Electron (used by Typora and Marktext) and uses the system's webview instead of bundling Chromium. The app is ~20 MB on disk, compared to ~200 MB for an Electron app.
+The desktop app is built with [Tauri](https://tauri.app), which is more lightweight than Electron (used by most alternatives) and uses the system's webview instead of bundling Chromium. The app is ~20 MB on disk, compared to ~200 MB for an Electron app.
 
-Measured editing actions complete in the 1-10 ms range, comparable to [Muya](https://github.com/marktext/marktext/tree/develop/packages/muya). Typodown scales well on large documents because CodeMirror renders only the visible viewport and a small buffer, instead of mounting the entire document in the DOM.
+Measured editing actions complete in the 1-10 ms range, comparable to alternatives. Typodown scales well on large documents because CodeMirror renders only the visible viewport and a small buffer, instead of mounting the entire document in the DOM.
 
 [^1]: Footnotes are useful for citations and additional context.
 

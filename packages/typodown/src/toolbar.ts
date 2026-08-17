@@ -300,23 +300,8 @@ export function createToolbar(
   anchor.append(bar, showBtn, tip);
   wrapper.prepend(anchor);
 
-  /** Float the show button in the margin left of the text column: as far out
-   * as 2.75rem, but never past the viewport edge (hosts differ in whether the
-   * margin comes from page layout, wrapper padding, or nothing at all). The
-   * measured offset is published as a CSS variable so host stylesheets can
-   * still override `left` outright.
-   */
-  const updateShowOffset = (): void => {
-    const space = anchor.getBoundingClientRect().left;
-    const outside = Math.min(44, Math.max(4, space - 4));
-    wrapper.style.setProperty("--td-toolbar-show-left", `${-outside}px`);
-  };
-  updateShowOffset();
-  window.addEventListener("resize", updateShowOffset);
-
   return {
     destroy() {
-      window.removeEventListener("resize", updateShowOffset);
       anchor.remove();
     },
     refresh() {

@@ -13,6 +13,7 @@
     "typora",
     "wysiwyg"
   ],
+  "homepage": "https://typodown.app",
   "license": "MIT",
   "author": {
     "name": "Vincent Emonet",

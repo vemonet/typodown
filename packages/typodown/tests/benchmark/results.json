@@ -1,171 +1,171 @@
 {
-  "generatedAt": "2026-08-16T11:28:40.470Z",
+  "generatedAt": "2026-08-16T21:35:41.847Z",
   "environment": {
-    "chromiumPath": "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "chromiumPath": "/opt/homebrew/bin/chromium",
     "chromiumVersion": "137.0.7105.0",
     "nodeVersion": "v24.19.0",
     "platform": "darwin-arm64",
-    "iterations": 20,
-    "warmup": 5,
+    "iterations": 40,
+    "warmup": 8,
     "largeSections": 1000,
-    "largeIterations": 5,
+    "largeIterations": 10,
     "scrollSteps": 20
   },
   "results": [
     {
       "engine": "typodown",
       "paragraphs": 10,
-      "iterations": 20,
+      "iterations": 40,
       "showMarkers": {
-        "scriptMeanMs": 0.8899999976158142,
-        "scriptP95Ms": 1.199999988079071,
-        "paintMeanMs": 16.64000000953674,
-        "paintP95Ms": 16.80000001192093,
-        "mutationsMean": 9
+        "scriptMeanMs": 1.1899999976158142,
+        "scriptP95Ms": 2.099999964237213,
+        "paintMeanMs": 16.520000010728836,
+        "paintP95Ms": 16.900000035762787,
+        "mutationsMean": 12
       },
       "render": {
-        "scriptMeanMs": 0.9400000035762787,
-        "scriptP95Ms": 1.100000023841858,
-        "paintMeanMs": 16.630000007152557,
-        "paintP95Ms": 16.700000047683716,
-        "mutationsMean": 10
+        "scriptMeanMs": 1.1999999940395356,
+        "scriptP95Ms": 2.100000023841858,
+        "paintMeanMs": 16.764999988675118,
+        "paintP95Ms": 17.799999952316284,
+        "mutationsMean": 12
       },
       "resources": {
-        "jsHeapMiB": 9.551937103271484,
-        "domNodes": 190,
-        "taskMs": 52.37099999999999,
-        "layoutMs": 3.8670000000000004,
-        "styleMs": 2.7140000000000004
+        "jsHeapMiB": 9.706867218017578,
+        "domNodes": 193,
+        "taskMs": 136.37099999999998,
+        "layoutMs": 11.940000000000001,
+        "styleMs": 13.360999999999997
       }
     },
     {
       "engine": "muya",
       "paragraphs": 10,
-      "iterations": 20,
+      "iterations": 40,
       "showMarkers": {
-        "scriptMeanMs": 1.0199999988079071,
-        "scriptP95Ms": 1.600000023841858,
-        "paintMeanMs": 16.65999999642372,
-        "paintP95Ms": 17.5,
+        "scriptMeanMs": 1.3150000065565108,
+        "scriptP95Ms": 1.7000000476837158,
+        "paintMeanMs": 16.735000002384187,
+        "paintP95Ms": 17.69999998807907,
         "mutationsMean": 1
       },
       "render": {
-        "scriptMeanMs": 1.0199999928474426,
-        "scriptP95Ms": 1.5999999642372131,
-        "paintMeanMs": 16.65,
-        "paintP95Ms": 17.600000023841858,
+        "scriptMeanMs": 1.3750000059604646,
+        "scriptP95Ms": 1.600000023841858,
+        "paintMeanMs": 16.540000003576278,
+        "paintP95Ms": 16.899999976158142,
         "mutationsMean": 1
       },
       "resources": {
-        "jsHeapMiB": 10.228992462158203,
+        "jsHeapMiB": 10.372478485107422,
         "domNodes": 82,
-        "taskMs": 58.176,
-        "layoutMs": 6.268000000000001,
-        "styleMs": 2.313
+        "taskMs": 109.72100000000002,
+        "layoutMs": 14.532000000000004,
+        "styleMs": 5.2379999999999995
       }
     },
     {
       "engine": "typodown",
       "paragraphs": 100,
-      "iterations": 20,
+      "iterations": 40,
       "showMarkers": {
-        "scriptMeanMs": 1.4899999976158143,
-        "scriptP95Ms": 1.699999988079071,
-        "paintMeanMs": 16.799999994039535,
-        "paintP95Ms": 17.599999964237213,
-        "mutationsMean": 9
+        "scriptMeanMs": 1.4400000035762788,
+        "scriptP95Ms": 2,
+        "paintMeanMs": 16.52999999821186,
+        "paintP95Ms": 17.5,
+        "mutationsMean": 12
       },
       "render": {
-        "scriptMeanMs": 1.5199999928474426,
-        "scriptP95Ms": 1.9000000357627869,
-        "paintMeanMs": 16.489999997615815,
-        "paintP95Ms": 16.69999998807907,
-        "mutationsMean": 10
+        "scriptMeanMs": 1.369999998807907,
+        "scriptP95Ms": 2,
+        "paintMeanMs": 16.75499999523163,
+        "paintP95Ms": 17.5,
+        "mutationsMean": 12
       },
       "resources": {
-        "jsHeapMiB": 10.649967193603516,
-        "domNodes": 389,
-        "taskMs": 77.51400000000002,
-        "layoutMs": 5.434000000000001,
-        "styleMs": 3.5129999999999986
+        "jsHeapMiB": 10.766624450683594,
+        "domNodes": 392,
+        "taskMs": 154.059,
+        "layoutMs": 12.586,
+        "styleMs": 12.409
       }
     },
     {
       "engine": "muya",
       "paragraphs": 100,
-      "iterations": 20,
+      "iterations": 40,
       "showMarkers": {
-        "scriptMeanMs": 0.8399999976158142,
-        "scriptP95Ms": 1.0999999642372131,
-        "paintMeanMs": 16.68000000119209,
+        "scriptMeanMs": 1.5250000089406968,
+        "scriptP95Ms": 2.100000023841858,
+        "paintMeanMs": 16.639999997615813,
+        "paintP95Ms": 17.30000001192093,
+        "mutationsMean": 1
+      },
+      "render": {
+        "scriptMeanMs": 1.3850000023841857,
+        "scriptP95Ms": 2,
+        "paintMeanMs": 16.635000002384185,
+        "paintP95Ms": 17.30000001192093,
+        "mutationsMean": 1
+      },
+      "resources": {
+        "jsHeapMiB": 10.605113983154297,
+        "domNodes": 802,
+        "taskMs": 182.48699999999997,
+        "layoutMs": 21.264,
+        "styleMs": 4.591999999999999
+      }
+    },
+    {
+      "engine": "typodown",
+      "paragraphs": 500,
+      "iterations": 40,
+      "showMarkers": {
+        "scriptMeanMs": 1.2500000089406966,
+        "scriptP95Ms": 1.600000023841858,
+        "paintMeanMs": 16.69499999880791,
+        "paintP95Ms": 17.5,
+        "mutationsMean": 12
+      },
+      "render": {
+        "scriptMeanMs": 1.330000001192093,
+        "scriptP95Ms": 3.399999976158142,
+        "paintMeanMs": 16.609999999403954,
+        "paintP95Ms": 17,
+        "mutationsMean": 12
+      },
+      "resources": {
+        "jsHeapMiB": 11.400718688964844,
+        "domNodes": 392,
+        "taskMs": 150.04399999999995,
+        "layoutMs": 10.938999999999991,
+        "styleMs": 9.716000000000003
+      }
+    },
+    {
+      "engine": "muya",
+      "paragraphs": 500,
+      "iterations": 40,
+      "showMarkers": {
+        "scriptMeanMs": 1.175,
+        "scriptP95Ms": 3.199999988079071,
+        "paintMeanMs": 16.644999992847442,
+        "paintP95Ms": 17.600000023841858,
+        "mutationsMean": 1
+      },
+      "render": {
+        "scriptMeanMs": 1.0650000035762788,
+        "scriptP95Ms": 1.5,
+        "paintMeanMs": 16.660000002384187,
         "paintP95Ms": 17.100000023841858,
         "mutationsMean": 1
       },
-      "render": {
-        "scriptMeanMs": 0.9800000071525574,
-        "scriptP95Ms": 1.699999988079071,
-        "paintMeanMs": 16.600000005960464,
-        "paintP95Ms": 17.600000023841858,
-        "mutationsMean": 1
-      },
       "resources": {
-        "jsHeapMiB": 10.513969421386719,
-        "domNodes": 802,
-        "taskMs": 74.98300000000002,
-        "layoutMs": 7.069000000000003,
-        "styleMs": 1.8419999999999999
-      }
-    },
-    {
-      "engine": "typodown",
-      "paragraphs": 500,
-      "iterations": 20,
-      "showMarkers": {
-        "scriptMeanMs": 1.3399999797344209,
-        "scriptP95Ms": 1.5999999642372131,
-        "paintMeanMs": 16.649999982118608,
-        "paintP95Ms": 16.799999952316284,
-        "mutationsMean": 9
-      },
-      "render": {
-        "scriptMeanMs": 1.45,
-        "scriptP95Ms": 1.600000023841858,
-        "paintMeanMs": 16.6700000166893,
-        "paintP95Ms": 17,
-        "mutationsMean": 10
-      },
-      "resources": {
-        "jsHeapMiB": 11.294700622558594,
-        "domNodes": 389,
-        "taskMs": 76.39699999999999,
-        "layoutMs": 4.785000000000005,
-        "styleMs": 2.885000000000002
-      }
-    },
-    {
-      "engine": "muya",
-      "paragraphs": 500,
-      "iterations": 20,
-      "showMarkers": {
-        "scriptMeanMs": 1.1600000023841859,
-        "scriptP95Ms": 1.399999976158142,
-        "paintMeanMs": 16.830000007152556,
-        "paintP95Ms": 17.80000001192093,
-        "mutationsMean": 1
-      },
-      "render": {
-        "scriptMeanMs": 1.1699999928474427,
-        "scriptP95Ms": 1.300000011920929,
-        "paintMeanMs": 16.480000001192092,
-        "paintP95Ms": 16.69999998807907,
-        "mutationsMean": 1
-      },
-      "resources": {
-        "jsHeapMiB": 11.008262634277344,
+        "jsHeapMiB": 11.099822998046875,
         "domNodes": 4002,
-        "taskMs": 106.665,
-        "layoutMs": 10.806999999999997,
-        "styleMs": 1.4680000000000006
+        "taskMs": 207.92900000000003,
+        "layoutMs": 18.914,
+        "styleMs": 2.1770000000000054
       }
     }
   ],
@@ -173,122 +173,122 @@
     {
       "engine": "typodown",
       "sections": 1000,
-      "setupMs": 391.53341599999976,
+      "setupMs": 393.99204199999986,
       "scroll": {
-        "settleMeanMs": 17.094999998807907,
-        "settleP95Ms": 25.19999998807907,
+        "settleMeanMs": 18.330000001192094,
+        "settleP95Ms": 25.099999964237213,
         "framesP95": 3,
         "maxVisibleGapPx": 0,
-        "maxScrollCorrectionPx": 37.29999999999927
+        "maxScrollCorrectionPx": 9.5
       },
       "actions": {
         "start": {
           "show-markers": {
-            "scriptMeanMs": 2.0799999952316286,
-            "scriptP95Ms": 2.5,
-            "paintMeanMs": 16.700000011920928,
-            "paintP95Ms": 17.5,
-            "mutationsMean": 10
+            "scriptMeanMs": 1.9000000059604645,
+            "scriptP95Ms": 2.300000011920929,
+            "paintMeanMs": 16.330000001192094,
+            "paintP95Ms": 16.600000023841858,
+            "mutationsMean": 13
           },
           "render": {
-            "scriptMeanMs": 1.899999976158142,
-            "scriptP95Ms": 2,
-            "paintMeanMs": 16.779999995231627,
-            "paintP95Ms": 17.099999964237213,
-            "mutationsMean": 10
+            "scriptMeanMs": 1.6,
+            "scriptP95Ms": 1.7000000476837158,
+            "paintMeanMs": 16.699999994039537,
+            "paintP95Ms": 17,
+            "mutationsMean": 12
           },
           "edit-paragraph": {
-            "scriptMeanMs": 4.800000011920929,
-            "scriptP95Ms": 5.700000047683716,
-            "paintMeanMs": 16.52000000476837,
-            "paintP95Ms": 16.69999998807907,
-            "mutationsMean": 4.2
+            "scriptMeanMs": 4.4300000131130215,
+            "scriptP95Ms": 4.600000023841858,
+            "paintMeanMs": 16.730000001192092,
+            "paintP95Ms": 17.100000023841858,
+            "mutationsMean": 8
           },
           "edit-code": {
-            "scriptMeanMs": 159.9200000166893,
-            "scriptP95Ms": 164.20000004768372,
-            "paintMeanMs": 163.54000000953675,
-            "paintP95Ms": 166.60000002384186,
+            "scriptMeanMs": 3.9099999964237213,
+            "scriptP95Ms": 6.300000011920929,
+            "paintMeanMs": 16.540000003576278,
+            "paintP95Ms": 16.600000023841858,
             "mutationsMean": 4
           }
         },
         "middle": {
           "show-markers": {
-            "scriptMeanMs": 2.339999997615814,
-            "scriptP95Ms": 2.899999976158142,
-            "paintMeanMs": 15.479999995231628,
-            "paintP95Ms": 16.5,
-            "mutationsMean": 10
+            "scriptMeanMs": 2.1700000047683714,
+            "scriptP95Ms": 2.800000011920929,
+            "paintMeanMs": 16.40999999642372,
+            "paintP95Ms": 17.30000001192093,
+            "mutationsMean": 13
           },
           "render": {
-            "scriptMeanMs": 2.0799999952316286,
-            "scriptP95Ms": 2.299999952316284,
-            "paintMeanMs": 17.059999990463258,
-            "paintP95Ms": 17.899999976158142,
-            "mutationsMean": 10
+            "scriptMeanMs": 1.7099999964237214,
+            "scriptP95Ms": 2.100000023841858,
+            "paintMeanMs": 16.659999990463255,
+            "paintP95Ms": 16.80000001192093,
+            "mutationsMean": 13
           },
           "edit-paragraph": {
-            "scriptMeanMs": 5.079999995231629,
-            "scriptP95Ms": 5.599999964237213,
-            "paintMeanMs": 16.540000009536744,
-            "paintP95Ms": 16.69999998807907,
-            "mutationsMean": 8.2
+            "scriptMeanMs": 4.570000004768372,
+            "scriptP95Ms": 4.899999976158142,
+            "paintMeanMs": 16.769999998807908,
+            "paintP95Ms": 17.5,
+            "mutationsMean": 4.2
           },
           "edit-code": {
-            "scriptMeanMs": 165.5600000023842,
-            "scriptP95Ms": 171.30000001192093,
-            "paintMeanMs": 170.19999998807907,
-            "paintP95Ms": 175,
-            "mutationsMean": 8.4
+            "scriptMeanMs": 3.6900000095367433,
+            "scriptP95Ms": 4,
+            "paintMeanMs": 16.6,
+            "paintP95Ms": 17.100000023841858,
+            "mutationsMean": 4
           }
         },
         "end": {
           "show-markers": {
-            "scriptMeanMs": 2.2799999952316283,
-            "scriptP95Ms": 2.399999976158142,
-            "paintMeanMs": 16.7,
-            "paintP95Ms": 17.5,
-            "mutationsMean": 10
+            "scriptMeanMs": 2.160000002384186,
+            "scriptP95Ms": 2.5,
+            "paintMeanMs": 16.44000000357628,
+            "paintP95Ms": 16.80000001192093,
+            "mutationsMean": 13
           },
           "render": {
-            "scriptMeanMs": 2.1,
-            "scriptP95Ms": 2.199999988079071,
-            "paintMeanMs": 16.59999998807907,
-            "paintP95Ms": 17.5,
-            "mutationsMean": 10
+            "scriptMeanMs": 1.6200000107288361,
+            "scriptP95Ms": 1.800000011920929,
+            "paintMeanMs": 16.800000005960463,
+            "paintP95Ms": 17.599999964237213,
+            "mutationsMean": 13
           },
           "edit-paragraph": {
-            "scriptMeanMs": 5.040000009536743,
-            "scriptP95Ms": 5.300000011920929,
-            "paintMeanMs": 16.580000019073488,
-            "paintP95Ms": 16.600000023841858,
+            "scriptMeanMs": 4.469999992847443,
+            "scriptP95Ms": 4.899999976158142,
+            "paintMeanMs": 16.759999990463257,
+            "paintP95Ms": 17.599999964237213,
             "mutationsMean": 4
           },
           "edit-code": {
-            "scriptMeanMs": 162.72000000476837,
-            "scriptP95Ms": 167.39999997615814,
-            "paintMeanMs": 166.91999999284744,
-            "paintP95Ms": 175,
-            "mutationsMean": 4.4
+            "scriptMeanMs": 3.5800000071525573,
+            "scriptP95Ms": 4,
+            "paintMeanMs": 16.38999999165535,
+            "paintP95Ms": 17,
+            "mutationsMean": 4.3
           }
         }
       },
       "resources": {
-        "jsHeapMiB": 28.675655364990234,
-        "domNodes": 628,
-        "textLength": 1002,
-        "taskMs": 3247.2280000000005,
-        "layoutMs": 35.08599999999999,
-        "styleMs": 59.460000000000015
+        "jsHeapMiB": 28.00442123413086,
+        "domNodes": 702,
+        "textLength": 987,
+        "taskMs": 10758.989,
+        "layoutMs": 71.86799999999998,
+        "styleMs": 109.74600000000001
       }
     },
     {
       "engine": "muya",
       "sections": 1000,
-      "setupMs": 119550.758334,
+      "setupMs": 112786.7205,
       "scroll": {
-        "settleMeanMs": 25.240000000596048,
-        "settleP95Ms": 28.5,
+        "settleMeanMs": 24.869999998807906,
+        "settleP95Ms": 25.80000001192093,
         "framesP95": 2,
         "maxVisibleGapPx": 0,
         "maxScrollCorrectionPx": 0.25
@@ -296,112 +296,112 @@
       "actions": {
         "start": {
           "show-markers": {
-            "scriptMeanMs": 16.019999992847442,
-            "scriptP95Ms": 16.400000035762787,
-            "paintMeanMs": 79,
-            "paintP95Ms": 85,
+            "scriptMeanMs": 15.04999998807907,
+            "scriptP95Ms": 15.300000011920929,
+            "paintMeanMs": 68.57999999523163,
+            "paintP95Ms": 73.80000001192093,
             "mutationsMean": 1
           },
           "render": {
-            "scriptMeanMs": 15.879999995231628,
-            "scriptP95Ms": 16.30000001192093,
-            "paintMeanMs": 79.06000000238419,
-            "paintP95Ms": 86.69999998807907,
+            "scriptMeanMs": 16.130000001192094,
+            "scriptP95Ms": 26.400000035762787,
+            "paintMeanMs": 70.01000000238419,
+            "paintP95Ms": 82.5,
             "mutationsMean": 1
           },
           "edit-paragraph": {
-            "scriptMeanMs": 19.21999999284744,
-            "scriptP95Ms": 22.80000001192093,
-            "paintMeanMs": 82.6,
-            "paintP95Ms": 94.60000002384186,
-            "mutationsMean": 2
+            "scriptMeanMs": 1.6900000154972077,
+            "scriptP95Ms": 1.800000011920929,
+            "paintMeanMs": 22.510000002384185,
+            "paintP95Ms": 27.100000023841858,
+            "mutationsMean": 1
           },
           "edit-code": {
-            "scriptMeanMs": 13.2,
-            "scriptP95Ms": 21.899999976158142,
-            "paintMeanMs": 74.93999998569488,
-            "paintP95Ms": 81.29999995231628,
-            "mutationsMean": 6
+            "scriptMeanMs": 5.649999988079071,
+            "scriptP95Ms": 6.399999976158142,
+            "paintMeanMs": 59.05,
+            "paintP95Ms": 68.69999998807907,
+            "mutationsMean": 2
           }
         },
         "middle": {
           "show-markers": {
-            "scriptMeanMs": 16.260000014305113,
-            "scriptP95Ms": 17.5,
-            "paintMeanMs": 78.00000001192093,
-            "paintP95Ms": 79.30000001192093,
+            "scriptMeanMs": 15.010000008344651,
+            "scriptP95Ms": 15.199999988079071,
+            "paintMeanMs": 68.56000001430512,
+            "paintP95Ms": 71.70000004768372,
             "mutationsMean": 1
           },
           "render": {
-            "scriptMeanMs": 20.619999992847443,
-            "scriptP95Ms": 27.900000035762787,
-            "paintMeanMs": 84.36000000238418,
-            "paintP95Ms": 90.80000001192093,
+            "scriptMeanMs": 15.570000010728837,
+            "scriptP95Ms": 19.600000023841858,
+            "paintMeanMs": 70.03000001311302,
+            "paintP95Ms": 74.40000003576279,
             "mutationsMean": 1
           },
           "edit-paragraph": {
-            "scriptMeanMs": 38.11999999284744,
-            "scriptP95Ms": 42.799999952316284,
-            "paintMeanMs": 103.99999998807907,
-            "paintP95Ms": 121.09999996423721,
-            "mutationsMean": 2
+            "scriptMeanMs": 19.829999995231628,
+            "scriptP95Ms": 27.69999998807907,
+            "paintMeanMs": 44.26000000238419,
+            "paintP95Ms": 85.69999998807907,
+            "mutationsMean": 1
           },
           "edit-code": {
-            "scriptMeanMs": 32.13999999761582,
-            "scriptP95Ms": 36.69999998807907,
-            "paintMeanMs": 94.4,
-            "paintP95Ms": 107.5,
-            "mutationsMean": 6
+            "scriptMeanMs": 22.830000001192094,
+            "scriptP95Ms": 23.600000023841858,
+            "paintMeanMs": 77.76000000238419,
+            "paintP95Ms": 88.19999998807907,
+            "mutationsMean": 2
           }
         },
         "end": {
           "show-markers": {
-            "scriptMeanMs": 16.339999997615813,
-            "scriptP95Ms": 16.5,
-            "paintMeanMs": 77.22000000476837,
-            "paintP95Ms": 77.5,
+            "scriptMeanMs": 15.15,
+            "scriptP95Ms": 15.800000011920929,
+            "paintMeanMs": 68.83000000119209,
+            "paintP95Ms": 74.5,
             "mutationsMean": 1
           },
           "render": {
-            "scriptMeanMs": 16.09999998807907,
-            "scriptP95Ms": 16.599999964237213,
-            "paintMeanMs": 77.35999999046325,
-            "paintP95Ms": 78,
+            "scriptMeanMs": 15.080000001192094,
+            "scriptP95Ms": 15.899999976158142,
+            "paintMeanMs": 68.7800000011921,
+            "paintP95Ms": 78.30000001192093,
             "mutationsMean": 1
           },
           "edit-paragraph": {
-            "scriptMeanMs": 58.639999985694885,
-            "scriptP95Ms": 68,
-            "paintMeanMs": 123.83999998569489,
-            "paintP95Ms": 132.30000001192093,
-            "mutationsMean": 2
+            "scriptMeanMs": 35.91000001430511,
+            "scriptP95Ms": 37.19999998807907,
+            "paintMeanMs": 56.890000003576276,
+            "paintP95Ms": 62.89999997615814,
+            "mutationsMean": 1
           },
           "edit-code": {
-            "scriptMeanMs": 56.31999999284744,
-            "scriptP95Ms": 63.80000001192093,
-            "paintMeanMs": 118.20000001192093,
-            "paintP95Ms": 124.80000001192093,
-            "mutationsMean": 6
+            "scriptMeanMs": 40.40000001192093,
+            "scriptP95Ms": 42.40000003576279,
+            "paintMeanMs": 93.63000000715256,
+            "paintP95Ms": 103.5,
+            "mutationsMean": 2
           }
         }
       },
       "resources": {
-        "jsHeapMiB": 39.32280349731445,
+        "jsHeapMiB": 39.41364288330078,
         "domNodes": 139622,
         "textLength": 358995,
-        "taskMs": 7755.166999999986,
-        "layoutMs": 565.526,
-        "styleMs": 16.56599999999997
+        "taskMs": 17318.677000000007,
+        "layoutMs": 1070.171,
+        "styleMs": 30.667999999999974
       }
     }
   ],
   "testDocumentResults": [
     {
       "engine": "typodown",
-      "bytes": 20012,
+      "bytes": 19998,
       "scroll": {
-        "settleMeanMs": 17.509999999403952,
-        "settleP95Ms": 28.5,
+        "settleMeanMs": 17.06999999880791,
+        "settleP95Ms": 24.80000001192093,
         "framesP95": 3,
         "maxVisibleGapPx": 0,
         "maxScrollCorrectionPx": 51
@@ -409,10 +409,10 @@
     },
     {
       "engine": "muya",
-      "bytes": 20012,
+      "bytes": 19998,
       "scroll": {
-        "settleMeanMs": 16.815000000596047,
-        "settleP95Ms": 27.600000023841858,
+        "settleMeanMs": 16.609999999403954,
+        "settleP95Ms": 26.19999998807907,
         "framesP95": 2,
         "maxVisibleGapPx": 0,
         "maxScrollCorrectionPx": 0.25

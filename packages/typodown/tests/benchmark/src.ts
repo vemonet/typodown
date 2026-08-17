@@ -49,7 +49,7 @@ const host = document.querySelector<HTMLElement>("#benchmark")!;
 let destroyEditor: (() => void) | undefined;
 let moveCursor: ((showMarkers: boolean) => void) | undefined;
 let performLargeAction: ((action: LargeAction, position: DocumentPosition) => void) | undefined;
-let prepareLargePosition: ((position: DocumentPosition) => void) | undefined;
+let prepareLargePosition: ((position: DocumentPosition, action: LargeAction) => void) | undefined;
 let scrollTarget: HTMLElement | undefined;
 
 const POSITIONS: DocumentPosition[] = ["start", "middle", "end"];
@@ -191,8 +191,17 @@ function setupLargeTypodown(markdown: string): void {
     view.dispatch({ changes: { from, to: from + 1, insert: editCharacter } });
     editCharacter = editCharacter === "x" ? "y" : "x";
   };
-  prepareLargePosition = (position) => {
-    view.dispatch({ selection: { anchor: offsets[position].idle }, scrollIntoView: true });
+  prepareLargePosition = (position, action) => {
+    const target = offsets[position];
+    const anchor =
+      action === "show-markers"
+        ? target.idle
+        : action === "render"
+          ? target.marker
+          : action === "edit-paragraph"
+            ? target.paragraphEdit
+            : target.codeEdit;
+    view.dispatch({ selection: { anchor }, scrollIntoView: true });
   };
   scrollTarget = editor.wrapper.querySelector<HTMLElement>(".cm-scroller") ?? undefined;
   view.focus();
@@ -301,18 +310,24 @@ function setupLargeMuya(markdown: string): void {
       );
       return;
     }
-    const block = action === "edit-paragraph" ? target.paragraph : target.code;
-    const offset = action === "edit-paragraph" ? target.paragraphEdit : target.codeEdit;
-    block.setCursor(offset, offset + 1, true);
     if (!document.execCommand("insertText", false, editCharacter)) {
       throw new Error("Muya edit command was rejected by the browser");
     }
     editCharacter = editCharacter === "x" ? "y" : "x";
   };
-  prepareLargePosition = (position) => {
+  prepareLargePosition = (position, action) => {
     const target = targets[position];
-    target.paragraph.setCursor(target.idle, target.idle, true);
-    target.paragraph.domNode?.scrollIntoView({ block: "center" });
+    const block = action === "edit-code" ? target.code : target.paragraph;
+    const offset =
+      action === "show-markers"
+        ? target.idle
+        : action === "render"
+          ? target.marker
+          : action === "edit-paragraph"
+            ? target.paragraphEdit
+            : target.codeEdit;
+    block.setCursor(offset, action.startsWith("edit-") ? offset + 1 : offset, true);
+    block.domNode?.scrollIntoView({ block: "center" });
   };
   scrollTarget = host;
   destroyEditor = () => editor.destroy();
@@ -475,16 +490,19 @@ async function runLarge(iterations: number, warmup: number): Promise<ActionSampl
   if (!prepareLargePosition) throw new Error("Large benchmark editor is not initialized");
   const actions: LargeAction[] = ["show-markers", "render", "edit-paragraph", "edit-code"];
   for (let index = 0; index < warmup; index++) {
-    prepareLargePosition(POSITIONS[index % POSITIONS.length]!);
+    const action = actions[index % actions.length]!;
+    prepareLargePosition(POSITIONS[index % POSITIONS.length]!, action);
     await nextPaint();
-    await largeAction(actions[index % actions.length]!, POSITIONS[index % POSITIONS.length]!);
+    await largeAction(action, POSITIONS[index % POSITIONS.length]!);
   }
   const samples: ActionSample[] = [];
   for (let iteration = 0; iteration < iterations; iteration++) {
     for (const position of POSITIONS) {
-      prepareLargePosition(position);
-      await nextPaint();
-      for (const action of actions) samples.push(await largeAction(action, position));
+      for (const action of actions) {
+        prepareLargePosition(position, action);
+        await nextPaint();
+        samples.push(await largeAction(action, position));
+      }
     }
   }
   return samples;
