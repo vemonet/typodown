@@ -130,7 +130,7 @@ export default defineConfig({
       release: {
         command: [
           "vp run ready",
-          'bumpp -r --all --git-check --commit --tag --no-push --execute "vp run changelog"',
+          'bumpp -r --all --git-check --commit --tag --no-push --execute "node scripts/sync-version.ts && vp run changelog"',
           "npm publish -w @vemonet/typodown",
           "npm run vsx:publish -w typodown",
           "git push --follow-tags",
