@@ -11,7 +11,7 @@ The same run also builds a 1,000-section mixed document containing headings, emp
 
 A separate scrolling pass jumps through that large document from top to bottom. It reports settling time and frames, visible CodeMirror spacer gaps, and scroll-position correction after layout measurement. This covers the blank viewport and scroll-jump behavior that the action timings intentionally exclude.
 
-The same scrolling pass runs against the repository's `test.md` torture fixture, which covers the VS Code reproduction case directly.
+The same scrolling pass runs against the `tests/test.md` torture fixture, which covers the VS Code reproduction case directly.
 
 ## Run
 

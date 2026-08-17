@@ -13,14 +13,14 @@
   </head>
   <body>
     <!--
-      Dev-only harness: renders the repo's `test.md` torture fixture with the
+      Dev-only harness: renders the `tests/test.md` torture fixture with the
       editor built from `src`, so its weird cases (nested fences, alerts holding
       code blocks, deep indentation) can be eyeballed while iterating. Not part
       of the built demo, which only bundles index.html.
     -->
     <main id="editor"></main>
     <script type="module">
-      import SAMPLE from "../../test.md?raw";
+      import SAMPLE from "./tests/test.md?raw";
       import { createTypodown } from "/src/index.ts";
       import "/src/theme.css";
 

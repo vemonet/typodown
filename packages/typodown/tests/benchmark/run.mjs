@@ -185,7 +185,7 @@ try {
     });
   }
 
-  const testMarkdown = await readFile(resolve(benchmarkDir, "../../../../test.md"), "utf8");
+  const testMarkdown = await readFile(resolve(benchmarkDir, "../test.md"), "utf8");
   const testDocumentResults = [];
   for (const engine of ["typodown", "muya"]) {
     await page.evaluate(

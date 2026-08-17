@@ -1,48 +1,76 @@
-# git-cliff configuration, one changelog for the whole monorepo.
-# Both packages (@vemonet/typodown and the typodown-vsx extension) are versioned
-# and released together, so commits are grouped by type, not by package.
-
 [changelog]
 header = """
 # Changelog\n
 All notable changes to Typodown.\n
 """
+# A Tera template to be rendered for each release in the changelog.
+# See https://keats.github.io/tera/docs/#introduction
+# Template for the changelog: https://keats.github.io/tera/docs
 body = """
 {% if version %}\
-## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+    {% if previous.version %}\
+        ## [{{ version | trim_start_matches(pat="v") }}](<REPO>/compare/{{ previous.version }}..{{ version }}) · {{ timestamp | date(format="%Y-%m-%d") }}
+    {% else %}\
+        ## [{{ version | trim_start_matches(pat="v") }}](<REPO>/tree/{{ version }}) · {{ timestamp | date(format="%Y-%m-%d") }}
+    {% endif %}\
 {% else %}\
-## [Unreleased]
+    ## [unreleased]
 {% endif %}\
 {% for group, commits in commits | group_by(attribute="group") %}
-### {{ group | upper_first }}
-{% for commit in commits %}
-- {{ commit.message | upper_first }}{% if commit.remote.username %} (@{{ commit.remote.username }}){% endif %}\
+    ### {{ group | upper_first }}
+    {% for commit in commits %}
+        - {% if commit.breaking %}[**breaking**] {% endif %}{{ commit.message | upper_first | trim }} · ([{{ commit.id | truncate(length=7, end="") }}](<REPO>/commit/{{ commit.id }}))\
+    {% endfor %}
 {% endfor %}
-{% endfor %}\n
+{%- if github.contributors | filter(attribute="is_first_time", value=true) | length != 0 %}
+    ### 🌱 New Contributors
+    {% for contributor in github.contributors | filter(attribute="is_first_time", value=true) %}
+        - [@{{ contributor.username }}](https://github.com/{{ contributor.username }}) made their first contribution\
+        {% if contributor.pr_number %} in [#{{ contributor.pr_number }}](<REPO>/pull/{{ contributor.pr_number }}){% endif %}\
+    {% endfor %}
+{% endif %}\n
 """
 trim = true
+postprocessors = [{ pattern = '<REPO>', replace = "https://github.com/vemonet/typodown" }]
+
+# GitHub integration: the body template's `github.contributors` needs the commit
+# and pull request lists from the API, which git-cliff only fetches when an owner
+# and repo are configured here. Anonymous requests work for this public repo, but
+# they share a 60 requests/hour limit and one changelog run spends ~15 of them.
+# Past the limit git-cliff logs an error but still writes the changelog, silently
+# without the "New Contributors" section, so set GITHUB_TOKEN (or pass
+# `--github-token`) when that section matters. CI already passes it.
+[remote.github]
+owner = "vemonet"
+repo = "typodown"
 
 [git]
+# Parse commits according to the conventional commits specification https://www.conventionalcommits.org
 conventional_commits = true
 filter_unconventional = false
-split_commits = false
-protect_breaking_commits = false
+split_commits = false # Split commits on newlines, treating each line as an individual commit.
+# An array of regex based parsers to modify commit messages prior to further processing.
+commit_preprocessors = [{ pattern = '\((\w+\s)?#([0-9]+)\)', replace = "" }]
 filter_commits = false
-tag_pattern = "v[0-9]*"
 topo_order = false
-sort_commits = "oldest"
+tag_pattern = "v[0-9]*"
+# Order of commits in each group/release within the changelog; allowed values: newest, oldest
+sort_commits = "newest"
 
 commit_parsers = [
-  { message = "^feat", group = "Features" },
-  { message = "^fix", group = "Bug Fixes" },
-  { message = "^perf", group = "Performance" },
-  { message = "^refactor", group = "Refactor" },
-  { message = "^doc", group = "Documentation" },
-  { message = "^style", group = "Styling" },
-  { message = "^test", group = "Testing" },
-  { message = "^chore\\(release\\)", skip = true },
+  { message = "^feat", group = "⛰️ Features" },
+  { message = "^fix", group = "🐛 Bug Fixes" },
+  { message = "^doc", group = "📚 Documentation" },
+  { message = "^perf|DataOriented", group = "⚡ Performance" },
+  { message = "^refactor", group = "🚜 Refactor" },
+  { message = "^style|Formatting", group = "🎨 Styling" },
+  { message = "^test", group = "🧪 Testing" },
+  { message = "^ci", group = "⚙️ Continuous Integration" },
+  { message = "^chore\\(release\\): prepare for", skip = true },
   { message = "^chore\\(deps\\)", skip = true },
-  { message = "^chore", group = "Miscellaneous" },
-  { message = "^ci", group = "Miscellaneous" },
-  { body = ".*security", group = "Security" },
+  { message = "^chore\\(pr\\)", skip = true },
+  { message = "^chore\\(pull\\)", skip = true },
+  { message = "^chore", group = "🛠️ Miscellaneous Tasks" },
+  { body = ".*security", group = "🛡️ Security" },
+  { message = "^revert", group = "◀️ Revert" },
 ]

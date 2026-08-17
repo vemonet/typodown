@@ -9,7 +9,7 @@ export default defineConfig({
     // `test.md` is a hand-written torture fixture: unclosed fences, tilde
     // fences, tab indentation and deliberately awkward nesting. Formatting it
     // rewrites exactly the syntax it is meant to exercise.
-    ignorePatterns: ["test.md"],
+    ignorePatterns: ["packages/typodown/tests/test.md"],
   },
   lint: {
     jsPlugins: [
