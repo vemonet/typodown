@@ -3,12 +3,18 @@ import { toast } from "solid-sonner";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { markdownToHtmlDocument } from "@vemonet/typodown";
 import {
   type TreeNode,
+  MARKDOWN_EXT,
+  downloadFile,
+  pickExportPath,
   pickFolder,
+  printHtmlDocument,
   readMarkdownTree,
   readFileContent,
   renamePath,
+  resolveLocalImageSrc,
   writeFileContent,
   watchVault,
   type UnwatchFn,
@@ -359,6 +365,56 @@ export async function renameEntry(oldPath: string, newName: string, isDir = fals
     await refreshTree();
   } catch (err) {
     toast.error("Failed to rename", { description: String(err) });
+  }
+}
+
+/** Render a markdown file to a standalone HTML document and save it.
+ *
+ * Reads from disk rather than the editor buffer so exporting a file other than
+ * the open one works, and flushes pending edits first so exporting the open file
+ * cannot produce a stale document. Image paths are left as authored, so the
+ * .html shows its images when saved beside the .md it came from. */
+export async function exportToHtml(path: string): Promise<void> {
+  try {
+    if (path === currentPath()) flushSave();
+    const markdown = await readFileContent(path);
+    const name = baseName(path);
+    const title = name.replace(MARKDOWN_EXT, "");
+    const html = markdownToHtmlDocument(markdown, { title });
+
+    const suggested = `${title}.html`;
+    if (!IS_TAURI) {
+      downloadFile(suggested, html, "text/html");
+      return;
+    }
+    const target = await pickExportPath(suggested, "html");
+    if (!target) return;
+    await writeFileContent(target, html);
+    toast.success("Exported to HTML", { description: baseName(target) });
+  } catch (err) {
+    toast.error("Failed to export to HTML", { description: String(err) });
+  }
+}
+
+/** Render a markdown file and open the OS print dialog on it, where "Save as
+ * PDF" produces the file. Images go through the asset-protocol resolver here (as
+ * opposed to the HTML export) because the print window has to load them itself. */
+export async function exportToPdf(path: string): Promise<void> {
+  if (!IS_TAURI) {
+    toast.error("Export to PDF is only available in the desktop app");
+    return;
+  }
+  try {
+    if (path === currentPath()) flushSave();
+    const markdown = await readFileContent(path);
+    const title = baseName(path).replace(MARKDOWN_EXT, "");
+    const html = markdownToHtmlDocument(markdown, {
+      title,
+      resolveImageSrc: (src) => resolveLocalImageSrc(src, path),
+    });
+    await printHtmlDocument(html, title);
+  } catch (err) {
+    toast.error("Failed to export to PDF", { description: String(err) });
   }
 }
 

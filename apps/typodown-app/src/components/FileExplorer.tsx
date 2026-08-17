@@ -14,7 +14,9 @@ import {
   Bot,
   BookOpenText,
   Copy,
+  FileCode2,
   FileText,
+  Printer,
   Folder,
   FolderOpen,
   FolderPlus,
@@ -50,6 +52,8 @@ import {
   showEditor,
   renameEntry,
   copyFileToClipboard,
+  exportToHtml,
+  exportToPdf,
 } from "@/lib/vault";
 import { useColorMode } from "@/components/color-mode";
 
@@ -247,7 +251,7 @@ const FileContextMenu: Component = () => {
               class="absolute min-w-[10rem] rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
               style={{
                 left: `${Math.min(menu().x, window.innerWidth - 176)}px`,
-                top: `${Math.min(menu().y, window.innerHeight - 88)}px`,
+                top: `${Math.min(menu().y, window.innerHeight - menuHeight(menu().isDir))}px`,
               }}
             >
               <ContextItem icon={Pencil} label="Rename" onClick={() => setRenaming(menu().path)} />
@@ -257,6 +261,17 @@ const FileContextMenu: Component = () => {
                   label="Copy file"
                   onClick={() => void copyFileToClipboard(menu().path)}
                 />
+                <div class="my-1 h-px bg-border" />
+                <ContextItem
+                  icon={FileCode2}
+                  label="Export to HTML"
+                  onClick={() => void exportToHtml(menu().path)}
+                />
+                <ContextItem
+                  icon={Printer}
+                  label="Export to PDF"
+                  onClick={() => void exportToPdf(menu().path)}
+                />
               </Show>
             </div>
           </div>
@@ -265,6 +280,13 @@ const FileContextMenu: Component = () => {
     </Show>
   );
 };
+
+/** Roughly how tall the menu renders, so it can be clamped inside the window
+ * instead of running off the bottom edge. Files get four items and a separator,
+ * folders only Rename. */
+function menuHeight(isDir: boolean): number {
+  return isDir ? 48 : 160;
+}
 
 const ContextItem: Component<{
   icon: Component<{ class?: string }>;

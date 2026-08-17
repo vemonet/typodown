@@ -1,6 +1,80 @@
 use std::sync::Mutex;
 use tauri::Manager;
 
+/// HTML waiting to be picked up by the export webview.
+///
+/// The print window cannot be handed its content directly: `WebviewUrl` only
+/// takes a URL, and neither `data:` (blocked by WKWebView for top-level loads)
+/// nor `file://` (outside the app's origin, so the asset protocol images resolve
+/// to would not load) works. So the document is stashed here and served by the
+/// `tdexport:` scheme handler registered in `run()`, which keeps the whole thing
+/// inside the app's own context.
+struct PendingExport(Mutex<Option<String>>);
+
+/// Render an already-built HTML document in a separate window and open the OS
+/// print dialog on it, which is where "Save as PDF" lives.
+///
+/// Printing is driven from Rust rather than `window.print()` in JS: on macOS
+/// only the native `NSPrintOperation` path works (wry runs it through
+/// `runOperationModalForWindow`), and going through `Webview::print()` gets the
+/// right mechanism on all three desktop platforms.
+#[cfg(desktop)]
+#[tauri::command]
+async fn export_pdf(app: tauri::AppHandle, html: String, title: String) -> Result<(), String> {
+    app.state::<PendingExport>().0.lock().unwrap().replace(html);
+
+    // A unique label per export so a second export while the first window is
+    // still open does not collide.
+    let label = format!(
+        "export-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0)
+    );
+
+    // A custom scheme is addressed differently per platform: `scheme://localhost`
+    // on macOS and Linux, `http://scheme.localhost` on Windows.
+    #[cfg(windows)]
+    let url = "http://tdexport.localhost/";
+    #[cfg(not(windows))]
+    let url = "tdexport://localhost/";
+
+    tauri::WebviewWindowBuilder::new(
+        &app,
+        label,
+        tauri::WebviewUrl::External(url.parse().map_err(|_| "bad export url".to_string())?),
+    )
+    .title(format!("Print {title}"))
+    .inner_size(900.0, 1000.0)
+    .on_page_load(|window, payload| {
+        // Print once the document has actually rendered; printing a blank
+        // webview is the classic failure here. The window stays open behind the
+        // dialog so the user can re-print or check the layout, and closing it is
+        // how they dismiss the export.
+        if payload.event() == tauri::webview::PageLoadEvent::Finished {
+            if let Err(error) = window.print() {
+                eprintln!("failed to open the print dialog: {error}");
+            }
+        }
+    })
+    .build()
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Mobile has no print dialog and no second window to open one in; the stub only
+/// exists so `generate_handler!` compiles for Android and iOS.
+#[cfg(not(desktop))]
+#[tauri::command]
+async fn export_pdf(
+    _app: tauri::AppHandle,
+    _html: String,
+    _title: String,
+) -> Result<(), String> {
+    Err("exporting to PDF is only available on desktop".into())
+}
+
 /// File the OS asked us to open (file association / VIEW intent), waiting for
 /// the frontend to pick it up. The frontend may not be loaded yet when the OS
 /// delivers it, so we stash it here and expose it via a command; we also emit
@@ -182,10 +256,28 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(PendingOpenFile(Mutex::new(None)))
+        .manage(PendingExport(Mutex::new(None)))
+        // Serves the document staged by `export_pdf` to the print window. Takes
+        // the HTML rather than cloning it: one window, one load, one document.
+        .register_uri_scheme_protocol("tdexport", |ctx, _request| {
+            let html = ctx
+                .app_handle()
+                .state::<PendingExport>()
+                .0
+                .lock()
+                .unwrap()
+                .take()
+                .unwrap_or_else(|| "<!doctype html><p>Nothing to export.".to_string());
+            tauri::http::Response::builder()
+                .header("Content-Type", "text/html; charset=utf-8")
+                .body(html.into_bytes())
+                .unwrap()
+        })
         .invoke_handler(tauri::generate_handler![
             take_pending_open_file,
             copy_file_to_clipboard,
-            start_native_drag
+            start_native_drag,
+            export_pdf
         ])
         .setup(|_app| {
             // On Windows and Linux, file associations pass the file as a CLI

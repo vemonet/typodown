@@ -29,9 +29,23 @@ const VSCODE_THEME_CSS = `
   --td-selection: var(--vscode-editor-selectionBackground);
 }
 
-/* Inset the editor without creating a second scrolling surface. */
+/* Inset the editor without creating a second scrolling surface.
+ *
+ * The side inset lives on .cm-content, not on the wrapper. Padding the wrapper
+ * moves the whole editor in, which takes the CodeMirror scroller's right edge
+ * (and the vertical scrollbar on it) away from the window edge, leaving the bar
+ * floating in the middle of the page. Putting it on .cm-content indents only the
+ * text, so the scroller still spans the full width and its scrollbar stays glued
+ * to the right. The desktop app's App.css does the same thing for the same
+ * reason, and outline.ts reserves its docked-panel space inside the scroller
+ * rather than on the wrapper for this exact reason too. */
 .typodown {
-  padding: 0 max(1.5rem, 4vw) 2rem;
+  padding: 0 0 2rem;
+}
+
+.typodown .cm-content {
+  padding-left: max(1.5rem, 4vw);
+  padding-right: max(1.5rem, 4vw);
 }`;
 
 for (const css of [themeCss, VSCODE_THEME_CSS]) {

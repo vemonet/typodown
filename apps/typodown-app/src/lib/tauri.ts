@@ -1,5 +1,5 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { readDir, readTextFile, rename, writeTextFile, watch } from "@tauri-apps/plugin-fs";
 import ignore, { type Ignore } from "ignore";
 
@@ -12,7 +12,8 @@ export interface TreeNode {
   children: TreeNode[];
 }
 
-const MARKDOWN_EXT = /\.(md|markdown|mdown|mkd|mdx)$/i;
+/** The markdown extensions the app treats as editable documents. */
+export const MARKDOWN_EXT = /\.(md|markdown|mdown|mkd|mdx)$/i;
 
 // Folders never worth walking in a markdown vault: dependency, VCS and build
 // caches that can hold thousands of stray README/CHANGELOG files. Applied even
@@ -92,6 +93,37 @@ export async function pickMarkdownFile(): Promise<string | null> {
     filters: [{ name: "Markdown", extensions: ["md", "markdown", "mdown", "mkd", "mdx"] }],
   });
   return typeof result === "string" ? result : null;
+}
+
+/** Ask where to save an exported file. Returns the chosen path, or null when the
+ * user cancels. In the browser build there is no native save dialog, so the file
+ * is offered as a download and null is returned to say "already handled". */
+export async function pickExportPath(
+  suggestedName: string,
+  extension: string,
+): Promise<string | null> {
+  if (!IS_TAURI) return null;
+  const result = await save({
+    defaultPath: suggestedName,
+    filters: [{ name: extension.toUpperCase(), extensions: [extension] }],
+  });
+  return typeof result === "string" ? result : null;
+}
+
+/** Save `content` as a download in the browser build (no filesystem access). */
+export function downloadFile(name: string, content: string, mime: string): void {
+  const url = URL.createObjectURL(new Blob([content], { type: mime }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+/** Hand a rendered HTML document to the Rust side, which opens it in its own
+ * window and brings up the OS print dialog ("Save as PDF"). */
+export async function printHtmlDocument(html: string, title: string): Promise<void> {
+  await invoke("export_pdf", { html, title });
 }
 
 /** Recursively read a directory and return a tree containing only markdown

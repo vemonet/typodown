@@ -802,12 +802,12 @@ const MARK_NAMES = new Set([
 
 // Escape text for HTML text content. Quotes are left alone (they're only
 // significant inside attribute values; see escAttr).
-function esc(s: string): string {
+export function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 // Escape a string for use inside a double-quoted attribute value.
-function escAttr(s: string): string {
+export function escAttr(s: string): string {
   return esc(s).replace(/"/g, "&quot;");
 }
 
@@ -887,7 +887,11 @@ function codeSpanText(node: SyntaxNode, src: string): string {
   return text;
 }
 
-function emitChildrenHTML(node: SyntaxNode, src: string): string {
+/** Emit the inline markdown inside `node` as HTML (emphasis, code spans, links,
+ * images, autolinks, raw tags). Shared with the HTML/PDF export in export.ts so
+ * an exported document's inline formatting is produced by exactly the same code
+ * the editor renders table cells with. */
+export function emitChildrenHTML(node: SyntaxNode, src: string): string {
   let out = "";
   let pos = node.from;
   for (const c of children(node)) {
@@ -900,8 +904,9 @@ function emitChildrenHTML(node: SyntaxNode, src: string): string {
 }
 
 // Emit only the inline content of `node` between `from` and `to` (used for a
-// link's bracketed text, which excludes the `(url)` destination).
-function emitRangeHTML(node: SyntaxNode, src: string, from: number, to: number): string {
+// link's bracketed text, which excludes the `(url)` destination, and by export.ts
+// for a task item's text, which excludes the `[ ]` marker).
+export function emitRangeHTML(node: SyntaxNode, src: string, from: number, to: number): string {
   let out = "";
   let pos = from;
   for (const c of children(node)) {
@@ -916,7 +921,7 @@ function emitRangeHTML(node: SyntaxNode, src: string, from: number, to: number):
 
 // All direct children of a node, in source order. (@lezer/common's getChildren
 // needs a node-type filter, so iterate the sibling chain for the unfiltered set.)
-function children(node: SyntaxNode): SyntaxNode[] {
+export function children(node: SyntaxNode): SyntaxNode[] {
   const out: SyntaxNode[] = [];
   for (let n = node.firstChild; n; n = n.nextSibling) out.push(n);
   return out;

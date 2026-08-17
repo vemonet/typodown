@@ -18,6 +18,8 @@
 
 export { Typodown, createTypodown } from "./editor.ts";
 export type { BuiltInTheme, Theme, TypodownOptions } from "./editor.ts";
+export { markdownToHtml, markdownToHtmlDocument } from "./export.ts";
+export type { ExportOptions } from "./export.ts";
 export { LANGUAGES, matchLanguages } from "./highlight.ts";
 export {
   insertTable,
