@@ -207,7 +207,7 @@ vp run vsx:install
 Copy the `.apk` file:
 
 ```sh
-cp apps/typodown-app/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk ~/Dropbox/typodown.apk
+cp apps/typodown-app/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk ~/typodown.apk
 ```
 
 ## 💻 Desktop and smartphone app

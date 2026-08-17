@@ -46,6 +46,24 @@ const VSCODE_THEME_CSS = `
 .typodown .cm-content {
   padding-left: max(1.5rem, 4vw);
   padding-right: max(1.5rem, 4vw);
+}
+
+/* Scrollbars follow the selected Typodown theme, not VS Code's.
+ *
+ * VS Code sets \`html { scrollbar-color: var(--vscode-scrollbarSlider-background)
+ * ... }\` in the content frame, inside @layer vscode-default. It is inherited, so
+ * it reaches every scroller in the editor, and a non-auto value makes Chromium
+ * ignore ::-webkit-scrollbar-* rules -- overriding those does nothing here.
+ * Setting the same property works, since an unlayered rule wins over any layer.
+ * In "follow editor theme" mode the VS Code colours are the right ones. */
+.typodown:not(.td-vscode) {
+  scrollbar-color: color-mix(in srgb, var(--td-faint) 45%, transparent) transparent;
+}
+
+/* scrollbar-width does not inherit, so it has to reach the scrollers themselves.
+ * The toolbar is excluded because it sets \`none\` to hide its own overflow. */
+.typodown:not(.td-vscode) :not(.cm-td-toolbar) {
+  scrollbar-width: thin;
 }`;
 
 for (const css of [themeCss, VSCODE_THEME_CSS]) {
