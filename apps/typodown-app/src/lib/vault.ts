@@ -31,20 +31,65 @@ const [currentPath, setCurrentPath] = createSignal<string | null>(null);
 const [currentContent, setCurrentContent] = createSignal<string>("");
 const [dirty, setDirty] = createSignal<boolean>(false);
 const [error, setError] = createSignal<string | null>(null);
+/** Paths of the files the user has opened, most recently used first. There is
+ * a single editor buffer (no tabs): this only records what is "open" so the
+ * explorer can hint at it and Ctrl+Tab can cycle in MRU order. */
+const [openPaths, setOpenPaths] = createSignal<string[]>([]);
+/** Files with edits that are not on disk and are not in the editor right now.
+ *
+ * There is a single editor buffer, so switching file used to have to write the
+ * outgoing one. With auto-save off that is exactly what the user asked us not
+ * to do, so the buffer is parked here instead: it comes back untouched on
+ * re-open, and only leaves when it is saved, when the file disappears, or when
+ * the app goes away (see the flush-on-hide handler). */
+const parked = new Map<string, string>();
+/** Reactive mirror of `parked`'s keys, so the explorer's unsaved marker can
+ * track files that are not the open one. */
+const [parkedPaths, setParkedPaths] = createSignal<string[]>([]);
+
+/** Path currently being read from disk, if any. Reads are instant on a local
+ * disk but can stall on a cloud folder (a Dropbox placeholder has to download
+ * first), where a blank editor with no explanation just looks stuck. */
+const [opening, setOpening] = createSignal<string | null>(null);
 
 let unwatch: UnwatchFn | null = null;
 let saveTimer: Debouncer | null = null;
 let maxSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** When false (e.g. on Android, where a manual Save button replaces
- * auto-save), onContentChange updates the in-memory content and dirty flag
- * but never schedules a write to disk; the user triggers saves explicitly via
- * `save()`, which reuses the same code path the auto-save did. */
-let autoSave = true;
+/** Auto-save preference, off by default and remembered across restarts.
+ *
+ * While off, typing only updates the in-memory content and the dirty flag; no
+ * write is scheduled and the user saves explicitly (the toolbar Save button or
+ * Ctrl/Cmd+S). Switching file keeps the edits in memory rather than writing
+ * them (see `parked`); the one place they are still flushed is leaving the
+ * app, where the alternative is losing them with the session. */
+const AUTO_SAVE_KEY = "typodown:auto-save";
+const [autoSave, setAutoSaveSignal] = createSignal<boolean>(loadAutoSavePref());
+
+function loadAutoSavePref(): boolean {
+  try {
+    return localStorage.getItem(AUTO_SAVE_KEY) === "on";
+  } catch {
+    // Storage can be unavailable (private mode, strict WebView); default off.
+    return false;
+  }
+}
 
 export function setAutoSave(enabled: boolean): void {
-  autoSave = enabled;
+  setAutoSaveSignal(enabled);
+  try {
+    localStorage.setItem(AUTO_SAVE_KEY, enabled ? "on" : "off");
+  } catch {
+    // Not persisting the choice is not worth failing the toggle over.
+  }
+  // Turning it off writes what was already pending; turning it on picks up
+  // every buffer held back while it was off, parked ones included.
   if (!enabled) flushSave();
+  else flushAll();
+}
+
+export function toggleAutoSave(): void {
+  setAutoSave(!autoSave());
 }
 
 interface Debouncer {
@@ -78,7 +123,67 @@ export const vault = {
   currentContent,
   dirty,
   error,
+  openPaths,
+  opening,
+  autoSave,
+  /** Whether a path is in the open list (drives the explorer hint). */
+  isOpen: (path: string) => openPaths().includes(path),
+  /** Whether a path has edits not yet written to disk - the file in the editor,
+   * or one whose buffer was parked when the user switched away from it. */
+  isDirty: (path: string) => (dirty() && currentPath() === path) || parkedPaths().includes(path),
+  /** The unsaved text of a file, for readers that must not see the stale disk
+   * copy (vault-wide search and its replace). Undefined when the file has no
+   * edits pending. */
+  unsavedContent: (path: string): string | undefined =>
+    currentPath() === path ? currentContent() : parked.get(path),
 };
+
+/** Leave the file in the editor: with auto-save on that means writing it, with
+ * auto-save off it means parking the buffer so the edits survive the switch
+ * without touching the disk. */
+function switchAway(): void {
+  if (autoSave()) {
+    flushSave();
+    return;
+  }
+  const path = untrack(currentPath);
+  if (!path || !untrack(dirty)) return;
+  cancelSaveTimers();
+  parked.set(path, untrack(currentContent));
+  setParkedPaths([...parked.keys()]);
+}
+
+/** Forget a parked buffer (it was saved, restored, or its file is gone). */
+function unpark(path: string): void {
+  if (!parked.delete(path)) return;
+  setParkedPaths([...parked.keys()]);
+}
+
+/** Move a path to the front of the MRU list, adding it if it wasn't open. */
+function touchOpen(path: string): void {
+  setOpenPaths((prev) => [path, ...prev.filter((p) => p !== path)]);
+}
+
+/** Close an open file. Closing the file in the editor falls back to the next
+ * most recently used one, or empties the editor when it was the last. */
+export function closeFile(path: string): void {
+  const isCurrent = currentPath() === path;
+  const rest = openPaths().filter((p) => p !== path);
+  setOpenPaths(rest);
+  if (!isCurrent) return;
+  // Falling back to another file goes through openFile, which parks the
+  // outgoing buffer itself; the empty-editor case has to do it here.
+  if (rest.length > 0) {
+    void openFile(rest[0]);
+    return;
+  }
+  switchAway();
+  setCurrentPath(null);
+  setCurrentContent("");
+  setDirty(false);
+  lastSavedContent = null;
+  updateWindowTitle();
+}
 
 /** Show the link graph in the main pane. */
 export function showGraph(): void {
@@ -134,14 +239,18 @@ function baseName(path: string): string {
 
 export async function loadFolder(folder: string): Promise<void> {
   setError(null);
+  // Buffers parked from the previous vault become unreachable once the tree is
+  // replaced, so this is the one switch that has to write them out.
+  flushAll();
   try {
     stopWatch();
     const nodes = await readMarkdownTree(folder);
     setVaultRoot(folder);
-    setTree(nodes);
+    setTreeNodes(nodes);
     setCurrentPath(null);
     setCurrentContent("");
     setDirty(false);
+    setOpenPaths([]);
     // Pick the first markdown file as a sensible default.
     const first = firstMarkdown(nodes);
     if (first) await openFile(first.path);
@@ -161,7 +270,7 @@ async function loadParentFolder(file: string): Promise<void> {
   try {
     const nodes = await readMarkdownTree(parent);
     setVaultRoot(parent);
-    setTree(nodes);
+    setTreeNodes(nodes);
     startWatch(parent);
     updateWindowTitle();
   } catch {
@@ -198,20 +307,38 @@ export async function initOpenWith(): Promise<void> {
   }
 }
 
+// Opens are tokenised so a slower read can never land after a newer one: on a
+// cloud folder a file can take seconds to materialise, and clicking on down
+// the list meanwhile must not be overwritten by the earlier file arriving late.
+let openToken = 0;
+
 export async function openFile(path: string): Promise<void> {
-  // Flush any pending save of the previous file before switching.
-  flushSave();
+  // Deal with the outgoing file's pending edits before switching.
+  switchAway();
   setError(null);
+  const token = ++openToken;
+  setOpening(path);
   try {
     const content = await readFileContent(path);
+    if (token !== openToken) return;
+    // A parked buffer wins over the disk copy: those are the user's unsaved
+    // edits. The disk read still happens, so `lastSavedContent` reflects what
+    // is really there (the file may have changed since it was parked) and the
+    // buffer goes back to clean when it turns out to match.
+    const pending = parked.get(path);
     setCurrentPath(path);
-    setCurrentContent(content);
+    setCurrentContent(pending ?? content);
     lastSavedContent = content;
-    setDirty(false);
+    setDirty(pending !== undefined && pending !== content);
+    unpark(path);
+    touchOpen(path);
     updateWindowTitle();
   } catch (err) {
+    if (token !== openToken) return;
     setError(String(err));
     toast.error("Failed to open file", { description: String(err) });
+  } finally {
+    if (token === openToken) setOpening(null);
   }
 }
 
@@ -225,7 +352,7 @@ export function onContentChange(value: string): void {
   const path = currentPath();
   if (!path) return;
   setDirty(true);
-  if (!autoSave) return;
+  if (!autoSave()) return;
   const cloud = isContentUri(path);
   if (saveTimer) saveTimer.cancel();
   saveTimer = debounce(() => void saveCurrent(), cloud ? SAF_DEBOUNCE_MS : LOCAL_DEBOUNCE_MS);
@@ -238,15 +365,15 @@ export function onContentChange(value: string): void {
   }
 }
 
-/** Manual save entry point (used by the toolbar Save button on Android).
+/** Manual save entry point (the toolbar Save button and Ctrl/Cmd+S).
  * Reuses the same `saveCurrent` write path as auto-save, forcing through the
- * cloud write-gap so the user sees the save land immediately. Pops a short
- * "Saved" toast so the tap has visible feedback (an error toast already fires
- * from `saveCurrent` if the write fails). */
+ * cloud write-gap so the user sees the save land immediately. Silent on
+ * success -- the dirty marker in the explorer and the toolbar's Save button
+ * both go quiet, which is feedback enough for something done this often; only
+ * a failed write says anything, from `saveCurrent`. */
 export function save(): void {
   if (!dirty() || !currentPath()) return;
   flushSave();
-  toast.success("Saved");
 }
 
 // Writes are serialized: a save that lands while another is in flight doesn't
@@ -306,7 +433,7 @@ async function saveCurrent(force = false): Promise<void> {
   }
 }
 
-export function flushSave(): void {
+function cancelSaveTimers(): void {
   if (saveTimer) {
     saveTimer.cancel();
     saveTimer = null;
@@ -319,10 +446,49 @@ export function flushSave(): void {
     clearTimeout(gapTimer);
     gapTimer = null;
   }
+}
+
+export function flushSave(): void {
+  cancelSaveTimers();
   // If still dirty after cancel, write now (ignoring the cloud write gap:
   // flushes fire when leaving the file or the app, where waiting is riskier
   // than an early upload).
   if (dirty() && currentPath()) void saveCurrent(true);
+}
+
+/** Write the editor buffer and every parked one. Parking edits is fine while
+ * the app is alive, but they only exist in memory: losing the session would
+ * lose them, so leaving the app (or turning auto-save on) writes them out. */
+export function flushAll(): void {
+  flushSave();
+  // Snapshot: unpark mutates the map as we go.
+  for (const [path, content] of Array.from(parked)) {
+    unpark(path);
+    void writeFileContent(path, content).catch((err: unknown) => {
+      toast.error("Failed to save", { description: String(err) });
+    });
+  }
+}
+
+/** Write new content to a file from outside the editor (search & replace).
+ *
+ * When the file is the one in the editor, the buffer is updated first and any
+ * pending auto-save is dropped, so the write cannot race with - or be undone
+ * by - a debounced save of the pre-replace text. Resolves once the file is on
+ * disk, so callers can re-scan straight after.
+ *
+ * A file with a parked buffer is written too: the replacement was computed
+ * from that buffer, so the write saves the unsaved edits along with it. */
+export async function replaceFileContent(path: string, content: string): Promise<void> {
+  if (path !== currentPath()) {
+    await writeFileContent(path, content);
+    unpark(path);
+    return;
+  }
+  cancelSaveTimers();
+  setCurrentContent(content);
+  setDirty(true);
+  await saveCurrent(true);
 }
 
 // Flush pending edits the moment the app loses the foreground: on Android the
@@ -330,9 +496,9 @@ export function flushSave(): void {
 // debounce would otherwise lose the tail of the session.
 if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) flushSave();
+    if (document.hidden) flushAll();
   });
-  window.addEventListener("pagehide", () => flushSave());
+  window.addEventListener("pagehide", () => flushAll());
 }
 
 /** Rename a file or folder (same parent). For files, if the new name has no
@@ -358,6 +524,21 @@ export async function renameEntry(oldPath: string, newName: string, isDir = fals
     // Persist pending edits before the path moves.
     if (openAffected) flushSave();
     await renamePath(oldPath, newPath);
+    // Rewrite every open path the rename moved, so the MRU list, the explorer
+    // hints and any parked buffer keep pointing at the same documents.
+    const moved = (p: string): string => {
+      const norm = p.replace(/\\/g, "/");
+      if (isDir) return norm.startsWith(`${oldNorm}/`) ? newPath + norm.slice(oldNorm.length) : p;
+      return p === oldPath ? newPath : p;
+    };
+    setOpenPaths((prev) => prev.map(moved));
+    for (const [p, content] of Array.from(parked)) {
+      const next = moved(p);
+      if (next === p) continue;
+      parked.delete(p);
+      parked.set(next, content);
+      setParkedPaths([...parked.keys()]);
+    }
     if (openAffected) {
       setCurrentPath(isDir ? newPath + openNorm!.slice(oldNorm.length) : newPath);
       updateWindowTitle();
@@ -433,21 +614,68 @@ export async function copyFileToClipboard(path: string): Promise<void> {
   }
 }
 
+/** Publish a freshly read tree, remembering its shape so later refreshes can
+ * tell whether anything actually changed. */
+function setTreeNodes(nodes: TreeNode[]): void {
+  treeSignature = treeSig(nodes);
+  setTree(nodes);
+}
+
+/** Newline-joined fingerprint of every path in the markdown tree. Watcher
+ * events fire for everything under the vault (a cloud folder syncing in the
+ * background emits them nonstop) while the tree only shows markdown files and
+ * their parents: comparing fingerprints stops those events from re-publishing
+ * an identical tree, which would otherwise recreate every explorer row -
+ * destroying the one under the pointer mid-click - every couple of seconds. */
+function treeSig(nodes: TreeNode[], out: string[] = []): string {
+  for (const node of nodes) {
+    out.push(node.path);
+    if (node.isDir) treeSig(node.children, out);
+  }
+  return out.join("\n");
+}
+
+// Tree reads walk the whole vault, so they are serialized: an event arriving
+// mid-read queues a single follow-up pass instead of stacking another walk on
+// top. On a big cloud folder a walk takes longer than the watcher debounce, and
+// overlapping walks starve everything else on the IPC channel - including the
+// read for the file the user just clicked.
+let refreshing = false;
+let refreshQueued = false;
+let treeSignature = "";
+
 async function refreshTree(): Promise<void> {
   const root = vaultRoot();
   if (!root) return;
+  if (refreshing) {
+    refreshQueued = true;
+    return;
+  }
+  refreshing = true;
   try {
     const nodes = await readMarkdownTree(root);
-    setTree(nodes);
-    // If the open file disappeared from disk, clear it.
+    if (treeSig(nodes) === treeSignature) return;
+    setTreeNodes(nodes);
+    // Drop files that disappeared from disk from the open list, and clear the
+    // editor if it was showing one of them.
+    setOpenPaths((prev) => prev.filter((p) => containsPath(nodes, p)));
+    for (const path of parked.keys()) if (!containsPath(nodes, path)) unpark(path);
     const open = currentPath();
     if (open && !containsPath(nodes, open)) {
       setCurrentPath(null);
       setCurrentContent("");
       setDirty(false);
+      const next = openPaths()[0];
+      if (next) void openFile(next);
     }
   } catch {
     // Watch refresh is best-effort.
+  } finally {
+    refreshing = false;
+    if (refreshQueued) {
+      refreshQueued = false;
+      void refreshTree();
+    }
   }
 }
 

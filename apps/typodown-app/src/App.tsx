@@ -14,16 +14,9 @@ import { Toaster } from "@/components/ui/sonner";
 import FileExplorer from "@/components/FileExplorer";
 import Editor from "@/components/Editor";
 import GraphView from "@/components/GraphView";
+import FileSwitcher from "@/components/FileSwitcher";
 import { useColorMode } from "@/components/color-mode";
-import {
-  initOpenWith,
-  openFolder,
-  save,
-  setAutoSave,
-  showEditor,
-  showGraph,
-  vault,
-} from "@/lib/vault";
+import { initOpenWith, openFolder, save, showEditor, showGraph, vault } from "@/lib/vault";
 import { IS_TAURI } from "@/lib/tauri";
 
 /** On mobile there is no window to drag, so the titlebar drag strip (which
@@ -33,24 +26,18 @@ const IS_MOBILE_OS = /android|iphone|ipad/i.test(navigator.userAgent);
 
 const IS_SMALL_SCREEN = window.matchMedia("(max-width: 767px)").matches;
 
-/** Android replaces the auto-save with an explicit Save button in the editor
- * toolbar (cloud SAF writes on every keystroke churn conflict copies on the
- * provider). */
-const IS_ANDROID = /android/i.test(navigator.userAgent);
-
 const App: Component = () => {
   const { colorMode, resolvedColorMode } = useColorMode();
 
   onMount(() => {
     void initOpenWith();
-    if (IS_ANDROID) setAutoSave(false);
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
       const key = e.key.toLowerCase();
       if (key === "o") {
         e.preventDefault();
         void openFolder();
-      } else if (key === "s" && !IS_TAURI) {
+      } else if (key === "s") {
         e.preventDefault();
         save();
       } else if (key === "g") {
@@ -105,7 +92,7 @@ const App: Component = () => {
                 fallback={
                   <Editor
                     theme={colorMode() === "system" ? "auto" : colorMode()}
-                    save={IS_ANDROID ? { run: save, isDirty: vault.dirty } : undefined}
+                    save={{ run: save, isDirty: vault.dirty }}
                   />
                 }
               >
@@ -116,6 +103,7 @@ const App: Component = () => {
         </SidebarProvider>
       </div>
 
+      <FileSwitcher />
       <Toaster />
     </div>
   );

@@ -31,6 +31,10 @@ import {
   Monitor,
   Palette,
   ScrollText,
+  Save,
+  SaveAll,
+  Search,
+  X,
 } from "lucide-solid";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -48,6 +52,8 @@ import {
   vault,
   openFolder,
   openFile,
+  closeFile,
+  toggleAutoSave,
   showGraph,
   showEditor,
   renameEntry,
@@ -56,6 +62,10 @@ import {
   exportToPdf,
 } from "@/lib/vault";
 import { useColorMode } from "@/components/color-mode";
+import { SearchPanel } from "@/components/SidebarSearch";
+import { search, toggleSearch } from "@/lib/search";
+
+const SAVE_SHORTCUT = /mac|iphone|ipad/i.test(navigator.userAgent) ? "Cmd+S" : "Ctrl+S";
 
 // Context-menu + inline-rename state, module level so the recursive TreeRow
 // doesn't need prop drilling.
@@ -121,19 +131,57 @@ const FileExplorer: Component<FileExplorerProps> = (props) => {
         </Show>
       </div>
 
-      <div class="flex items-center gap-1.5 px-2 pb-2">
+      <div class="flex items-center justify-center gap-1.5 px-2 pb-2">
         <Tooltip>
           <TooltipTrigger
             as={Button}
             variant="outline"
             size="sm"
-            class="h-7 flex-1 text-xs"
+            class="h-7 w-7 shrink-0 px-0"
+            aria-label="Open folder"
             onClick={() => void openFolder()}
           >
-            <FolderPlus />
-            Open folder
+            <FolderPlus class="size-3.5" />
           </TooltipTrigger>
           <TooltipContent>Open a folder containing markdown files</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            as={Button}
+            variant={vault.autoSave() ? "default" : "outline"}
+            size="sm"
+            class="h-7 w-7 shrink-0 px-0"
+            aria-label="Toggle auto-save"
+            aria-pressed={vault.autoSave()}
+            onClick={toggleAutoSave}
+          >
+            <Show when={vault.autoSave()} fallback={<Save class="size-3.5" />}>
+              <SaveAll class="size-3.5" />
+            </Show>
+          </TooltipTrigger>
+          <TooltipContent>
+            <Show
+              when={vault.autoSave()}
+              fallback={`Auto-save off - save with ${SAVE_SHORTCUT}; unsaved edits are kept when you switch file`}
+            >
+              Auto-save on - writes to disk as you type
+            </Show>
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            as={Button}
+            variant={search.open() ? "default" : "outline"}
+            size="sm"
+            class="h-7 w-7 shrink-0 px-0"
+            aria-label="Search in vault"
+            aria-pressed={search.open()}
+            disabled={!vault.vaultRoot()}
+            onClick={toggleSearch}
+          >
+            <Search class="size-3.5" />
+          </TooltipTrigger>
+          <TooltipContent>Search and replace across the vault</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger
@@ -204,18 +252,20 @@ const FileExplorer: Component<FileExplorerProps> = (props) => {
         </DropdownMenu>
       </div>
 
-      <ScrollArea class="flex-1">
-        <Show when={vault.vaultRoot()} fallback={<EmptyState />}>
-          <Show when={vault.error()}>
-            <div class="px-3 py-2 text-xs text-destructive">{vault.error()}</div>
+      <Show when={!search.open()} fallback={<SearchPanel />}>
+        <ScrollArea class="flex-1">
+          <Show when={vault.vaultRoot()} fallback={<EmptyState />}>
+            <Show when={vault.error()}>
+              <div class="px-3 py-2 text-xs text-destructive">{vault.error()}</div>
+            </Show>
+            <ul class="px-1.5 pb-4">
+              <For each={vault.tree()}>
+                {(node) => <TreeRow node={node} depth={0} onOpenFile={handleFile} />}
+              </For>
+            </ul>
           </Show>
-          <ul class="px-1.5 pb-4">
-            <For each={vault.tree()}>
-              {(node) => <TreeRow node={node} depth={0} onOpenFile={handleFile} />}
-            </For>
-          </ul>
-        </Show>
-      </ScrollArea>
+        </ScrollArea>
+      </Show>
 
       <FileContextMenu />
     </div>
@@ -316,7 +366,9 @@ const TreeRow: Component<{
   onOpenFile: (path: string) => void;
 }> = (props) => {
   const node = untrack(() => props.node);
-  const [open, setOpen] = createSignal(true);
+  // Folders start collapsed: a deep vault expanded in full is unreadable, and
+  // the explorer is the only way back to the top of it.
+  const [open, setOpen] = createSignal(false);
   const isActive = () => vault.currentPath() === node.path;
 
   return (
@@ -367,22 +419,32 @@ const TreeRow: Component<{
           <Show
             when={renaming() === node.path}
             fallback={
-              <button
-                type="button"
+              <div
                 class={cn(
-                  "flex w-full items-center gap-1.5 rounded-md py-1 pr-2 text-left text-sm transition-colors hover:bg-sidebar-accent/60",
-                  isActive() && "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
+                  "group/file relative flex items-center rounded-md transition-colors hover:bg-sidebar-accent/60",
+                  isActive() && "bg-sidebar-accent text-sidebar-accent-foreground",
                 )}
-                style={{ "padding-left": `${props.depth * 12 + 24}px` }}
-                onClick={() => props.onOpenFile(node.path)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setCtxMenu({ x: e.clientX, y: e.clientY, path: node.path, isDir: false });
-                }}
               >
-                <MarkdownFileIcon name={node.name} active={isActive()} />
-                <span class="truncate">{node.name}</span>
-              </button>
+                <button
+                  type="button"
+                  class={cn(
+                    "flex min-w-0 flex-1 items-center gap-1.5 py-1 pr-7 text-left text-sm",
+                    isActive() && "font-medium",
+                  )}
+                  style={{ "padding-left": `${props.depth * 12 + 24}px` }}
+                  onClick={() => props.onOpenFile(node.path)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setCtxMenu({ x: e.clientX, y: e.clientY, path: node.path, isDir: false });
+                  }}
+                >
+                  <MarkdownFileIcon name={node.name} active={isActive()} />
+                  <span class="truncate">{node.name}</span>
+                </button>
+                <Show when={vault.isOpen(node.path) || vault.isDirty(node.path)}>
+                  <OpenFileMarker path={node.path} />
+                </Show>
+              </div>
             }
           >
             <RenameInput node={node} depth={props.depth} indent={24} />
@@ -392,6 +454,49 @@ const TreeRow: Component<{
     </>
   );
 };
+
+/** Hint that a file is open, sitting where a tab bar would otherwise be: a
+ * hollow dot for open, a filled one for unsaved edits. Hovering the row swaps
+ * it for a close button. A closed file can still be dirty (its buffer is
+ * parked until saved), and shows the filled dot with no close button. */
+const OpenFileMarker: Component<{ path: string }> = (props) => {
+  const dirty = () => vault.isDirty(props.path);
+  const open = () => vault.isOpen(props.path);
+  return (
+    <span class="absolute right-1.5 flex size-4 items-center justify-center">
+      <span
+        class={cn(
+          "size-1.5 rounded-full transition-colors",
+          open() && "group-hover/file:hidden",
+          dirty() ? "bg-sidebar-foreground/70" : "border border-sidebar-foreground/40",
+        )}
+        aria-hidden="true"
+      />
+      <Show when={open()}>
+        <Tooltip>
+          <TooltipTrigger
+            as="button"
+            type="button"
+            class="hidden size-4 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-hover/file:flex"
+            aria-label={`Close ${baseName(props.path)}`}
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation();
+              closeFile(props.path);
+            }}
+          >
+            <X class="size-3" />
+          </TooltipTrigger>
+          <TooltipContent>Close file</TooltipContent>
+        </Tooltip>
+      </Show>
+    </span>
+  );
+};
+
+function baseName(path: string): string {
+  const norm = path.replace(/\\/g, "/").replace(/\/+$/, "");
+  return norm.slice(norm.lastIndexOf("/") + 1);
+}
 
 /** Inline rename field replacing a file or folder row while renaming. Enter
  * commits, Escape cancels, clicking away commits (file-manager conventions).

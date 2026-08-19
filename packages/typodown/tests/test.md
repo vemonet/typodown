@@ -1,5 +1,5 @@
 ---
-type: software
+type: Software
 description: Seamless open-source markdown editing
 ---
 

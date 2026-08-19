@@ -1,6 +1,13 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { readDir, readTextFile, rename, writeTextFile, watch } from "@tauri-apps/plugin-fs";
+import {
+  readDir,
+  readTextFile,
+  rename,
+  writeTextFile,
+  watch,
+  type WatchEvent,
+} from "@tauri-apps/plugin-fs";
 import ignore, { type Ignore } from "ignore";
 
 export type UnwatchFn = () => void;
@@ -176,11 +183,28 @@ async function buildNode(
   return null;
 }
 
+// A vault walk issues one readDir per directory, and every one of them is an
+// IPC round trip. Fanning them all out at once (a cloud folder can hold
+// thousands of directories) floods the bridge, so anything the user does
+// meanwhile - clicking a file, for one - waits behind the whole walk. Cap how
+// many are in flight; the walk releases its slot before recursing, so nesting
+// cannot deadlock.
+const MAX_CONCURRENT_READ_DIR = 8;
+let activeReadDirs = 0;
+const readDirWaiters: (() => void)[] = [];
+
 async function readDirSafe(path: string) {
+  if (activeReadDirs >= MAX_CONCURRENT_READ_DIR) {
+    await new Promise<void>((resolve) => readDirWaiters.push(resolve));
+  }
+  activeReadDirs++;
   try {
     return await readDir(path);
   } catch {
     return [];
+  } finally {
+    activeReadDirs--;
+    readDirWaiters.shift()?.();
   }
 }
 
@@ -241,7 +265,35 @@ export async function watchVault(rootPath: string, cb: () => void): Promise<Unwa
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }
-  return watch(rootPath, cb, { recursive: true });
+  return watch(
+    rootPath,
+    (event) => {
+      if (changesTree(event)) cb();
+    },
+    { recursive: true },
+  );
+}
+
+/** Whether a filesystem event can possibly change what the explorer shows.
+ * The tree only holds markdown files and the folders leading to them, while a
+ * vault kept in a cloud folder emits events continuously for everything else
+ * it syncs - and each one would otherwise cost a full walk of the vault. */
+function changesTree(event: WatchEvent): boolean {
+  const kind = event.type;
+  if (kind === "any") return true;
+  if (typeof kind === "object" && "access" in kind) return false;
+  // Only appearing or disappearing entries can add or drop a folder; a plain
+  // modification matters solely for markdown files.
+  const structural = typeof kind === "object" && ("create" in kind || "remove" in kind);
+  return event.paths.some((path) => {
+    const name = path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1);
+    // Dotfiles are editor swap files and cloud bookkeeping, never tree content.
+    if (name.startsWith(".")) return false;
+    if (MARKDOWN_EXT.test(name)) return true;
+    // No extension: most likely a directory, which only counts when created or
+    // removed. Anything else with an extension is a non-markdown file.
+    return structural && !name.includes(".");
+  });
 }
 
 async function readWebMarkdownTree(rootPath: string): Promise<TreeNode[]> {

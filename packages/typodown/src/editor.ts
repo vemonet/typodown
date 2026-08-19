@@ -32,7 +32,7 @@ import {
   type CompletionContext,
   type CompletionResult,
 } from "@codemirror/autocomplete";
-import { search } from "@codemirror/search";
+import { search, SearchQuery, setSearchQuery } from "@codemirror/search";
 import {
   defaultHighlightStyle,
   ensureSyntaxTree,
@@ -520,6 +520,29 @@ export class Typodown {
    * document's headings. Out-of-range lines clamp to the first / last line. */
   scrollToLine(line: number): void {
     scrollViewToLine(this.view, line);
+  }
+
+  /** Select `length` characters at (1-indexed) `line`, 0-indexed `column`, and
+   * scroll them into view. Lets a host jump to a match its own (vault-wide)
+   * search found and show the user exactly where it is. The range clamps to the
+   * line, so a stale hit selects at most what is still there. */
+  selectRange(line: number, column: number, length: number): void {
+    const doc = this.view.state.doc;
+    const n = Math.max(1, Math.min(line, doc.lines));
+    const target = doc.line(n);
+    const from = Math.min(target.from + Math.max(0, column), target.to);
+    const to = Math.min(from + Math.max(0, length), target.to);
+    scrollViewToLine(this.view, n);
+    this.view.dispatch({ selection: { anchor: from, head: to } });
+  }
+
+  /** Light up every occurrence of `query` in the document, the way the built-in
+   * find panel does, without opening it -- for a host whose own search box is
+   * outside the editor. An empty query clears the highlights. */
+  highlightMatches(query: string, caseSensitive = false): void {
+    this.view.dispatch({
+      effects: setSearchQuery.of(new SearchQuery({ search: query, caseSensitive })),
+    });
   }
 
   focus(): void {

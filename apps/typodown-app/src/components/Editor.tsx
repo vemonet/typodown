@@ -13,6 +13,23 @@ interface EditorProps {
   save?: ToolbarSave;
 }
 
+/** The mounted editor, so hosts outside the component tree (the sidebar's
+ * search results) can reveal a line without prop-drilling a handle. There is
+ * only ever one editor. */
+let active: Typodown | undefined;
+
+/** Scroll to a search hit and select it, so the user sees which occurrence the
+ * clicked row points at. */
+export function revealEditorMatch(line: number, column: number, length: number): void {
+  active?.selectRange(line, column, length);
+}
+
+/** Light up every occurrence of the sidebar's query in the open file. Called
+ * with an empty query to clear the highlights. */
+export function highlightEditorMatches(query: string, caseSensitive: boolean): void {
+  active?.highlightMatches(query, caseSensitive);
+}
+
 const Editor: Component<EditorProps> = (props) => {
   let hostRef: HTMLDivElement | undefined;
   let editor: Typodown | undefined;
@@ -34,6 +51,7 @@ const Editor: Component<EditorProps> = (props) => {
       },
       save: props.save,
     });
+    active = editor;
     ready = true;
   });
 
@@ -56,6 +74,7 @@ const Editor: Component<EditorProps> = (props) => {
 
   onCleanup(() => {
     editor?.destroy();
+    if (active === editor) active = undefined;
     editor = undefined;
   });
 
@@ -65,15 +84,36 @@ const Editor: Component<EditorProps> = (props) => {
       <Show when={!vault.currentPath()}>
         <div class="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
           <div class="text-center">
-            <p class="text-sm text-muted-foreground">No file selected</p>
-            <p class="mt-1 text-xs text-muted-foreground">
-              Open a folder or a markdown file from the sidebar.
-            </p>
+            <Show
+              when={vault.opening()}
+              fallback={
+                <>
+                  <p class="text-sm text-muted-foreground">No file selected</p>
+                  <p class="mt-1 text-xs text-muted-foreground">
+                    Open a folder or a markdown file from the sidebar.
+                  </p>
+                </>
+              }
+            >
+              {(path) => (
+                <>
+                  <p class="text-sm text-muted-foreground">Opening {fileName(path())}…</p>
+                  <p class="mt-1 text-xs text-muted-foreground">
+                    Files stored in the cloud have to download first.
+                  </p>
+                </>
+              )}
+            </Show>
           </div>
         </div>
       </Show>
     </div>
   );
 };
+
+function fileName(path: string): string {
+  const norm = path.replace(/\\/g, "/").replace(/\/+$/, "");
+  return norm.slice(norm.lastIndexOf("/") + 1);
+}
 
 export default Editor;

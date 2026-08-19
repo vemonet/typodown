@@ -345,9 +345,16 @@
 .typodown .cm-td-heading {
   font-weight: 600;
   line-height: 25.6px;
+  vertical-align: top;
 }
+/* `min-height`, not `height`: a heading long enough to wrap needs the line box
+ * to grow with it, otherwise the extra visual rows spill out of a fixed-height
+ * box and paint over the content below. `vertical-align: top` on the heading
+ * itself is what keeps the unwrapped case at exactly one 25.6px row: a 2em
+ * glyph box aligned on the baseline sticks out above the strut and would
+ * inflate the line box by ~6px per heading. */
 .typodown .cm-line:has(.cm-td-heading) {
-  height: 25.6px;
+  min-height: 25.6px;
 }
 .typodown .cm-td-paragraph-gap {
   height: 11.2px;
