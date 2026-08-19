@@ -1,7 +1,7 @@
 {
   "name": "typodown",
   "displayName": "Typodown",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "View and edit Markdown with a seamless editor inspired by Typora.",
   "categories": [
     "Other"

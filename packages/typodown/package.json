@@ -1,6 +1,6 @@
 {
   "name": "@vemonet/typodown",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "A Typora-like WYSIWYG markdown editor for the web. Renders GitHub Flavored Markdown inline and reveals the raw markdown syntax on the block under the cursor.",
   "keywords": [
     "editor",
