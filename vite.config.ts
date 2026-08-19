@@ -127,12 +127,14 @@ export default defineConfig({
         command: "git cliff -o CHANGELOG.md --tag v$(npm pkg get version | tr -d '\"')",
         cache: false,
       },
+      // Nothing is published from here: the release.yml workflow publishes to
+      // npm (trusted publishing / OIDC), the VS Code Marketplace and Open VSX
+      // on the tag push. So this only bumps, tags and pushes -- the tag push is
+      // what kicks all of that off.
       release: {
         command: [
           "vp run ready",
           'bumpp -r --all --git-check --commit --tag --no-push --execute "node scripts/sync-version.ts && vp run changelog"',
-          "npm publish -w @vemonet/typodown",
-          "npm run vsx:publish -w typodown",
           "git push --follow-tags",
         ],
         cache: false,

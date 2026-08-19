@@ -395,10 +395,154 @@ jobs:
           path: dist-artifacts/*.ipa
           if-no-files-found: error
 
+  # Build the .vsix and publish it to the VS Code Marketplace and Open VSX.
+  #
+  # Unlike npm, neither marketplace supports OIDC, so both need a token secret:
+  #   VSCE_PAT  Azure DevOps PAT, scope "Marketplace > Manage" (expires, max 1y)
+  #   OVSX_PAT  Open VSX access token, from open-vsx.org user settings
+  # Each publish step is skipped when its secret is absent, so the release still
+  # succeeds for forks / before the marketplaces are set up.
+  build-vsx:
+    name: 🧩 Build & publish VS Code extension
+    needs: create-release
+    # Run on tag pushes (release_id set) and on manual dry runs (create-release skipped).
+    if: ${{ always() && needs.create-release.result != 'failure' && needs.create-release.result != 'cancelled' }}
+    runs-on: ubuntu-latest
+    env:
+      HAS_VSCE_PAT: ${{ secrets.VSCE_PAT != '' }}
+      HAS_OVSX_PAT: ${{ secrets.OVSX_PAT != '' }}
+      VSIX_PATH: apps/typodown-vsx/typodown.vsix
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.0
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: "lts"
+
+      - name: Install dependencies
+        run: vp i
+
+      # `vsx:build` depends on @vemonet/typodown#build and runs `vsce package`,
+      # which triggers the extension's `vscode:prepublish` (esbuild --production).
+      - name: Build the .vsix
+        run: vp run vsx:build
+
+      # Both marketplaces reject a version that is already published, and the
+      # extension version comes from its own package.json (bumped by `bumpp -r
+      # --all`), not from the tag. Catch drift before the upload attempt.
+      - name: Verify the version matches the tag
+        if: github.ref_type == 'tag'
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(node -p "require('./apps/typodown-vsx/package.json').version")
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::Tag v$tag does not match the extension version $pkg"
+            exit 1
+          fi
+          echo "Publishing the Typodown extension $pkg"
+
+      # --packagePath publishes the artifact built above rather than repackaging.
+      - name: Publish to the VS Code Marketplace
+        if: ${{ needs.create-release.outputs.release_id != '' && env.HAS_VSCE_PAT == 'true' }}
+        run: npx vsce publish --packagePath "$VSIX_PATH"
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      - name: Publish to Open VSX
+        if: ${{ needs.create-release.outputs.release_id != '' && env.HAS_OVSX_PAT == 'true' }}
+        run: npx ovsx publish "$VSIX_PATH"
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+
+      - name: Note when a marketplace publish is skipped
+        if: ${{ needs.create-release.outputs.release_id != '' && (env.HAS_VSCE_PAT != 'true' || env.HAS_OVSX_PAT != 'true') }}
+        run: |
+          [ "$HAS_VSCE_PAT" = "true" ] || echo "::notice::VSCE_PAT not set · skipped the VS Code Marketplace."
+          [ "$HAS_OVSX_PAT" = "true" ] || echo "::notice::OVSX_PAT not set · skipped Open VSX."
+
+      - name: Upload the .vsix to the release
+        if: needs.create-release.outputs.release_id != ''
+        uses: softprops/action-gh-release@v3.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: ${{ env.VSIX_PATH }}
+
+      - name: Upload the .vsix to the workflow run (dry run)
+        if: needs.create-release.outputs.release_id == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: ${{ env.VSIX_PATH }}
+          if-no-files-found: error
+
+  # Publish @vemonet/typodown to npm.
+  #
+  # Authentication is npm trusted publishing (OIDC): the job exchanges the
+  # workflow's short-lived id-token for a publish credential, so there is no
+  # NPM_TOKEN secret to rotate and nothing to expire. It requires the package's
+  # trusted publisher on npmjs.com to point at this repo AND at this workflow
+  # file name (release.yml) -- renaming this file breaks publishing.
+  # A side benefit is that npm records provenance automatically.
+  #
+  # Skipped on manual runs (workflow_dispatch), like create-release: those are
+  # dry runs that must not push anything to the registry.
+  publish-npm:
+    name: 📦 Publish to npm
+    needs: create-release
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required for OIDC trusted publishing.
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.0
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: "lts"
+
+      # Trusted publishing landed in npm 11.5.1; the npm bundled with Node LTS
+      # can be older, and an older npm falls back to token auth and fails.
+      - name: Upgrade npm
+        run: |
+          npm install -g npm@latest
+          npm --version
+
+      - name: Install dependencies
+        run: vp i
+
+      - name: Build the package
+        run: vp run @vemonet/typodown#build
+
+      # The release commit made by `bumpp` already carries the bumped version,
+      # so tag and package.json must agree. If they drifted, publishing would
+      # silently ship the wrong version under the right tag.
+      - name: Verify the version matches the tag
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(node -p "require('./packages/typodown/package.json').version")
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::Tag v$tag does not match @vemonet/typodown@$pkg"
+            exit 1
+          fi
+          echo "Publishing @vemonet/typodown@$pkg"
+
+      - name: Publish
+        run: npm publish -w @vemonet/typodown
+
   # Publish the release once every artifact has been attached.
   publish-release:
     name: ✅ Publish release
-    needs: [create-release, build-desktop, build-android, build-ios]
+    needs: [create-release, build-desktop, build-android, build-ios, build-vsx, publish-npm]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:

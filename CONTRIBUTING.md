@@ -251,15 +251,57 @@ vp run app:aab
 > For Play Store publishing (optional; the release still succeeds without it):
 >
 > - `PLAY_SERVICE_ACCOUNT_JSON`: the full JSON key of a Google Play service account (see [Publish to Google Play](#-publish-to-google-play) below)
+>
+> For VSCode extension publishing (optional; each marketplace is skipped when its token is missing, see [Publish the VSCode extension](#-publish-the-vscode-extension) below):
+>
+> - `VSCE_PAT`: Azure DevOps personal access token for the VSCode Marketplace
+> - `OVSX_PAT`: Open VSX access token
+>
+> The npm package needs **no secret**: it is published with [trusted publishing](#-publish-to-npm) (OIDC).
 
 ```sh
 vp run release
 ```
 
 > [!NOTE]
-> The npm package and VSCode extension are built and published locally, then a GitHub Actions workflow ([`release.yml`](.github/workflows/release.yml)) builds the platform artefacts (desktop app, Android `.apk` + `.aab`, unsigned iOS `.ipa`), attaches the desktop bundles, `.apk` and `.ipa` to the GitHub release, and uploads the `.aab` to the Play Store's internal track.
+> `vp run release` only checks, bumps, tags and pushes. **Nothing is published from your machine**: pushing the tag triggers the GitHub Actions workflow ([`release.yml`](.github/workflows/release.yml)), which publishes the npm package, publishes the VSCode extension to the VSCode Marketplace and Open VSX, builds the platform artefacts (desktop app, Android `.apk` + `.aab`, unsigned iOS `.ipa`), attaches the desktop bundles, `.apk`, `.ipa` and `.vsix` to the GitHub release, and uploads the `.aab` to the Play Store's internal track.
+>
+> That means no publishing token ever lives on a laptop, and a release cannot half-fail because a local token expired.
 
-You can trigger the release workflow manually (`workflow_dispatch`) for a **dry run**: it builds every artefact and uploads them to the workflow run (no GitHub release, no Play Store upload).
+You can trigger the release workflow manually (`workflow_dispatch`) for a **dry run**: it builds every artefact and uploads them to the workflow run (no GitHub release, no npm publish, no marketplace publish, no Play Store upload).
+
+### 📦 Publish to npm
+
+`@vemonet/typodown` is published by the _Publish to npm_ job using npm [trusted publishing](https://docs.npmjs.com/trusted-publishers): the job trades its GitHub Actions OIDC token for a short-lived publish credential. There is no `NPM_TOKEN` secret to create or rotate, and npm records [provenance](https://docs.npmjs.com/generating-provenance-statements) automatically.
+
+One-time setup, on the package's page on npmjs.com under _Settings > Trusted publisher_:
+
+| Field            | Value                                                              |
+| ---------------- | ------------------------------------------------------------------ |
+| Publisher        | GitHub Actions                                                     |
+| Repository       | `vemonet/typodown`                                                 |
+| Workflow file    | `release.yml`                                                      |
+| Environment name | _leave empty_ (the job declares no environment)                    |
+| Allowed actions  | **Allow npm publish** only (the workflow does not stage publishes) |
+
+> [!WARNING]
+> The workflow **file name** is part of the credential match, so renaming `release.yml` breaks publishing until the trusted publisher is updated. Same for moving the repo.
+>
+> If you fill in _Environment name_, you must also add a matching `environment:` to the _Publish to npm_ job, otherwise the OIDC claims will not match and the publish fails to authenticate.
+
+Trusted publishing needs npm >= 11.5.1, which is why the job upgrades npm before publishing: an older npm silently falls back to token auth and fails.
+
+### 🧩 Publish the VSCode extension
+
+The _Build & publish VSCode extension_ job packages the `.vsix` with `vsce` (the same `vsx:build` task you can run locally) and pushes it to both marketplaces. Neither supports OIDC, so unlike npm both need a token secret. Each publish step is skipped when its secret is missing, so the release still succeeds for forks or before the marketplaces are set up.
+
+1. **`VSCE_PAT`** for the [VSCode Marketplace](https://marketplace.visualstudio.com/manage). On [dev.azure.com](https://dev.azure.com), in the organisation tied to the `vemonet` publisher: _User settings > Personal access tokens > New Token_, with **Organization: All accessible organizations** and **Scopes: Custom defined > Marketplace > Manage**.
+2. **`OVSX_PAT`** for [Open VSX](https://open-vsx.org). Log in with GitHub, then _Settings > Access Tokens > Generate New Token_. The `vemonet` namespace must exist and the [publisher agreement](https://open-vsx.org/user-settings/extensions) must be signed first.
+
+> [!IMPORTANT]
+> An Azure DevOps PAT expires (1 year maximum), so `VSCE_PAT` is the one credential in this setup that does need rotating. A release that fails only on the Marketplace step, with everything else green, is usually an expired PAT.
+
+Both marketplaces reject a version that is already published, so the job checks the extension's version against the tag before uploading anything.
 
 ### 🍎 iOS `.ipa` (unsigned)
 
