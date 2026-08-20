@@ -55,6 +55,7 @@ import {
   openFolder,
   openFile,
   closeFile,
+  closeOtherFiles,
   toggleAutoSave,
   showGraph,
   showEditor,
@@ -348,6 +349,10 @@ const FileContextMenu: Component = () => {
                   label="Export to PDF"
                   onClick={() => void exportToPdf(menu().path)}
                 />
+                <Show when={canCloseOthers()}>
+                  <div class="my-1 h-px bg-border" />
+                  <ContextItem icon={X} label="Close all" onClick={closeOtherFiles} />
+                </Show>
               </Show>
             </div>
           </div>
@@ -357,11 +362,18 @@ const FileContextMenu: Component = () => {
   );
 };
 
+/** Whether "Close all" applies: it closes every open file but the one in the
+ * editor, so it needs at least one other file open. */
+function canCloseOthers(): boolean {
+  return vault.openPaths().some((p) => p !== vault.currentPath());
+}
+
 /** Roughly how tall the menu renders, so it can be clamped inside the window
  * instead of running off the bottom edge. Files get four items and a separator,
- * folders only Rename. */
+ * folders only Rename, plus "Close all" and its separator when it shows. */
 function menuHeight(isDir: boolean): number {
-  return isDir ? 48 : 160;
+  if (isDir) return 48;
+  return 160 + (canCloseOthers() ? 40 : 0);
 }
 
 const ContextItem: Component<{

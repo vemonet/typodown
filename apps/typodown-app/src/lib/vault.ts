@@ -185,6 +185,13 @@ export function closeFile(path: string): void {
   updateWindowTitle();
 }
 
+/** Close every open file except the one in the editor. Buffers parked for the
+ * closed files stay parked, exactly as when closing them one by one. */
+export function closeOtherFiles(): void {
+  const keep = currentPath();
+  setOpenPaths(keep ? [keep] : []);
+}
+
 /** Show the link graph in the main pane. */
 export function showGraph(): void {
   setView("graph");
