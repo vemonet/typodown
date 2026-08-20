@@ -157,6 +157,8 @@ window.addEventListener("message", (event: MessageEvent<HostMessage>) => {
   if (message.type === "init") {
     themeSetting = message.theme;
     imageBaseUri = message.imageBaseUri;
+    editor.setJoinSoftBreaks(message.joinSoftBreaks);
+    editor.setTabSize(message.tabSize);
     applyTheme();
     setContent(message.text);
     ready = true;
@@ -165,6 +167,10 @@ window.addEventListener("message", (event: MessageEvent<HostMessage>) => {
   } else if (message.type === "theme") {
     themeSetting = message.theme;
     applyTheme();
+  } else if (message.type === "joinSoftBreaks") {
+    editor.setJoinSoftBreaks(message.join);
+  } else if (message.type === "tabSize") {
+    editor.setTabSize(message.size);
   } else if (message.type === "clipboard") {
     pendingClipboard?.(message.text);
     pendingClipboard = null;

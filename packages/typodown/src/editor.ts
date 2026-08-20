@@ -51,6 +51,7 @@ import {
   ALERT_KINDS,
   markerEndOnLine,
   paragraphSeparatorTarget,
+  type LivePreviewConfig,
 } from "./live-preview.ts";
 import { openInsertTableDialog, insertTable } from "./menu.ts";
 import { createOutline, scrollToLine as scrollViewToLine, type OutlineHandle } from "./outline.ts";
@@ -111,6 +112,15 @@ export interface TypodownOptions {
   /** Render raw HTML blocks/tags as live widgets. Defaults to true. */
   html?: boolean;
   /**
+   * Render a paragraph that is hard-wrapped in the source as one flowing
+   * paragraph, joining its lines with a space the way every Markdown renderer
+   * does (a single newline is a soft line break in CommonMark). Defaults to
+   * true; set to false to keep each source line on its own visual line.
+   * A hard break -- two trailing spaces or a backslash -- always breaks the
+   * line either way.
+   */
+  joinSoftBreaks?: boolean;
+  /**
    * Show a Save action at the end of the formatting toolbar, invoked when the
    * user taps it. Hosts that prefer an explicit save (e.g. a mobile app that
    * disables auto-save to avoid churning cloud conflict copies) pass a callback
@@ -142,6 +152,11 @@ export interface TypodownOptions {
    */
   outline?: boolean;
   /**
+   * Number of spaces one indent level uses: what Tab inserts and Shift+Tab
+   * removes, and therefore how deep a nested list item sits. Defaults to 4.
+   */
+  tabSize?: number;
+  /**
    * Remember UI preferences across reloads: whether the formatting toolbar is
    * expanded and whether the outline panel is open, saved to localStorage. Pass
    * a string to use it as the storage key (namespacing several editors); `true`
@@ -163,6 +178,8 @@ export class Typodown {
   private readonly preview = new Compartment();
   private readonly html: boolean;
   private readonly resolveImageSrc?: (src: string) => string;
+  private joinSoftBreaks: boolean;
+  private tabSize: number;
   private rawMarkdown = false;
   /** Where the last pointer press landed, and where that document position sat
    * on screen before the press was handled. See `anchorPointer`. */
@@ -173,6 +190,8 @@ export class Typodown {
     this.openLink = options.openLink;
     this.html = options.html ?? true;
     this.resolveImageSrc = options.resolveImageSrc;
+    this.joinSoftBreaks = options.joinSoftBreaks ?? true;
+    this.tabSize = normalizeTabSize(options.tabSize);
 
     this.wrapper = document.createElement("div");
     this.wrapper.className = "typodown";
@@ -186,10 +205,7 @@ export class Typodown {
 
     const extensions: Extension[] = [
       typodownMarkdown(),
-      this.preview.of([
-        livePreview({ html: this.html, resolveImageSrc: this.resolveImageSrc }),
-        clampCursorPastMarker,
-      ]),
+      this.preview.of([livePreview(this.previewConfig()), clampCursorPastMarker]),
       history(),
       // Browser-native contenteditable carets can be painted at stale DOM
       // boundaries when live-preview rebuilds syntax spans around the cursor.
@@ -248,8 +264,8 @@ export class Typodown {
         { key: "Mod-Shift-v", run: (v) => this.plainPaste(v) },
         {
           key: "Tab",
-          run: (v) => acceptCompletion(v) || changeIndent(false)(v),
-          shift: changeIndent(true),
+          run: (v) => acceptCompletion(v) || changeIndent(false, this.tabSize)(v),
+          shift: (v) => changeIndent(true, this.tabSize)(v),
         },
         // Enter starts a new paragraph (Typora-style); Shift+Enter is a soft
         // line break. In lists / blockquotes, Enter continues the markup.
@@ -468,6 +484,31 @@ export class Typodown {
     }
   }
 
+  private previewConfig(): LivePreviewConfig {
+    return {
+      html: this.html,
+      resolveImageSrc: this.resolveImageSrc,
+      joinSoftBreaks: this.joinSoftBreaks,
+    };
+  }
+
+  /** Whether hard-wrapped paragraph lines are shown joined into one flowing
+   * paragraph (see the `joinSoftBreaks` option). */
+  setJoinSoftBreaks(join: boolean): void {
+    if (join === this.joinSoftBreaks) return;
+    this.joinSoftBreaks = join;
+    if (this.rawMarkdown) return;
+    this.view.dispatch({
+      effects: this.preview.reconfigure([livePreview(this.previewConfig()), clampCursorPastMarker]),
+    });
+  }
+
+  /** Change the indent width (spaces per Tab). Takes effect on the next
+   * Tab / Shift+Tab; existing indentation is left as-is. */
+  setTabSize(size: number): void {
+    this.tabSize = normalizeTabSize(size);
+  }
+
   setTheme(theme: Theme): void {
     this.wrapper.dataset.tdTheme = theme;
   }
@@ -477,10 +518,7 @@ export class Typodown {
   refreshPreview(): void {
     if (this.rawMarkdown) return;
     this.view.dispatch({
-      effects: this.preview.reconfigure([
-        livePreview({ html: this.html, resolveImageSrc: this.resolveImageSrc }),
-        clampCursorPastMarker,
-      ]),
+      effects: this.preview.reconfigure([livePreview(this.previewConfig()), clampCursorPastMarker]),
     });
   }
 
@@ -497,10 +535,7 @@ export class Typodown {
       effects: this.preview.reconfigure(
         raw
           ? syntaxHighlighting(defaultHighlightStyle)
-          : [
-              livePreview({ html: this.html, resolveImageSrc: this.resolveImageSrc }),
-              clampCursorPastMarker,
-            ],
+          : [livePreview(this.previewConfig()), clampCursorPastMarker],
       ),
     });
   }
@@ -1012,10 +1047,17 @@ export function wrap(marker: string): Command {
   };
 }
 
-/** Indent (Tab) or outdent (Shift+Tab) every line the selection touches by two
- * spaces, nesting / un-nesting list items.
+/** A usable indent width: a positive whole number of spaces, defaulting to 4
+ * when unset or nonsensical. Capped so a typo cannot insert a huge run. */
+function normalizeTabSize(size: number | undefined): number {
+  if (typeof size !== "number" || !Number.isFinite(size) || size < 1) return 4;
+  return Math.min(16, Math.floor(size));
+}
+
+/** Indent (Tab) or outdent (Shift+Tab) every line the selection touches by one
+ * indent level (`size` spaces), nesting / un-nesting list items.
  */
-function changeIndent(outdent: boolean): Command {
+function changeIndent(outdent: boolean, size: number): Command {
   return (view) => {
     const { state } = view;
     const lines = new Set<number>();
@@ -1028,10 +1070,10 @@ function changeIndent(outdent: boolean): Command {
     for (const n of lines) {
       const line = state.doc.line(n);
       if (outdent) {
-        const match = /^(\t| {1,2})/.exec(line.text);
+        const match = new RegExp(`^(\\t| {1,${size}})`).exec(line.text);
         if (match) changes.push({ from: line.from, to: line.from + match[0].length });
       } else {
-        changes.push({ from: line.from, insert: "  " });
+        changes.push({ from: line.from, insert: " ".repeat(size) });
       }
     }
     if (changes.length === 0) return false;

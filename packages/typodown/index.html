@@ -1069,7 +1069,7 @@ Markdown renders where you type. Move your caret into a **bold term**, \`code sp
 
 ## Why?
 
-[**Typora**](https://typora.io) nailed markdown editing: you edit the rendered document directly. But Typora is a closed-source desktop app, so that experience stops at its electron window.
+[**Typora**](https://typora.io) nailed markdown editing: you edit the rendered document directly. But it is a closed-source desktop app, so that experience stops at its electron window.
 
 [**Marktext**](https://marktext.me/) came up with a really good open-source alternative to Typora. However, as a long time Typora user, a few things were not feeling right:
 
@@ -1135,7 +1135,7 @@ A floating toolbar brings formatting actions to touch screens where keyboard sho
 
 ### 📦 npm package
 
-Embed the editor in any web app, framework-agnostic. Built with [CodeMirror 6](https://codemirror.net/). Install it from npm:
+Embed the editor in any web app, framework-agnostic, built with [CodeMirror 6](https://codemirror.net/). Install it from npm:
 
 \`\`\`sh
 npm i --save @vemonet/typodown
@@ -1151,6 +1151,7 @@ const editor = createTypodown(document.getElementById("editor")!, {
   value: "# Hello",
   theme: "auto", // "light" | "dark" | "auto"
   placeholder: "Write some markdown...",
+  tabSize: 4, // spaces per indent level (Tab / Shift+Tab)
   onChange: (markdown) => console.log(markdown),
 });
 
@@ -1177,9 +1178,9 @@ Select some text and press <kbd>Ctrl/⌘</kbd> + <kbd>B</kbd>, <kbd>Ctrl/⌘</kb
 Unordered lists nest with different bullets per level (Tab / ⇧+Tab):
 
 - Fruit
-  - Apple
-  - Banana
-    - Cavendish
+    - Apple
+    - Banana
+        - Cavendish
 - Vegetables
 
 Ordered lists keep their starting number:
@@ -1293,7 +1294,7 @@ Define a custom theme:
 
 [Measured actions](https://github.com/vemonet/typodown/blob/main/packages/typodown/tests/benchmark/RESULTS.md) complete in the 1-30 ms range, comparable to alternatives. Typodown scales well on large documents because [CodeMirror](https://codemirror.net) renders only the visible viewport and a small buffer, instead of mounting the entire document in the DOM.
 
-The desktop/smartphone app is built with [SolidJS](https://www.solidjs.com) and [Tauri](https://tauri.app), which is more lightweight than Electron, used by most alternatives, and uses the system's webview instead of bundling Chromium. The app is ~10 MB on disk, compared to ~200 MB for an Electron app.
+The desktop/smartphone app is built with [SolidJS](https://www.solidjs.com) and [Tauri](https://tauri.app), which is more lightweight than Electron, used by most alternatives, and uses the system webview instead of bundling Chromium. The app is ~10 MB on disk, compared to ~200 MB for an Electron app.
 
 [^1]: Footnotes are useful for citations and additional context.
 

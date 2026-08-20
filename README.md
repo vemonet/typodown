@@ -15,7 +15,7 @@
 
 Markdown renders where you type: no preview pane, no markup cluttering the page. Reading and writing blend into one continuous experience.
 
-Move your caret into a heading, **bold term**, `code span` or [link](/) and only its raw markers surface for the moment you edit them, then settle back into place as you move on. The content stays central, the syntax stays out of the way.
+See the [**website**](https://typodown.app) for a live demo and more details.
 
 ## Features
 
@@ -26,21 +26,6 @@ Move your caret into a heading, **bold term**, `code span` or [link](/) and only
 - **Familiar shortcuts.** <kbd>Ctrl/⌘</kbd>+<kbd>B</kbd> bold, <kbd>Ctrl/⌘</kbd>+<kbd>I</kbd> italic, <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> link, <kbd>Tab</kbd> / <kbd>⇧+Tab</kbd> indent, <kbd>Ctrl/⌘</kbd>+<kbd>Z</kbd> undo / redo.
 - **Built on [CodeMirror 6](https://codemirror.net).** Battle-tested editing, selection, undo, IME and viewport virtualisation, the live preview is a decoration layer on top.
 - **Fully local.** No telemetry, no remote server.
-
-## Use it
-
-Typodown ships in various forms:
-
-|                      | Description                                                                            | Get it                                                                                     |
-| -------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| **Library**          | Embed the editor in any web app. Framework-agnostic                                    | [`@vemonet/typodown`](https://www.npmjs.com/package/@vemonet/typodown)                     |
-| **VSCode extension** | Edit `.md` files with the Typodown editor inside VSCode                                | [`vemonet.typodown`](https://marketplace.visualstudio.com/items?itemName=vemonet.typodown) |
-| **Desktop app**      | Open folders of `.md` files, with file explorer and graph view (Linux, macOS, Windows) | [Download](https://github.com/vemonet/typodown/releases)                                   |
-| **Android app**      | Open `.md` files                                                                       | [Download](https://github.com/vemonet/typodown/releases)                                   |
-
-> Contributions welcome, especially if someone with an iOS developer account wants to help ship the iOS app.
-
-See the [website](https://typodown.app) for more details.
 
 ## Development
 

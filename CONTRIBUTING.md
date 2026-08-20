@@ -30,150 +30,6 @@ Build the monorepo:
 vp run build
 ```
 
-## 🏗️ How it works
-
-New to the codebase? Start here. This is the 10,000-foot view; the files
-themselves carry the detail.
-
-### One library, four surfaces
-
-Everything that makes Typodown an editor lives in **one package**. The four
-things you can install are thin hosts around it:
-
-| Path                                                           | What it is                                                                                                                                      |
-| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`packages/typodown`](packages/typodown)                       | The editor library, published to npm as `@vemonet/typodown`. **All editing and rendering logic is here.**                                       |
-| [`packages/typodown/index.html`](packages/typodown/index.html) | The demo site and landing page ([typodown.app](https://typodown.app)), which is also the fastest way to try a change.                           |
-| [`apps/typodown-app`](apps/typodown-app)                       | Desktop + Android app: a [Tauri v2](https://v2.tauri.app/) shell around a SolidJS frontend.                                                     |
-| [`apps/typodown-pwa`](apps/typodown-pwa)                       | The same SolidJS frontend built for the browser. Its entry point is literally one re-export of the app's, so there is no second UI to maintain. |
-| [`apps/typodown-vsx`](apps/typodown-vsx)                       | VS Code extension: an extension-host half and a webview half that talk over a typed message protocol.                                           |
-
-If you are fixing how markdown looks or behaves, you almost certainly want
-`packages/typodown/src`, not an app.
-
-### The core idea
-
-There is no preview pane and no separate rendered document. **The markdown text
-is the single source of truth, and nothing ever rewrites it in order to render
-it.** CodeMirror 6 owns the caret, selection, history, clipboard and viewport
-virtualisation; on top of that sits a decoration layer that makes plain text
-_look_ rendered.
-
-The Typora trick is one rule: hide the raw syntax everywhere **except** on the
-construct the caret is touching. Put the cursor in a heading and the `#` comes
-back, editable in place. Move away and it is a heading again.
-
-### The rendering pipeline
-
-```
-markdown text
-  |
-  |  typodownMarkdown()  -- CommonMark + GFM + math, via @codemirror/lang-markdown
-  v
-Lezer syntax tree        -- incremental: CodeMirror reparses only what changed
-  |
-  |  live-preview.ts     -- walks the tree, emits decorations
-  v
-DecorationSet
-  |
-  |  CodeMirror applies them over the unchanged text
-  v
-what you see
-```
-
-[`live-preview.ts`](packages/typodown/src/live-preview.ts) is the heart of the
-project (and the biggest file). It emits three kinds of decoration:
-
-- **mark**: style a construct in place (heading sizes, bold, inline code, links).
-- **replace**: hide the syntax marks (`**`, `#`, backticks, the `](url)` half of
-  a link) so only the content shows.
-- **widget**: swap a whole construct for real DOM. Checkboxes, bullets, images,
-  horizontal rules, tables, highlighted code blocks with a copy button, Mermaid
-  diagrams, KaTeX math, and sanitized raw HTML are all widgets.
-
-The reveal-on-caret behaviour is not a mode or a state machine: every decorator
-just asks whether the selection overlaps the range it is about to hide, and
-skips hiding when it does. That single predicate is the whole feature.
-
-**Two decoration sources, and why it matters.** `livePreview()` returns a pair:
-
-- `inlinePlugin` is a **ViewPlugin**. It only rebuilds over
-  `view.visibleRanges`, so its cost is bounded by the viewport, not the
-  document. This handles everything inline.
-- `blockField` is a **StateField**, and it scans the whole document. It has to
-  be a state field because multi-line replacements (a rendered table, an HTML
-  block) change block layout, and CodeMirror only accepts layout-affecting
-  decorations from state, not from a view plugin.
-
-That whole-document scan is why `blockField` is full of fast paths, and why you
-should be careful editing it: an edit that looks harmless can turn every
-keystroke into a full-document rebuild. It skips work when an edit is a simple
-inline one (it maps the existing decorations instead of rebuilding), and on
-caret moves it compares the tracked selection-sensitive ranges and bails out
-unless the caret actually crossed a widget boundary. Whole-document line scans
-for rarer features are gated behind a cheap substring check on the source.
-
-One more wrinkle worth knowing: **the Lezer tree parses lazily**, so on first
-load it is often incomplete and later transactions extend it. Both decoration
-sources track how far it has parsed and rebuild as it advances. If something
-renders only after you type a character, that is the mechanism to look at.
-
-### The rest of the library
-
-| File                                                 | Role                                                                                                                                     |
-| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| [`editor.ts`](packages/typodown/src/editor.ts)       | The `Typodown` class: assembles the CodeMirror extensions, keymap and commands, and is the public API surface.                           |
-| [`highlight.ts`](packages/typodown/src/highlight.ts) | Code-block highlighting, delegated to CodeMirror's own Lezer grammars and mapped onto `cm-td-tok-*` theme classes.                       |
-| [`export.ts`](packages/typodown/src/export.ts)       | Markdown to standalone HTML (used by the app's export-to-HTML/PDF). Walks the same tree as the live preview but emits semantic HTML.     |
-| [`sanitize.ts`](packages/typodown/src/sanitize.ts)   | DOMPurify, applied at **every** raw-HTML sink. Markdown files are untrusted input, so skipping this is a stored-XSS hole.                |
-| [`theme.css`](packages/typodown/src/theme.css)       | Every colour is a `--td-*` variable scoped to `.typodown[data-td-theme="..."]`. `setTheme()` does nothing but write that attribute.      |
-| `toolbar.ts`, `outline.ts`, `search.ts`, `menu.ts`   | The floating UI (formatting toolbar, heading outline, find/replace, table menus). Plain DOM, no framework, themed by the same variables. |
-| `math.ts`, `emoji.ts`, `clipboard.ts`, `prefs.ts`    | KaTeX blocks, `:emoji:` completion, HTML-to-markdown paste, and localStorage-backed UI preferences.                                      |
-
-Raw mode (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>/</kbd>) is a good illustration of
-how the layers separate: it swaps the live-preview extension out of a CodeMirror
-`Compartment` for plain syntax highlighting. Same text, same parser, no
-decorations.
-
-### How the hosts embed it
-
-Every host does the same thing: `createTypodown(element, options)`. A few
-options exist purely because embedders differ in what the web platform gives
-them, and they are the usual source of "works on the website, broken in the app"
-bugs:
-
-- `getClipboardText` - VS Code webviews block `navigator.clipboard`, so the
-  extension reads it from the extension host instead.
-- `openLink` - `window.open` is a no-op in a Tauri webview; links have to go
-  through the opener plugin to reach the system browser.
-- `resolveImageSrc` - a relative image path means nothing until you know which
-  file is open, so the host resolves it.
-
-Beyond that:
-
-- **VS Code**: [`extension.ts`](apps/typodown-vsx/src/extension.ts) registers a
-  `CustomTextEditorProvider` and drives the webview
-  ([`webview/main.ts`](apps/typodown-vsx/src/webview/main.ts)) over the typed
-  messages in [`protocol.ts`](apps/typodown-vsx/src/protocol.ts). Both halves
-  guard against echoing their own edits back at each other.
-- **Desktop / Android / PWA**: [`vault.ts`](apps/typodown-app/src/lib/vault.ts)
-  holds the open-folder state, and [`tauri.ts`](apps/typodown-app/src/lib/tauri.ts)
-  is the seam that makes one frontend serve three targets: it branches on
-  `IS_TAURI` between Tauri's filesystem commands and the browser's File System
-  Access API. [`graph.ts`](apps/typodown-app/src/lib/graph.ts) derives the link
-  graph from the files alone, with pure builders kept testable without Tauri.
-
-### Tests
-
-The library's test suite lives in [`packages/typodown/tests`](packages/typodown/tests)
-and is where behaviour is pinned down - including a run against the CommonMark
-spec. Rendering and editing changes are much easier to land with a test than to
-argue about by hand:
-
-```sh
-vp test
-```
-
 ## ⚡️ Demo website
 
 Run dev server:
@@ -238,6 +94,132 @@ Build Android `.aab` (Android App Bundle, required by the Play Store):
 vp run app:aab
 ```
 
+## 🏗️ How it works
+
+### One library, four surfaces
+
+Everything that makes Typodown an editor lives in **one package**. The four
+things you can install are thin hosts around it:
+
+| Path                                                           | What it is                                                                                                                                      |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`packages/typodown`](packages/typodown)                       | The editor library, published to npm as `@vemonet/typodown`. **All editing and rendering logic is here.**                                       |
+| [`packages/typodown/index.html`](packages/typodown/index.html) | The demo site and landing page ([typodown.app](https://typodown.app)), which is also the fastest way to try a change.                           |
+| [`apps/typodown-app`](apps/typodown-app)                       | Desktop + Android app: a [Tauri v2](https://v2.tauri.app/) shell around a SolidJS frontend.                                                     |
+| [`apps/typodown-pwa`](apps/typodown-pwa)                       | The same SolidJS frontend built for the browser. Its entry point is literally one re-export of the app's, so there is no second UI to maintain. |
+| [`apps/typodown-vsx`](apps/typodown-vsx)                       | VS Code extension: an extension-host half and a webview half that talk over a typed message protocol.                                           |
+
+If you are fixing how markdown looks or behaves, you almost certainly want
+`packages/typodown/src`, not an app.
+
+### The core idea
+
+There is no preview pane and no separate rendered document. **The markdown text
+is the single source of truth, and nothing ever rewrites it in order to render
+it.** CodeMirror 6 owns the caret, selection, history, clipboard and viewport
+virtualisation; on top of that sits a decoration layer that makes plain text
+_look_ rendered.
+
+### The rendering pipeline
+
+```
+markdown text
+  |
+  |  typodownMarkdown()  -- CommonMark + GFM + math, via @codemirror/lang-markdown
+  v
+Lezer syntax tree        -- incremental: CodeMirror reparses only what changed
+  |
+  |  live-preview.ts     -- walks the tree, emits decorations
+  v
+DecorationSet
+  |
+  |  CodeMirror applies them over the unchanged text
+  v
+what you see
+```
+
+[`live-preview.ts`](packages/typodown/src/live-preview.ts) is the heart of the
+project (and the biggest file). It emits three kinds of decoration:
+
+- **mark**: style a construct in place (heading sizes, bold, inline code, links).
+- **replace**: hide the syntax marks (`**`, `#`, backticks, the `](url)` half of
+  a link) so only the content shows.
+- **widget**: swap a whole construct for real DOM. Checkboxes, bullets, images,
+  horizontal rules, tables, highlighted code blocks with a copy button, Mermaid
+  diagrams, KaTeX math, and sanitized raw HTML are all widgets.
+
+The reveal-on-caret behaviour is not a mode or a state machine: every decorator
+just asks whether the selection overlaps the range it is about to hide, and
+skips hiding when it does.
+
+**Two decoration sources, and why it matters.** `livePreview()` returns a pair:
+
+- `inlinePlugin` is a **ViewPlugin**. It only rebuilds over
+  `view.visibleRanges`, so its cost is bounded by the viewport, not the
+  document. This handles everything inline.
+- `blockField` is a **StateField**, and it scans the whole document. It has to
+  be a state field because multi-line replacements (a rendered table, an HTML
+  block) change block layout, and CodeMirror only accepts layout-affecting
+  decorations from state, not from a view plugin.
+
+That whole-document scan is why `blockField` is full of fast paths, and why you
+should be careful editing it: an edit that looks harmless can turn every
+keystroke into a full-document rebuild. It skips work when an edit is a simple
+inline one (it maps the existing decorations instead of rebuilding), and on
+caret moves it compares the tracked selection-sensitive ranges and bails out
+unless the caret actually crossed a widget boundary. Whole-document line scans
+for rarer features are gated behind a cheap substring check on the source.
+
+One more **thing** worth knowing: **the Lezer tree parses lazily**, so on first
+load it is often incomplete and later transactions extend it. Both decoration
+sources track how far it has parsed and rebuild as it advances. If something
+renders only after you type a character, that is the mechanism to look at.
+
+### The rest of the library
+
+| File                                                 | Role                                                                                                                                     |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| [`editor.ts`](packages/typodown/src/editor.ts)       | The `Typodown` class: assembles the CodeMirror extensions, keymap and commands, and is the public API surface.                           |
+| [`highlight.ts`](packages/typodown/src/highlight.ts) | DOMPurify, applied at every raw-HTML sink. Markdown files are untrusted input, so skipping this is a stored-XSS hole.                    |
+| [`export.ts`](packages/typodown/src/export.ts)       | Markdown to standalone HTML (used by the app's export-to-HTML/PDF). Walks the same tree as the live preview but emits semantic HTML.     |
+| [`sanitize.ts`](packages/typodown/src/sanitize.ts)   | DOMPurify, applied at every raw-HTML sink. Markdown files are untrusted input, so skipping this is a stored-XSS hole.                    |
+| [`theme.css`](packages/typodown/src/theme.css)       | Every colour is a `--td-*` variable scoped to `.typodown[data-td-theme="..."]`. `setTheme()` does nothing but write that attribute.      |
+| `toolbar.ts`, `outline.ts`, `search.ts`, `menu.ts`   | The floating UI (formatting toolbar, heading outline, find/replace, table menus). Plain DOM, no framework, themed by the same variables. |
+| `math.ts`, `emoji.ts`, `clipboard.ts`, `prefs.ts`    | KaTeX blocks, `:emoji:` completion, HTML-to-markdown paste, and localStorage-backed UI preferences.                                      |
+
+Raw mode (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>/</kbd>) is a good illustration of
+how the layers separate: it swaps the live-preview extension out of a CodeMirror
+`Compartment` for plain syntax highlighting. Same text, same parser, no
+decorations.
+
+### How the hosts embed it
+
+Every host does the same thing: `createTypodown(element, options)`. A few
+options exist purely because embedders differ in what the web platform gives
+them, and they are the usual source of "works on the website, broken in the app"
+bugs:
+
+- `getClipboardText` - VS Code webviews block `navigator.clipboard`, so the
+  extension reads it from the extension host instead.
+- `openLink` - `window.open` is a no-op in a Tauri webview; links have to go
+  through the opener plugin to reach the system browser.
+- `resolveImageSrc` - a relative image path means nothing until you know which
+  file is open, so the host resolves it.
+
+Beyond that:
+
+- **VS Code**: [`extension.ts`](apps/typodown-vsx/src/extension.ts) registers a
+  `CustomTextEditorProvider` and drives the webview
+  ([`webview/main.ts`](apps/typodown-vsx/src/webview/main.ts)) over the typed
+  messages in [`protocol.ts`](apps/typodown-vsx/src/protocol.ts). Both halves
+  guard against echoing their own edits back at each other.
+- **Desktop / Android / PWA**: [`vault.ts`](apps/typodown-app/src/lib/vault.ts)
+  holds the open-folder state, and [`tauri.ts`](apps/typodown-app/src/lib/tauri.ts)
+  is the seam that makes one frontend serve three targets: it branches on
+  `IS_TAURI` between Tauri's filesystem commands and the browser's File System
+  Access API. [`graph.ts`](apps/typodown-app/src/lib/graph.ts) derives the link
+  graph from the files alone, with pure builders kept testable without Tauri.
+
 ## 🏷️ Release
 
 > [!IMPORTANT]
@@ -265,8 +247,6 @@ vp run release
 
 > [!NOTE]
 > `vp run release` only checks, bumps, tags and pushes. **Nothing is published from your machine**: pushing the tag triggers the GitHub Actions workflow ([`release.yml`](.github/workflows/release.yml)), which publishes the npm package, publishes the VSCode extension to the VSCode Marketplace and Open VSX, builds the platform artefacts (desktop app, Android `.apk` + `.aab`, unsigned iOS `.ipa`), attaches the desktop bundles, `.apk`, `.ipa` and `.vsix` to the GitHub release, and uploads the `.aab` to the Play Store's internal track.
->
-> That means no publishing token ever lives on a laptop, and a release cannot half-fail because a local token expired.
 
 You can trigger the release workflow manually (`workflow_dispatch`) for a **dry run**: it builds every artefact and uploads them to the workflow run (no GitHub release, no npm publish, no marketplace publish, no Play Store upload).
 

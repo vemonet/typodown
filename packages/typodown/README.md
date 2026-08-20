@@ -33,6 +33,7 @@ const editor = createTypodown(document.getElementById("editor")!, {
   value: "# Hello",
   theme: "auto",
   placeholder: "Write some markdown...",
+  tabSize: 4, // spaces per indent level (Tab / Shift+Tab), defaults to 4
   onChange: (markdown) => console.log(markdown),
 });
 
@@ -100,16 +101,18 @@ A standalone UMD build (CodeMirror and Lezer bundled in) is available as `dist/i
 
 ### Options
 
-| Option             | Type                              | Default                        | Description                                                                                                                                    |
-| ------------------ | --------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `value`            | `string`                          | `""`                           | Initial markdown content.                                                                                                                      |
-| `theme`            | `Theme`                           | `"auto"`                       | Bundled theme name or a custom `data-td-theme` name. `auto` follows the OS preference.                                                         |
-| `placeholder`      | `string`                          | `""`                           | Shown while the document is empty.                                                                                                             |
-| `spellcheck`       | `boolean`                         | `false`                        | Enable the browser's native spellcheck.                                                                                                        |
-| `html`             | `boolean`                         | `true`                         | Render raw HTML blocks/tags as live widgets.                                                                                                   |
-| `toolbar`          | `"auto" \| "shown" \| "hidden"`   | `"auto"`                       | Floating formatting toolbar. `auto` starts visible on small screens and hidden on large ones; a floating button toggles it either way.         |
-| `onChange`         | `(value: string) => void`         |                                | Called whenever the content changes.                                                                                                           |
-| `getClipboardText` | `() => string \| Promise<string>` | `navigator.clipboard.readText` | Read the clipboard for the <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> link shortcut. Provide it where the Clipboard API is blocked (e.g. VSCode webviews). |
+| Option             | Type                              | Default                        | Description                                                                                                                                        |
+| ------------------ | --------------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `value`            | `string`                          | `""`                           | Initial markdown content.                                                                                                                          |
+| `theme`            | `Theme`                           | `"auto"`                       | Bundled theme name or a custom `data-td-theme` name. `auto` follows the OS preference.                                                             |
+| `placeholder`      | `string`                          | `""`                           | Shown while the document is empty.                                                                                                                 |
+| `spellcheck`       | `boolean`                         | `false`                        | Enable the browser's native spellcheck.                                                                                                            |
+| `html`             | `boolean`                         | `true`                         | Render raw HTML blocks/tags as live widgets.                                                                                                       |
+| `joinSoftBreaks`   | `boolean`                         | `true`                         | Render a paragraph hard-wrapped in the source as one flowing paragraph. Off keeps every source line on its own visual line.                        |
+| `tabSize`          | `number`                          | `4`                            | Spaces per indent level: what <kbd>Tab</kbd> inserts and <kbd>Shift</kbd>+<kbd>Tab</kbd> removes. Also settable later with `editor.setTabSize(n)`. |
+| `toolbar`          | `"auto" \| "shown" \| "hidden"`   | `"auto"`                       | Floating formatting toolbar. `auto` starts visible on small screens and hidden on large ones; a floating button toggles it either way.             |
+| `onChange`         | `(value: string) => void`         |                                | Called whenever the content changes.                                                                                                               |
+| `getClipboardText` | `() => string \| Promise<string>` | `navigator.clipboard.readText` | Read the clipboard for the <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> link shortcut. Provide it where the Clipboard API is blocked (e.g. VSCode webviews).     |
 
 > `LANGUAGES` and `matchLanguages` are also exported for standalone use with the fenced-code language picker.
 

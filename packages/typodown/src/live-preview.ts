@@ -38,6 +38,11 @@ import { sanitizeHtml } from "./sanitize.ts";
 export interface LivePreviewConfig {
   /** Render raw HTML blocks/tags as live widgets while idle. */
   html: boolean;
+  /** Render a single newline inside a paragraph as a space, so a paragraph
+   * hard-wrapped in the source reads as one flowing paragraph (CommonMark's
+   * soft line break). Defaults to true; when false the source line breaks stay
+   * visible. */
+  joinSoftBreaks?: boolean;
   /** Resolve an image destination before assigning it to an img element. */
   resolveImageSrc?: (src: string) => string;
 }
@@ -171,6 +176,19 @@ export function quoteDepth(text: string): number {
   return marker ? (marker[0].match(/>/g) ?? []).length : 0;
 }
 
+/** Whether the block directly above `lineNumber` is a blockquote, GFM alert or
+ * directive. Those render as a boxed, gutter-marked region, and a code block
+ * following one needs more air than the 6px gap it carries by default -- the
+ * two boxes would otherwise read as a single stack. */
+export function followsQuoteBlock(doc: EditorState["doc"], lineNumber: number): boolean {
+  for (let n = lineNumber - 1; n >= 1; n--) {
+    const text = doc.line(n).text;
+    if (text.trim().length === 0) continue;
+    return /^[ \t]*(?:>|:::)/.test(text);
+  }
+  return false;
+}
+
 function sanitizeUrl(url: string): string {
   return /^\s*javascript:/i.test(url) ? "#" : url;
 }
@@ -284,6 +302,56 @@ class ParagraphGapWidget extends WidgetType {
       gap.classList.add("cm-td-directive-gap", `cm-td-alert-${this.directiveKind}`);
     }
     return gap;
+  }
+}
+
+/** The single space a soft line break renders as. It replaces the newline
+ * together with the continuation line's indent and quote markers, which is what
+ * pulls the two source lines into one visual line. */
+class SoftBreakWidget extends WidgetType {
+  eq(): boolean {
+    return true;
+  }
+  toDOM(): HTMLElement {
+    const span = document.createElement("span");
+    span.className = "cm-td-soft-break";
+    span.textContent = " ";
+    return span;
+  }
+}
+
+const softBreak = Decoration.replace({ widget: new SoftBreakWidget() });
+
+/** The `[!NOTE]` / `[!TIP]` / ... opening of a GFM alert, which renders as a
+ * label on its own line, so the alert's text must not be pulled up onto it. */
+const ALERT_OPENING = /^[ \t]*(?:> ?)*[ \t]*\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i;
+
+/** Join the source lines of one paragraph into a single visual line, the way
+ * every Markdown renderer does. Each newline is replaced (a state-field-only
+ * decoration, since it crosses a line boundary) by a space, swallowing the
+ * trailing whitespace before it and the continuation line's own indent or `>`
+ * markers after it. A hard break -- two trailing spaces or a backslash, which
+ * CommonMark renders as `<br>` -- is left alone. */
+function joinParagraphLines(
+  doc: EditorState["doc"],
+  node: { from: number; to: number },
+  out: Range<Decoration>[],
+): void {
+  const first = doc.lineAt(node.from).number;
+  const last = doc.lineAt(Math.max(node.from, node.to - 1)).number;
+  for (let n = first; n < last; n++) {
+    const line = doc.line(n);
+    const next = doc.line(n + 1);
+    if (/(?: {2,}|\\)$/.test(line.text)) continue;
+    if (ALERT_OPENING.test(line.text)) continue;
+    const trimmed = line.text.replace(/[ \t]+$/, "");
+    if (trimmed.length === 0) continue;
+    const prefix = /^[ \t]*(?:> ?)*[ \t]*/.exec(next.text)?.[0].length ?? 0;
+    const from = line.from + trimmed.length;
+    const to = next.from + prefix;
+    // Nothing left on the continuation line: it is a separator, not text.
+    if (to >= next.to) continue;
+    out.push(softBreak.range(from, to));
   }
 }
 
@@ -501,6 +569,8 @@ class CopyButtonWidget extends WidgetType {
 class CodeBlockWidget extends WidgetType {
   static readonly verticalPadding = 10;
   static readonly topGap = 6;
+  /** Gap used when the block sits right below a quote / alert / directive. */
+  static readonly wideTopGap = 12;
   static readonly horizontalPadding = 16;
 
   readonly lines: number;
@@ -512,6 +582,7 @@ class CodeBlockWidget extends WidgetType {
     readonly indent: number,
     readonly quoted: boolean,
     readonly listBullet: boolean,
+    readonly wideGap = false,
   ) {
     super();
     this.lines = Math.max(1, lineCount);
@@ -524,15 +595,19 @@ class CodeBlockWidget extends WidgetType {
       other.lines === this.lines &&
       other.indent === this.indent &&
       other.quoted === this.quoted &&
-      other.listBullet === this.listBullet
+      other.listBullet === this.listBullet &&
+      other.wideGap === this.wideGap
     );
   }
   get estimatedHeight(): number {
-    return this.lines * 25.6 + CodeBlockWidget.verticalPadding * 2 + CodeBlockWidget.topGap;
+    const gap = this.wideGap ? CodeBlockWidget.wideTopGap : CodeBlockWidget.topGap;
+    return this.lines * 25.6 + CodeBlockWidget.verticalPadding * 2 + gap;
   }
   toDOM(view: EditorView): HTMLElement {
     const block = document.createElement("div");
-    block.className = `cm-td-code-widget${this.quoted ? " cm-td-code-widget-quoted" : ""}`;
+    block.className = `cm-td-code-widget${this.quoted ? " cm-td-code-widget-quoted" : ""}${
+      this.wideGap ? " cm-td-code-widget-wide-gap" : ""
+    }`;
     block.style.height = `${this.estimatedHeight}px`;
     block.style.paddingBlock = `${CodeBlockWidget.verticalPadding}px`;
     if (this.indent > 0) block.style.marginLeft = `${this.indent}ch`;
@@ -2051,7 +2126,12 @@ class DecoBuilder {
         }
         this.syntax(line.from, prefixEnd, false);
       }
-      if (n === firstContent && !fenceStartsListItem) cls.push("cm-td-code-top");
+      if (n === firstContent && !fenceStartsListItem) {
+        cls.push("cm-td-code-top");
+        // Same wider gap the idle widget uses, so entering the block with the
+        // caret does not shift the layout.
+        if (followsQuoteBlock(doc, openLine.number)) cls.push("cm-td-code-wide-gap");
+      }
       if (n === firstContent && fenceStartsListItem) {
         cls.push("cm-td-code-top", "cm-td-code-list-first");
         this.widget(line.from, new BulletWidget(this.listLevel(node), "cm-td-fence-bullet"), -1);
@@ -2592,6 +2672,8 @@ function buildBlocks(
             }).range(headingLine.from),
           );
         }
+      } else if (node.name === "Paragraph") {
+        if (config.joinSoftBreaks !== false) joinParagraphLines(doc, node, out);
       } else if (node.name === "Table") {
         claim(node.from, node.to);
         // Tables are always rendered as an editable grid widget; cell editing
@@ -2677,6 +2759,7 @@ function buildBlocks(
                     prefix.replace(/^.*>[ \t]?/, "").replace(/^\s*[-+*]\s+/, "").length,
                     prefix.includes(">"),
                     /^\s*[-+*]\s+$/.test(prefix),
+                    followsQuoteBlock(doc, openLine.number),
                   ),
             block: true,
           }).range(first.from, last.to),
@@ -2822,6 +2905,18 @@ export function blockField(config: LivePreviewConfig): StateField<BlockFieldValu
             }
           }
           if (fromA - line.from < 4 && !activeFencedCodeEdit) simpleInlineEdit = false;
+          // An edit at the end of a line that is joined to the next one can
+          // create or remove a hard break (two trailing spaces), which changes
+          // where the join starts. Editing the last line of a paragraph -- the
+          // common case, with a blank line after it -- keeps the fast path.
+          if (
+            config.joinSoftBreaks !== false &&
+            toA >= line.to &&
+            line.number < tr.startState.doc.lines &&
+            tr.startState.doc.line(line.number + 1).length > 0
+          ) {
+            simpleInlineEdit = false;
+          }
           if (overlapsSensitive && !activeFencedCodeEdit) simpleInlineEdit = false;
         });
         if (simpleInlineEdit) {

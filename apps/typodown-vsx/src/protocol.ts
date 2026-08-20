@@ -12,9 +12,18 @@ export type ThemeSetting =
 
 /** Host -> webview. */
 export type HostMessage =
-  | { type: "init"; text: string; theme: ThemeSetting; imageBaseUri: string }
+  | {
+      type: "init";
+      text: string;
+      theme: ThemeSetting;
+      imageBaseUri: string;
+      joinSoftBreaks: boolean;
+      tabSize: number;
+    }
   | { type: "update"; text: string }
   | { type: "theme"; theme: ThemeSetting }
+  | { type: "joinSoftBreaks"; join: boolean }
+  | { type: "tabSize"; size: number }
   | { type: "clipboard"; text: string };
 
 /** Webview -> host. */

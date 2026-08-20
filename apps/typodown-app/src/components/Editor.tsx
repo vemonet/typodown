@@ -3,6 +3,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { Typodown, type Theme, type ToolbarSave } from "@vemonet/typodown";
 import "@vemonet/typodown/style.css";
 import { vault, onContentChange } from "@/lib/vault";
+import { settings } from "@/lib/settings";
 import { IS_TAURI, resolveLocalImageSrc } from "@/lib/tauri";
 
 interface EditorProps {
@@ -50,6 +51,7 @@ const Editor: Component<EditorProps> = (props) => {
         else window.open(url, "_blank", "noopener,noreferrer");
       },
       save: props.save,
+      joinSoftBreaks: settings.joinSoftBreaks(),
     });
     active = editor;
     ready = true;
@@ -59,6 +61,13 @@ const Editor: Component<EditorProps> = (props) => {
   createEffect(() => {
     if (!editor) return;
     editor.setTheme(props.theme ?? "auto");
+  });
+
+  // React to the wrapped-lines setting being toggled from the sidebar.
+  createEffect(() => {
+    const join = settings.joinSoftBreaks();
+    if (!ready || !editor) return;
+    editor.setJoinSoftBreaks(join);
   });
 
   // React to file opens / switches by pushing the new content into the editor.

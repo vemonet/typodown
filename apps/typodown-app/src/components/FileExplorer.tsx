@@ -30,6 +30,8 @@ import {
   Moon,
   Monitor,
   Palette,
+  Check,
+  Settings2,
   ScrollText,
   Save,
   SaveAll,
@@ -64,6 +66,7 @@ import {
 import { useColorMode } from "@/components/color-mode";
 import { SearchPanel } from "@/components/SidebarSearch";
 import { search, toggleSearch } from "@/lib/search";
+import { settings, toggleJoinSoftBreaks } from "@/lib/settings";
 
 const SAVE_SHORTCUT = /mac|iphone|ipad/i.test(navigator.userAgent) ? "Cmd+S" : "Ctrl+S";
 
@@ -197,6 +200,29 @@ const FileExplorer: Component<FileExplorerProps> = (props) => {
           </TooltipTrigger>
           <TooltipContent>Toggle the link graph</TooltipContent>
         </Tooltip>
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger
+              as={DropdownMenuTrigger}
+              class={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+                "h-7 w-7 shrink-0 px-0",
+              )}
+              aria-label="Editor settings"
+            >
+              <Settings2 class="size-3.5" />
+            </TooltipTrigger>
+            <TooltipContent>Editor settings</TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent>
+            <DropdownMenuItem onSelect={toggleJoinSoftBreaks}>
+              <Show when={settings.joinSoftBreaks()} fallback={<span class="mr-2 size-3.5" />}>
+                <Check class="mr-2 size-3.5" />
+              </Show>
+              Join wrapped lines
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <DropdownMenu>
           <Tooltip>
             <TooltipTrigger
@@ -371,6 +397,16 @@ const TreeRow: Component<{
   const [open, setOpen] = createSignal(false);
   const isActive = () => vault.currentPath() === node.path;
 
+  // Reveal the current file when it is opened from elsewhere (file switcher,
+  // search, links): each ancestor folder opens itself, which mounts the next
+  // level down so the cascade continues to the file's own row.
+  if (node.isDir) {
+    createEffect(() => {
+      const current = vault.currentPath();
+      if (current && contains(node.path, current)) setOpen(true);
+    });
+  }
+
   return (
     <>
       {node.isDir ? (
@@ -492,6 +528,12 @@ const OpenFileMarker: Component<{ path: string }> = (props) => {
     </span>
   );
 };
+
+/** Whether `path` sits inside the `dir` folder, at any depth. */
+function contains(dir: string, path: string): boolean {
+  const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "");
+  return norm(path).startsWith(`${norm(dir)}/`);
+}
 
 function baseName(path: string): string {
   const norm = path.replace(/\\/g, "/").replace(/\/+$/, "");

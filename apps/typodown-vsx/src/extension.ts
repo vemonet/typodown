@@ -75,9 +75,15 @@ class TypodownEditorProvider implements vscode.CustomTextEditorProvider {
       post({ type: "update", text });
     });
 
-    // Push the theme setting to the webview when it changes.
+    // Push settings to the webview when they change.
     const configSub = vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration("typodown.theme")) post({ type: "theme", theme: readTheme() });
+      if (e.affectsConfiguration("typodown.joinSoftBreaks")) {
+        post({ type: "joinSoftBreaks", join: readJoinSoftBreaks() });
+      }
+      if (e.affectsConfiguration("typodown.tabSize")) {
+        post({ type: "tabSize", size: readTabSize() });
+      }
     });
 
     panel.onDidDispose(() => {
@@ -93,6 +99,8 @@ class TypodownEditorProvider implements vscode.CustomTextEditorProvider {
           text: syncedText,
           theme: readTheme(),
           imageBaseUri: `${webview.asWebviewUri(documentDirectory).toString()}/`,
+          joinSoftBreaks: readJoinSoftBreaks(),
+          tabSize: readTabSize(),
         });
       } else if (message.type === "edit") {
         syncedText = message.text;
@@ -187,6 +195,15 @@ function readTheme(): ThemeSetting {
     value === "solarized-dark"
     ? value
     : "editor";
+}
+
+function readJoinSoftBreaks(): boolean {
+  return vscode.workspace.getConfiguration("typodown").get<boolean>("joinSoftBreaks") !== false;
+}
+
+function readTabSize(): number {
+  const value = vscode.workspace.getConfiguration("typodown").get<number>("tabSize");
+  return typeof value === "number" && Number.isFinite(value) ? value : 4;
 }
 
 function makeNonce(): string {

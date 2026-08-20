@@ -99,3 +99,17 @@ test("an edit inside an idle fence rebuilds its rendered widget", () => {
   expect(widgetBefore).toBeDefined();
   expect(firstWidget(s2, "CodeBlockWidget")).not.toBe(widgetBefore);
 });
+
+test("a code block below an alert gets the wider top gap", () => {
+  const doc = "> [!IMPORTANT]\n>\n> Published with OIDC.\n\n```sh\nvp run release\n```\n";
+  const widget = firstWidget(stateOf(doc, 0), "CodeBlockWidget") as { wideGap: boolean };
+
+  expect(widget.wideGap).toBe(true);
+});
+
+test("a code block below a paragraph keeps the default top gap", () => {
+  const doc = "Just a paragraph.\n\n```sh\nvp run release\n```\n";
+  const widget = firstWidget(stateOf(doc, 0), "CodeBlockWidget") as { wideGap: boolean };
+
+  expect(widget.wideGap).toBe(false);
+});

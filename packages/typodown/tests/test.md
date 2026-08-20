@@ -14,8 +14,8 @@ Markdown renders where you type. Move your caret into a **bold term**, `code spa
 [**Marktext**](https://marktext.me/) came up with a really good open-source alternative to Typora. However, as a long time Typora user, a few things were not feeling right:
 
 - Marktext is not as minimalist as Typora. It has a different design philosophy where it shows all available actions on the screen. Which might be good for some users, but not zen enough for me.
-  - Every time I click a different line, a button moves in the left margin; every time I highlight some characters, a toolbar pops on top of the selection. Too many unnecessary movements on the screen to me.
-  - Codeblocks ``` could be always hidden, no need to reveal them; frontmatter does not need a "front matter delimiter" written all around it, etc.
+    - Every time I click a different line, a button moves in the left margin; every time I highlight some characters, a toolbar pops on top of the selection. Too many unnecessary movements on the screen to me.
+    - Codeblocks ``` could be always hidden, no need to reveal them; frontmatter does not need a "front matter delimiter" written all around it, etc.
 - Despite 10+ themes I could not find a good imitation of GitHub style markdown rendering, which is arguably the style developers are the most exposed to. And custom CSS seems to have its limitations (I could not figure out how to make the `<hr>` a plain line instead of the default dotted line)
 
 **Typodown** brings Typora's editing experience to the open-source world, the web, VSCode and smartphones, with a minimalist design, GitHub style rendering, and more.
@@ -69,7 +69,7 @@ A floating toolbar brings formatting actions to touch screens where keyboard sho
 
 ### 📦 npm package
 
-Embed the editor in any web app, framework-agnostic. Built with [CodeMirror 6](https://codemirror.net/). Install it from npm:
+Embed the editor in any web app, framework-agnostic, built with [CodeMirror 6](https://codemirror.net/). Install it from npm:
 
 ```sh
 npm i --save @vemonet/typodown
@@ -111,9 +111,9 @@ Select some text and press <kbd>Ctrl/⌘</kbd> + <kbd>B</kbd>, <kbd>Ctrl/⌘</kb
 Unordered lists nest with different bullets per level (Tab / ⇧+Tab):
 
 - Fruit
-  - Apple
-  - Banana
-    - Cavendish
+    - Apple
+    - Banana
+        - Cavendish
 - Vegetables
 
 Ordered lists keep their starting number:
@@ -258,6 +258,15 @@ to the document and not to the list:
     not a list continuation
 
 ## Fenced code inside lists
+
+- a list item with a fence at 4 spaces (the default indent width):
+
+    ```json
+    {
+      "answer": 42,
+      "indented": ["the code must keep its own indentation", "not the list's"]
+    }
+    ```
 
 - a list item with a fence at 2 spaces:
 

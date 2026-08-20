@@ -113,6 +113,18 @@
           ],
           "default": "editor",
           "description": "Color theme for the Typodown markdown editor."
+        },
+        "typodown.joinSoftBreaks": {
+          "type": "boolean",
+          "default": true,
+          "description": "Render a paragraph that is hard-wrapped in the source as one flowing paragraph, joining its lines with a space (a single newline is a soft line break in Markdown). Turn off to keep every source line on its own visual line. A hard break (two trailing spaces) always breaks the line."
+        },
+        "typodown.tabSize": {
+          "type": "number",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 16,
+          "description": "Number of spaces one indent level uses in the Typodown editor: what Tab inserts and Shift+Tab removes."
         }
       }
     }

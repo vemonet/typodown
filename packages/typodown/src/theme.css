@@ -463,7 +463,8 @@
   background: var(--td-code-block-bg);
   color: var(--td-code-fg);
   font-family: var(--td-mono);
-  font-size: 1em;
+  font-size: 0.9em;
+  line-height: 25.6px;
   padding: 0 16px;
   box-shadow:
     inset 1px 0 0 var(--td-border-muted),
@@ -484,6 +485,7 @@
   box-shadow: inset 0 0 0 1px var(--td-border-muted);
   color: var(--td-code-fg);
   font-family: var(--td-mono);
+  font-size: 0.9em;
   line-height: 25.6px;
   white-space: pre;
 }
@@ -500,6 +502,10 @@
   top: 8px;
   right: 8px;
   z-index: 2;
+}
+.typodown .cm-td-code-widget-wide-gap {
+  border-top-width: 12px;
+  border-radius: 6px 6px 6px 6px / 18px 18px 6px 6px;
 }
 .typodown .cm-td-code-widget-quoted {
   margin-left: 1em;
@@ -537,6 +543,14 @@
   padding-top: 10px;
   padding-right: 48px;
   position: relative;
+}
+/* A code block right below a quote / alert / directive gets a wider gap, so the
+ * two boxed regions do not read as one stack. The vertical top radius tracks
+ * the border width (border + 6px) to keep the visible corner curve constant. */
+.typodown .cm-line.cm-td-code-top.cm-td-code-wide-gap {
+  border-top-width: 12px;
+  border-top-left-radius: 6px 18px;
+  border-top-right-radius: 6px 18px;
 }
 /* Longhands only: a `border-radius` shorthand here would also zero the top
  * radii on a single-line block, which is both `-top` and `-bottom` at once. */
