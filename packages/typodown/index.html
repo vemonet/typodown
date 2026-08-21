@@ -708,10 +708,10 @@
       <h1>Seamless markdown editing,<br />everywhere you write.</h1>
       <p class="hero-sub">
         In <b>Typodown</b>, Markdown renders where you type: no preview pane, no markup cluttering
-        the page. Reading and writing blend into one continuous experience.
+        the page.
       </p>
       <p class="hero-sub">
-        Open-source & cross-platform, inspired by
+        Open source and cross-platform, inspired by
         <a href="https://typora.io/" target="_blank" rel="noopener">Typora</a>.
       </p>
       <div class="hero-cta">
@@ -971,7 +971,7 @@
     <section class="features" aria-label="Features">
       <div class="feature">
         <h3>👀 WYSIWYG editing</h3>
-        <p>Edit rendered markdown directly. Raw markers surface only on the block you edit.</p>
+        <p>Edit the rendered markdown directly. Raw markers show up only on the block you edit.</p>
       </div>
       <!-- <div class="feature">
         <h3>Syntax under the cursor</h3>
@@ -982,11 +982,11 @@
       </div> -->
       <div class="feature">
         <h3>🐙 GitHub Flavored Markdown</h3>
-        <p>Alerts, checkboxes lists, editable tables, YAML front matter and raw HTML.</p>
+        <p>Alerts, checkbox lists, editable tables, YAML front matter and raw HTML.</p>
       </div>
       <div class="feature">
         <h3>📈 Maths &amp; diagrams</h3>
-        <p>Inline and block LaTeX, plus live Mermaid diagrams.</p>
+        <p>Inline and block LaTeX, and live Mermaid diagrams.</p>
       </div>
       <div class="feature">
         <h3>⌨️ Familiar shortcuts</h3>
@@ -998,15 +998,15 @@
       <div class="feature">
         <h3>⚔️ Cross-platform</h3>
         <p>
-          Available as a VSCode extension, desktop app (Linux, macOS, windows), android app, web
-          app, and npm package.
+          A VSCode extension, a desktop app (Linux, macOS, Windows), an Android app, a web app, and
+          an npm package.
         </p>
       </div>
       <div class="feature">
         <h3>🏡 Fully local</h3>
         <p>
-          No telemetry, no remote server. Bring your own cloud. Your notes stay on your machine,
-          where they belong.
+          No telemetry, no remote server. Your files stay on your machine, bring your own cloud if
+          you want one.
         </p>
       </div>
     </section>
@@ -1032,14 +1032,13 @@
           <span class="beta-badge">BETA</span>
         </div>
         <p>
-          Some features may not work as expected yet. Found a bug or rough edge?
+          Some things are still rough. If you hit a bug,
           <a
             href="https://github.com/vemonet/typodown/issues/new/choose"
             target="_blank"
             rel="noopener"
-            >Create an issue</a
-          >
-          and help make Typodown better.
+            >open an issue</a
+          >.
         </p>
       </div>
     </aside>
@@ -1047,7 +1046,7 @@
     <div class="demo-head">
       <h2>Try it live</h2>
       <p>
-        Everything below is one editable markdown string rendered by Typodown.
+        Everything below is a single markdown document, edit it as you like.
         <!-- Click into any block to reveal its raw syntax, then click away to render it again. -->
       </p>
     </div>
@@ -1060,16 +1059,16 @@
 
       const SAMPLE = `---
 type: Software
-description: Seamless open-source markdown editing
+description: An open source markdown editor inspired by Typora
 ---
 
 # Typodown
 
-Markdown renders where you type. Move your caret into a **bold term**, \`code span\` or [link](/) and its raw markers surface while you edit, then settle back into place.
+Move your caret into a **bold term**, \`code span\` or [link](/) and its raw markers show up while you edit, then go away again.
 
 ## Why?
 
-[**Typora**](https://typora.io) nailed markdown editing: you edit the rendered document directly. But it is a closed-source desktop app, so that experience stops at its electron window.
+[**Typora**](https://typora.io) nailed markdown editing: you edit the rendered document directly. But it is a closed-source desktop app, so that experience stops at its Electron window.
 
 [**Marktext**](https://marktext.me/) came up with a really good open-source alternative to Typora. However, as a long time Typora user, a few things were not feeling right:
 
@@ -1080,7 +1079,7 @@ Markdown renders where you type. Move your caret into a **bold term**, \`code sp
 
 ## Usage
 
-Typodown ships in several forms, and table columns can be left, center, or right aligned:
+Typodown comes in several forms (and table columns can be left, center, or right aligned):
 
 | Form                 | Description                                           |                                                                                  Get it |
 | :------------------- | :----------------------------------------------------: | --------------------------------------------------------------------------------------: |
@@ -1131,7 +1130,7 @@ xattr -dr com.apple.quarantine /Applications/Typodown.app
 
 Open a \`.md\` file with Typodown straight from your file or storage app: git, Dropbox, Google Drive, Nextcloud, anything exposing a writable Android documents provider works; there is no per-provider integration. With Dropbox you will need to save the \`.md\` file on device to be able to edit it with Typodown.
 
-A floating toolbar brings formatting actions to touch screens where keyboard shortcuts are out of reach.
+A floating toolbar gives you the formatting actions on a touch screen, where keyboard shortcuts are out of reach.
 
 ### 📦 npm package
 
@@ -1300,7 +1299,7 @@ The desktop/smartphone app is built with [SolidJS](https://www.solidjs.com) and 
 
 ---
 
-Everything above is driven from a single markdown string. Edit freely and the source stays in sync.
+All of the above is one markdown string, and it stays in sync as you edit it.
 `;
 
       const savedTheme = localStorage.getItem("typodown-theme") || "auto";

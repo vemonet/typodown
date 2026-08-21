@@ -3,7 +3,7 @@
 
 # Typodown
 
-**Seamless open-source markdown editing, inspired by [Typora](https://typora.io). Available everywhere you write.**
+**An open source markdown editor inspired by [Typora](https://typora.io), for the browser, VSCode, desktop and phone.**
 
 [![Website](https://img.shields.io/badge/Website-Open-0ea5e9?logo=firefoxbrowser&logoColor=white)](https://typodown.app) [![npm](https://img.shields.io/npm/v/@vemonet/typodown?logo=npm)](https://www.npmjs.com/package/@vemonet/typodown) [![Install Extension](https://img.shields.io/badge/VSCode-Install_Extension-007ACC?logo=vscodium)](https://marketplace.visualstudio.com/items?itemName=vemonet.typodown) [![Get the app](https://img.shields.io/badge/Get%20the%20app-Desktop%20%26%20Phone-10b981?logo=tauri)](https://github.com/vemonet/typodown/releases/latest)
 
@@ -13,19 +13,18 @@
 
 ---
 
-Markdown renders where you type: no preview pane, no markup cluttering the page. Reading and writing blend into one continuous experience.
+There is no preview pane: markdown is rendered directly in the text you are typing. The raw `#`, `**` or backticks only show up on the construct your caret is sitting on.
 
-See the [**website**](https://typodown.app) for a live demo and more details.
+Try it on the [**website**](https://typodown.app), the whole page is one editable markdown document.
 
 ## Features
 
-- **Seamless markdown editing.** WYSIWYG, edit rendered markdown directly.
-- **Syntax reveals under the cursor.** Raw markers appear only for the construct you are editing, everything else stays rendered.
-- **GitHub Flavored Markdown.** GFM alerts (`> [!NOTE]`), task lists, editable tables, images, links, YAML front matter and arbitrary HTML.
-- **LaTeX math and Mermaid diagrams.** Inline `$...$` and block `$$...$$` rendered with KaTeX.
-- **Familiar shortcuts.** <kbd>Ctrl/⌘</kbd>+<kbd>B</kbd> bold, <kbd>Ctrl/⌘</kbd>+<kbd>I</kbd> italic, <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> link, <kbd>Tab</kbd> / <kbd>⇧+Tab</kbd> indent, <kbd>Ctrl/⌘</kbd>+<kbd>Z</kbd> undo / redo.
-- **Built on [CodeMirror 6](https://codemirror.net).** Battle-tested editing, selection, undo, IME and viewport virtualisation, the live preview is a decoration layer on top.
-- **Fully local.** No telemetry, no remote server.
+- Edit rendered markdown directly, with the raw syntax revealed under the cursor.
+- GitHub Flavored Markdown: GFM alerts (`> [!NOTE]`), task lists, editable tables, images, links, YAML front matter and raw HTML.
+- LaTeX maths with KaTeX (`$...$` and `$$...$$`) and Mermaid diagrams.
+- The usual shortcuts: <kbd>Ctrl/⌘</kbd>+<kbd>B</kbd> bold, <kbd>Ctrl/⌘</kbd>+<kbd>I</kbd> italic, <kbd>Ctrl/⌘</kbd>+<kbd>K</kbd> link, <kbd>Tab</kbd> / <kbd>⇧+Tab</kbd> indent, <kbd>Ctrl/⌘</kbd>+<kbd>Z</kbd> undo / redo.
+- Built on [CodeMirror 6](https://codemirror.net), so editing, selection, undo, IME and viewport virtualisation come from a well tested editor. The rendering is only a decoration layer on top of it.
+- No telemetry, no remote server, your files stay where you put them.
 
 ## Development
 

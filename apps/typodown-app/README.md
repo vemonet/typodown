@@ -1,18 +1,18 @@
 # 🖋️ Typodown app
 
-Seamless open-source markdown editing for desktop (Linux, macOS, windows) and Android, inspired by [Typora](https://typora.io).
+An open source markdown editor for desktop (Linux, macOS, Windows) and Android, inspired by [Typora](https://typora.io).
 
-Typodown blends reading and writing markdown into one continuous motion. Markdown renders where you type: no preview pane to keep in sync, no mode to toggle, no markup cluttering the page. Move your caret into a heading, bold run, code span or link and only its raw markers (`#`, `**`, `` ` ``) surface for the moment you edit them. The content stays central, the syntax stays out of the way.
+Markdown is rendered directly in the text you type, so there is no preview pane to keep in sync and no mode to toggle. Move your caret into a heading, bold run, code span or link and only its raw markers (`#`, `**`, `` ` ``) show up, for as long as you are editing it.
 
 ## Features
 
-- **Seamless markdown editing** with syntax revealed under the cursor, powered by the [`@vemonet/typodown`](https://www.npmjs.com/package/@vemonet/typodown) library.
-- **GitHub Flavored Markdown**: GFM alerts (`> [!NOTE]`), task lists, editable tables, images and links.
-- **LaTeX math and Mermaid diagrams**, rendered with KaTeX.
-- **Auto-save.** Edits are written about a second after you stop typing; on Android, writes to cloud providers are paced to avoid sync conflicts.
-- **Familiar shortcuts** (<kbd>Ctrl/⌘</kbd>+<kbd>B</kbd> / <kbd>I</kbd> / <kbd>K</kbd>, <kbd>Tab</kbd> indent, undo/redo) plus a floating toolbar for touch screens.
-- **File explorer.** Open a folder as a file tree.
-- **Graph view.** Built from files using the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
+- Edit the rendered markdown directly, with the raw syntax revealed under the cursor, using the [`@vemonet/typodown`](https://www.npmjs.com/package/@vemonet/typodown) library.
+- GitHub Flavored Markdown: GFM alerts (`> [!NOTE]`), task lists, editable tables, images and links.
+- LaTeX maths with KaTeX, and Mermaid diagrams.
+- Auto-save: edits are written about a second after you stop typing. On Android, writes to cloud providers are paced to avoid sync conflicts.
+- The usual shortcuts (<kbd>Ctrl/⌘</kbd>+<kbd>B</kbd> / <kbd>I</kbd> / <kbd>K</kbd>, <kbd>Tab</kbd> indent, undo/redo), plus a floating toolbar for touch screens.
+- A file explorer, to open a folder as a file tree.
+- A graph view, built from the files using the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf).
 
 ### On desktop
 
