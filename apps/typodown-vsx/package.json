@@ -1,7 +1,7 @@
 {
   "name": "typodown",
   "displayName": "Typodown",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "View and edit Markdown rendered inline, with the raw syntax revealed under the cursor. Inspired by Typora.",
   "categories": [
     "Other"

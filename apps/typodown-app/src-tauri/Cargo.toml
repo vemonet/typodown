@@ -1,6 +1,6 @@
 [package]
 name = "typodown-app"
-version = "0.0.4"
+version = "0.0.5"
 description = "Markdown editor"
 authors = ["Vincent Emonet"]
 license = "MIT"
