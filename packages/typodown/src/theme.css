@@ -298,6 +298,7 @@
   padding: 1rem 1.25rem;
   caret-color: var(--td-fg);
   max-width: 100%;
+  min-width: 0;
 }
 .typodown .cm-td-toolbar-anchor-visible ~ .cm-editor .cm-content {
   padding-top: 3.5rem;
@@ -323,12 +324,33 @@
 .typodown .cm-cursor {
   border-left-color: var(--td-fg);
 }
-/* Keep native selection styled for browser fallbacks and raw DOM operations. */
-.typodown .cm-content ::selection {
-  background: var(--td-selection);
-}
-.typodown .cm-selectionBackground {
+/* The selection highlight is the browser's own (`::selection`), not the layer
+ * `drawSelection()` paints. drawSelection is still on for its caret layer (see
+ * editor.ts), but its selection layer is unusable here on two counts:
+ *
+ *  - It is a sibling of `.cm-content` at a negative z-index, so it paints
+ *    *under* every in-flow background. Any line that has one of its own -- a
+ *    fenced code block, front matter -- hid the highlight completely.
+ *  - Its cross-line bands run from `leftSide` to `rightSide`, which CodeMirror
+ *    derives from the content box plus the *first* line's padding. With a page
+ *    inset on `.cm-content` (and per-block line padding) those edges land in
+ *    the margin, so a multi-line selection leaked out on both sides.
+ *
+ * The native highlight has neither problem: the browser paints it over any
+ * background and clips it to the text it covers. Rendered widgets (tables,
+ * idle code blocks) sit outside `.cm-line` and already relied on it, so this
+ * leaves one mechanism for the whole editor instead of two.
+ *
+ * The extra `.cm-editor` class and `!important` are both needed to outrank
+ * drawSelection's `hideNativeSelection` theme, which blanks `::selection` on
+ * `.cm-line` with `!important` of its own. */
+.typodown .cm-editor .cm-content ::selection,
+.typodown .cm-editor .cm-line ::selection,
+.typodown .cm-editor .cm-line::selection {
   background: var(--td-selection) !important;
+}
+.typodown .cm-selectionLayer {
+  display: none;
 }
 .typodown .cm-placeholder {
   color: var(--td-faint);
@@ -460,10 +482,14 @@
 .typodown .cm-td-code {
   --cm-td-code-top: inset 0 0 0 transparent;
   --cm-td-code-bottom: inset 0 0 0 transparent;
+  /* The type scale is a property so lengths that have to line up with the
+   * surrounding (full-size) text can divide it back out -- see the quote
+   * gutter on `.cm-td-quote.cm-td-code`. */
+  --cm-td-code-scale: 0.9;
   background: var(--td-code-block-bg);
   color: var(--td-code-fg);
   font-family: var(--td-mono);
-  font-size: 0.9em;
+  font-size: calc(1em * var(--cm-td-code-scale));
   line-height: 25.6px;
   padding: 0 16px;
   box-shadow:
@@ -533,10 +559,13 @@
   position: absolute;
   left: calc(-1 * var(--cm-td-code-indent));
 }
-/* Active code uses the same vertical inset as the idle block widget. */
+/* Active code uses the same vertical inset as the idle block widget. The gap
+ * width is a custom property because a quote / alert gutter has to reach back
+ * up through it (see `.cm-td-quote.cm-td-code::before`). */
 .typodown .cm-td-code-top {
   --cm-td-code-top: inset 0 1px 0 var(--td-border-muted);
-  border-top: 6px solid transparent;
+  --cm-td-code-gap: 6px;
+  border-top: var(--cm-td-code-gap) solid transparent;
   background-clip: padding-box;
   border-top-left-radius: 6px 12px;
   border-top-right-radius: 6px 12px;
@@ -548,7 +577,7 @@
  * two boxed regions do not read as one stack. The vertical top radius tracks
  * the border width (border + 6px) to keep the visible corner curve constant. */
 .typodown .cm-line.cm-td-code-top.cm-td-code-wide-gap {
-  border-top-width: 12px;
+  --cm-td-code-gap: 12px;
   border-top-left-radius: 6px 18px;
   border-top-right-radius: 6px 18px;
 }
@@ -728,12 +757,17 @@
   background: var(--td-alert-color, var(--td-border));
 }
 /* A fenced code block inside a blockquote / alert keeps both the quote accent
- * and the code block edges on their shared line box. */
+ * and the code block edges on their shared line box.
+ *
+ * The indent is one quote em per level, but `1em` on a code line is the 0.9
+ * code size while the quote paragraphs above and below indent by their own
+ * full-size em -- dividing the scale back out keeps every level of the gutter
+ * on one vertical line instead of stepping ~1.6px left per level. */
 .typodown .cm-line.cm-td-quote.cm-td-code {
   background-color: var(--td-code-block-bg);
   background-image: none;
   background-clip: padding-box;
-  margin-left: calc(var(--td-quote-depth) * 1em);
+  margin-left: calc(var(--td-quote-depth) * 1em / var(--cm-td-code-scale));
   padding-left: 16px;
   position: relative;
   box-shadow:
@@ -742,10 +776,20 @@
     var(--cm-td-code-top),
     var(--cm-td-code-bottom);
 }
+/* The gutter starts at the top of the *border* box, not the padding box: the
+ * first line of the block carries the paragraph gap as a transparent
+ * `border-top`, and stopping at the padding box left that gap unstriped, so the
+ * quote / alert line broke between the paragraph above and the code block.
+ * `--cm-td-code-gap` is 0 on every line but the first.
+ *
+ * The stripes themselves are drawn at the paragraphs' em (the same correction
+ * the line's `margin-left` makes), applied here as a `font-size` so every
+ * length below -- offset, width and both gradients -- picks it up. */
 .typodown .cm-line.cm-td-quote.cm-td-code::before {
   content: "";
   position: absolute;
-  top: 0;
+  font-size: calc(1em / var(--cm-td-code-scale));
+  top: calc(-1 * var(--cm-td-code-gap, 0px));
   bottom: 0;
   left: calc(-1 * var(--td-quote-depth) * 1em);
   width: calc(var(--td-quote-depth) * 1em);
@@ -1402,6 +1446,13 @@
 
 .typodown .cm-td-html {
   white-space: normal;
+}
+/* A block of raw HTML can hold something that does not wrap (a `<pre>`, a wide
+ * table); scroll it inside the widget rather than letting it stick out of the
+ * text column. Inline HTML uses a `<span>` with the same class, where overflow
+ * has no effect anyway. */
+.typodown div.cm-td-html {
+  overflow-x: auto;
 }
 .typodown .cm-td-html-raw {
   font-family: var(--td-mono);

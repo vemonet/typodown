@@ -9,7 +9,8 @@
   "type": "module",
   "scripts": {
     "prepare": "vp config && vp run @vemonet/typodown#build",
-    "version": "node scripts/sync-version.ts"
+    "version": "node scripts/sync-version.ts",
+    "releases-download": "node scripts/releases-download.ts"
   },
   "devDependencies": {
     "@marktext/muya": "^0.2.5",

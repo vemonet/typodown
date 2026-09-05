@@ -16,6 +16,7 @@ import {
   type DecorationSet,
   EditorView,
   type PluginValue,
+  type Rect,
   ViewPlugin,
   type ViewUpdate,
   WidgetType,
@@ -541,6 +542,49 @@ function renderedCharacterWidth(code: HTMLElement, fallback: number): number {
   return fallback;
 }
 
+/** Where the caret belongs for a position held by a *floating* point widget.
+ *
+ * The controls that float in a code block's corners (copy button, language
+ * selector) are point widgets at the end of a content line, so their position
+ * is one the caret occupies constantly while typing. CodeMirror measures a
+ * cursor there from the widget's own DOM rect, and these widgets are
+ * `position: absolute` -- so the caret jumped into the corner (next to the
+ * language input) on every keystroke at the end of the line, while the typed
+ * character landed correctly. It shows up whenever the cursor's `assoc` is not
+ * negative, which is the case for the plain `cursor(pos)` an edit dispatches.
+ *
+ * Measuring the flow content the widget follows puts the caret back on the
+ * text, with the same rect CodeMirror would use for the text itself. */
+function coordsAtFloatingWidget(dom: HTMLElement): Rect | null {
+  const line = dom.closest(".cm-line");
+  if (!line) return null;
+  let last: Node | null = null;
+  const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (dom.contains(node)) break;
+    if (node.textContent) last = node;
+  }
+  if (last) {
+    const range = document.createRange();
+    range.setStart(last, (last.textContent ?? "").length);
+    range.collapse(true);
+    return caretRect(range.getBoundingClientRect());
+  }
+  // Nothing but widgets on the line (an empty line of code): fall back to the
+  // last rect of everything ahead of the widget, which is CodeMirror's own
+  // zero-width buffer element sitting at the line's content edge.
+  const ahead = document.createRange();
+  ahead.setStart(line, 0);
+  ahead.setEndBefore(dom);
+  const rects = ahead.getClientRects();
+  const edge = rects.length > 0 ? rects[rects.length - 1] : undefined;
+  return edge ? caretRect(edge) : null;
+}
+
+function caretRect(rect: DOMRect): Rect {
+  return { left: rect.right, right: rect.right, top: rect.top, bottom: rect.bottom };
+}
+
 class CopyButtonWidget extends WidgetType {
   private unpin?: () => void;
 
@@ -557,6 +601,9 @@ class CopyButtonWidget extends WidgetType {
     wrap.appendChild(createCopyButton(this.source));
     this.unpin = pinToHorizontalScroll(wrap, view.scrollDOM);
     return wrap;
+  }
+  coordsAt(dom: HTMLElement): Rect | null {
+    return coordsAtFloatingWidget(dom);
   }
   destroy(): void {
     this.unpin?.();
@@ -833,6 +880,9 @@ class LanguageWidget extends WidgetType {
       wrap.appendChild(list);
     }
     return wrap;
+  }
+  coordsAt(dom: HTMLElement): Rect | null {
+    return coordsAtFloatingWidget(dom);
   }
   ignoreEvent(): boolean {
     return true;

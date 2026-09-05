@@ -168,7 +168,7 @@ jobs:
 
   # Build a signed universal Android APK.
   build-android:
-    name: 📱 Build & publish Android
+    name: 📱 Build Android
     needs: create-release
     # Run on tag pushes (release_id set) and on manual dry runs (create-release skipped).
     if: ${{ always() && needs.create-release.result != 'failure' && needs.create-release.result != 'cancelled' }}
@@ -402,8 +402,8 @@ jobs:
   #   OVSX_PAT  Open VSX access token, from open-vsx.org user settings
   # Each publish step is skipped when its secret is absent, so the release still
   # succeeds for forks / before the marketplaces are set up.
-  build-vsx:
-    name: 🧩 Build & publish VS Code extension
+  publish-vsx:
+    name: 🧩 Publish VSCode extension
     needs: create-release
     # Run on tag pushes (release_id set) and on manual dry runs (create-release skipped).
     if: ${{ always() && needs.create-release.result != 'failure' && needs.create-release.result != 'cancelled' }}
