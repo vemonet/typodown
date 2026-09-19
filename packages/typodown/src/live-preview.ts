@@ -26,6 +26,7 @@ import {
   type Extension,
   type Range,
   RangeSet,
+  type SelectionRange,
   StateField,
   type Text,
 } from "@codemirror/state";
@@ -100,10 +101,19 @@ export function parseDirectiveOpening(text: string): DirectiveOpening | null {
   };
 }
 
-/** A selection is "on" a construct when any of its ranges overlaps [from, to].
- That is what reveals the raw syntax for the construct under the caret. */
-function touches(state: EditorState, from: number, to: number): boolean {
-  return state.selection.ranges.some((r) => r.from <= to && r.to >= from);
+/** A selection range is "on" a construct when it sits *inside* [from, to] --
+ * a caret somewhere in it, or a selection that stays within it. Reaching
+ * outside leaves the construct rendered: unfolding a link, a table or a code
+ * block while the user drags across it reflows the text under the pointer and
+ * makes the selection impossible to aim. Only the display is affected, so a
+ * copy still yields the full Markdown of whatever is selected. */
+function revealedBy(range: SelectionRange, from: number, to: number): boolean {
+  return range.from >= from && range.to <= to;
+}
+
+/** Whether any selection range reveals the construct at [from, to]. */
+function revealed(state: EditorState, from: number, to: number): boolean {
+  return state.selection.ranges.some((r) => revealedBy(r, from, to));
 }
 
 /** Returns the 1-based {open, close} line numbers of the YAML front matter
@@ -1713,7 +1723,7 @@ class DecoBuilder {
 
   private on(from: number, to: number): boolean {
     for (const range of this.selections) {
-      if (range.from <= to && range.to >= from) return true;
+      if (revealedBy(range, from, to)) return true;
     }
     return false;
   }
@@ -2543,13 +2553,13 @@ function inlinePlugin(
 // are few of these per document, so scanning the whole tree is cheap.
 
 /** A block range whose widget visibility depends on the selection (the widget
- * is suppressed while the caret is inside it), plus the touched state it was
+ * is suppressed while the caret is inside it), plus the revealed state it was
  * built with. Lets `blockField` skip whole-document rebuilds on caret moves
  * that don't cross any such boundary. */
 interface SensitiveRange {
   from: number;
   to: number;
-  touched: boolean;
+  revealed: boolean;
 }
 
 function buildBlocks(
@@ -2609,11 +2619,11 @@ function buildBlocks(
       frontMatter && lineNumber > frontMatter.open && lineNumber < frontMatter.close;
     if (!insideBlock && !insideFrontMatter) {
       const singleSeparator = runEnd === lineNumber;
-      const touched = touches(state, line.from, doc.line(runEnd).to);
+      const isRevealed = revealed(state, line.from, doc.line(runEnd).to);
       if (!singleSeparator) {
-        sensitive.push({ from: line.from, to: doc.line(runEnd).to, touched });
+        sensitive.push({ from: line.from, to: doc.line(runEnd).to, revealed: isRevealed });
       }
-      if (singleSeparator || !touched) {
+      if (singleSeparator || !isRevealed) {
         const following = runEnd < doc.lines ? doc.line(runEnd + 1) : null;
         let gapWidget: ParagraphGapWidget | HeadingGapWidget | undefined;
         if (singleSeparator && following) {
@@ -2671,9 +2681,9 @@ function buildBlocks(
       }
     }
     if (insideCode) continue;
-    const touched = touches(state, line.from, line.to);
-    sensitive.push({ from: line.from, to: line.to, touched });
-    if (!touched) hideLine(line);
+    const isRevealed = revealed(state, line.from, line.to);
+    sensitive.push({ from: line.from, to: line.to, revealed: isRevealed });
+    if (!isRevealed) hideLine(line);
   }
   if (frontMatter) {
     hideLine(doc.line(frontMatter.open));
@@ -2748,9 +2758,9 @@ function buildBlocks(
           out.push(Decoration.mark({ class: "cm-td-comment" }).range(node.from, node.to));
           return;
         }
-        const touched = touches(state, node.from, node.to);
-        sensitive.push({ from: node.from, to: node.to, touched });
-        if (touched) return;
+        const isRevealed = revealed(state, node.from, node.to);
+        sensitive.push({ from: node.from, to: node.to, revealed: isRevealed });
+        if (isRevealed) return;
         const first = doc.lineAt(node.from);
         const last = doc.lineAt(node.to > node.from ? node.to - 1 : node.to);
         out.push(
@@ -2773,8 +2783,8 @@ function buildBlocks(
         const prefix = doc.sliceString(openLine.from, node.from);
         const marks = node.node.getChildren("CodeMark");
         const closeLine = marks.length >= 2 ? doc.lineAt(marks[marks.length - 1]!.from) : null;
-        const touched = touches(state, node.from, node.to);
-        sensitive.push({ from: node.from, to: node.to, touched });
+        const isRevealed = revealed(state, node.from, node.to);
+        sensitive.push({ from: node.from, to: node.to, revealed: isRevealed });
         let insideQuote = false;
         for (let ancestor = node.node.parent; ancestor; ancestor = ancestor.parent) {
           if (ancestor.name === "Blockquote") {
@@ -2786,7 +2796,7 @@ function buildBlocks(
           (container) =>
             openLine.number > container.openingLine && openLine.number < container.closingLine,
         );
-        if (touched || insideQuote || insideDirective) {
+        if (isRevealed || insideQuote || insideDirective) {
           if (/^[\s>]*$/.test(prefix) || /^\s*[-+*]\s+$/.test(prefix)) hideLine(openLine);
           if (closeLine) hideLine(closeLine);
           return;
@@ -2816,9 +2826,9 @@ function buildBlocks(
         );
       } else if (node.name === "MathBlock") {
         claim(node.from, node.to);
-        const touched = touches(state, node.from, node.to);
-        sensitive.push({ from: node.from, to: node.to, touched });
-        if (touched) return;
+        const isRevealed = revealed(state, node.from, node.to);
+        sensitive.push({ from: node.from, to: node.to, revealed: isRevealed });
+        if (isRevealed) return;
         const marks = node.node.getChildren("MathMark");
         const source =
           marks.length >= 2
@@ -2943,7 +2953,7 @@ export function blockField(config: LivePreviewConfig): StateField<BlockFieldValu
                 .getChildren("CodeText")
                 .find((part) => fromA >= part.from && toA <= part.to);
               const activeFence = value.sensitive.some(
-                (range) => range.touched && fromA >= range.from && toA <= range.to,
+                (range) => range.revealed && fromA >= range.from && toA <= range.to,
               );
               activeFencedCodeEdit = Boolean(codeText && activeFence);
               if (!activeFencedCodeEdit) simpleInlineEdit = false;
@@ -2976,7 +2986,7 @@ export function blockField(config: LivePreviewConfig): StateField<BlockFieldValu
             sensitive: value.sensitive.map((range) => ({
               from: tr.changes.mapPos(range.from, 1),
               to: tr.changes.mapPos(range.to, -1),
-              touched: range.touched,
+              revealed: range.revealed,
             })),
           };
         }
@@ -2987,7 +2997,7 @@ export function blockField(config: LivePreviewConfig): StateField<BlockFieldValu
         // block, so skip the whole-document rebuild when it did neither.
         if (
           !tr.selection ||
-          value.sensitive.every((s) => touches(tr.state, s.from, s.to) === s.touched)
+          value.sensitive.every((s) => revealed(tr.state, s.from, s.to) === s.revealed)
         ) {
           return value;
         }

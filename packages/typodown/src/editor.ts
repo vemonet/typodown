@@ -12,8 +12,9 @@ import {
   EditorState,
   type Extension,
   Prec,
+  type SelectionRange,
   type Text,
-  type Transaction,
+  Transaction,
   type TransactionSpec,
 } from "@codemirror/state";
 import {
@@ -286,8 +287,13 @@ export class Typodown {
             (deleteCodeBlockAtStart(v) || deleteParagraphGapBackward(v) || deleteMarkupBackward(v)),
         },
         // At the content start of a bullet/checkbox/quote line, Left exits to
-        // the previous line (runs before the default cursorCharLeft).
-        { key: "ArrowLeft", run: (v) => !this.rawMarkdown && arrowLeftPastMarker(v) },
+        // the previous line (runs before the default cursorCharLeft, and its
+        // shift form before selectCharLeft).
+        {
+          key: "ArrowLeft",
+          run: (v) => !this.rawMarkdown && arrowLeftPastMarker(v),
+          shift: (v) => !this.rawMarkdown && arrowLeftPastMarker(v, true),
+        },
         ...historyKeymap,
         ...defaultKeymap,
       ]),
@@ -419,14 +425,9 @@ export class Typodown {
     });
     if (outlineEnabled) this.outline = createOutline(this.wrapper, this.view, prefs);
     // The transaction filter only runs on transactions, not on the initial
-    // state, so if the document opens on a marker line with the caret at the
-    // very start (before the bullet), clamp it to the content start now.
-    const initPos = this.view.state.selection.main.head;
-    const initLine = this.view.state.doc.lineAt(initPos);
-    const initMarkEnd = markerEndOnLine(this.view.state, initLine);
-    if (initMarkEnd != null && initPos < initMarkEnd) {
-      this.view.dispatch({ selection: { anchor: initMarkEnd } });
-    }
+    // state, so if the document opens with the selection inside a marker
+    // prefix (before the bullet), apply the same rule now.
+    this.clampSelection();
   }
 
   // ---- public API ---------------------------------------------------------
@@ -473,15 +474,18 @@ export class Typodown {
       selection: EditorSelection.create(ranges, state.selection.mainIndex),
     });
     // clampCursorPastMarker only runs on selection-only transactions, so
-    // re-clamp the main caret in case the mapped position landed inside a
-    // hidden marker prefix on its new line.
-    const main = this.view.state.selection.main;
-    if (!main.empty) return;
-    const line = this.view.state.doc.lineAt(main.head);
-    const markEnd = markerEndOnLine(this.view.state, line);
-    if (markEnd != null && main.head < markEnd) {
-      this.view.dispatch({ selection: { anchor: markEnd } });
-    }
+    // re-apply the rule in case a mapped position landed inside a hidden
+    // marker prefix on its new line.
+    this.clampSelection();
+  }
+
+  /** Apply the marker line-start rule to the current selection, for the paths
+   * that bypass the transaction filter (initial state, host-driven setValue).
+   */
+  private clampSelection(): void {
+    const state = this.view.state;
+    const clamped = selectionPastMarkers(state, state.selection);
+    if (clamped !== state.selection) this.view.dispatch({ selection: clamped });
   }
 
   private previewConfig(): LivePreviewConfig {
@@ -1359,42 +1363,72 @@ export const continueMarkup: Command = (view) => {
   return true;
 };
 
-/** The atomic ranges from live-preview skip the caret over the *interior* of
- * hidden markers, but the line-start boundary (position 0 of a marker line, or
- * the first line which has no preceding newline to extend the range into) can
- * still be reached -- by Home, a click on the bullet, or arrow motion. This
- * filter clamps any empty caret that lands before the marker end to the content
- * start, so it is impossible for the caret to sit left of (or inside) the
- * hidden bullet / checkbox / quote marker. It also skips the source-only blank
- * line used as the normal paragraph separator. Selections (non-empty ranges)
- * are left untouched, and doc-changing transactions are skipped (the
- * dedicated commands already land the caret at an editable position).
- */
+/** Where a selection edge that lands inside a line's hidden marker prefix
+ * belongs. The prefix (indent + bullet / checkbox / quote marker) is block
+ * structure rather than text -- it is never shown as markup -- so the start of
+ * such a line is the first character of its content: any edge landing before
+ * that moves forward to it. The single exception is the start of a range that runs
+ * past the end of the line, where whole lines are being selected and carry
+ * their markup with them (select-all, dragging across lines). */
+function markerLineEdge(state: EditorState, pos: number, range: SelectionRange): number {
+  const line = state.doc.lineAt(pos);
+  const markEnd = markerEndOnLine(state, line);
+  if (markEnd == null || pos >= markEnd) return pos;
+  return pos === range.from && range.to > line.to ? line.from : markEnd;
+}
+
+/** `sel` with the line-start rule (see `markerLineEdge`) applied to every edge,
+ * or `sel` itself when nothing moves. This is the one place the rule lives: the
+ * transaction filter below runs it on every selection change, and `setValue` /
+ * the constructor run it on the selections that never pass through a
+ * transaction filter. */
+export function selectionPastMarkers(state: EditorState, sel: EditorSelection): EditorSelection {
+  let moved = false;
+  const ranges = sel.ranges.map((r) => {
+    const anchor = markerLineEdge(state, r.anchor, r);
+    const head = markerLineEdge(state, r.head, r);
+    if (anchor === r.anchor && head === r.head) return r;
+    moved = true;
+    return r.empty ? EditorSelection.cursor(head, r.assoc) : EditorSelection.range(anchor, head);
+  });
+  return moved ? EditorSelection.create(ranges, sel.mainIndex) : sel;
+}
+
+/** Re-issue `tr` with a different selection. The user event is carried over:
+ * `reanchorClick` keys off `select.pointer` to hold the viewport still, and a
+ * clamped click (on a bullet, say) is exactly a press that moves the caret. */
+function withSelection(tr: Transaction, selection: TransactionSpec["selection"]): TransactionSpec {
+  const spec: TransactionSpec = {
+    selection,
+    effects: tr.effects,
+    scrollIntoView: tr.scrollIntoView,
+  };
+  const userEvent = tr.annotation(Transaction.userEvent);
+  return userEvent ? { ...spec, annotations: Transaction.userEvent.of(userEvent) } : spec;
+}
+
+/** Keeps the caret and every selection edge out of the hidden marker prefixes,
+ * so the start of a bullet / checkbox / quote line is its first visible
+ * character for Home, Shift+Home, clicks, drags and arrow motion alike (see
+ * `selectionPastMarkers`). It also skips the source-only blank line used as
+ * the normal paragraph separator, which only concerns a lone caret.
+ * Doc-changing transactions are left alone: the dedicated editing commands
+ * already land the caret at an editable position. */
 export const clampCursorPastMarker = EditorState.transactionFilter.of(
   (tr: Transaction): TransactionSpec | Transaction => {
     const sel = tr.selection;
     if (!sel || !tr.changes.empty) return tr;
-    const main = sel.main;
-    if (!main.empty || sel.ranges.length > 1) return tr;
-    const pos = main.head;
     const state = tr.startState;
-    const direction = pos < state.selection.main.head ? -1 : 1;
-    const separatorTarget = paragraphSeparatorTarget(state, pos, main.assoc || direction);
-    if (separatorTarget != null) {
-      return {
-        selection: EditorSelection.cursor(separatorTarget, main.assoc),
-        effects: tr.effects,
-        scrollIntoView: tr.scrollIntoView,
-      };
+    const main = sel.main;
+    if (sel.ranges.length === 1 && main.empty) {
+      const direction = main.head < state.selection.main.head ? -1 : 1;
+      const separatorTarget = paragraphSeparatorTarget(state, main.head, main.assoc || direction);
+      if (separatorTarget != null) {
+        return withSelection(tr, EditorSelection.cursor(separatorTarget, main.assoc));
+      }
     }
-    const line = state.doc.lineAt(pos);
-    const markEnd = markerEndOnLine(state, line);
-    if (markEnd == null || pos >= markEnd) return tr;
-    return {
-      selection: EditorSelection.cursor(markEnd, main.assoc),
-      effects: tr.effects,
-      scrollIntoView: tr.scrollIntoView,
-    };
+    const clamped = selectionPastMarkers(state, sel);
+    return clamped === sel ? tr : withSelection(tr, clamped);
   },
 );
 
@@ -1404,12 +1438,13 @@ export const clampCursorPastMarker = EditorState.transactionFilter.of(
  * so there'd be no way to leave a marker line to the left. This gives a
  * single predictable exit: at the content start, one Left jumps to the
  * previous line (mirroring how Right from the previous line's end is clamped
- * straight to the content start). At any other position the default Left runs.
- */
-export const arrowLeftPastMarker: Command = (view) => {
+ * straight to the content start). `extend` is the Shift+Left variant, which
+ * keeps the anchor and only moves the head. At any other position the default
+ * Left runs. */
+export function arrowLeftPastMarker(view: EditorView, extend = false): boolean {
   const { state } = view;
   const range = state.selection.main;
-  if (!range.empty) return false;
+  if (!extend && !range.empty) return false;
   const pos = range.head;
   const line = state.doc.lineAt(pos);
   const markEnd = markerEndOnLine(state, line);
@@ -1417,11 +1452,13 @@ export const arrowLeftPastMarker: Command = (view) => {
   if (line.from === 0) return false; // first line, nothing to the left
   const prev = state.doc.lineAt(line.from - 1);
   view.dispatch({
-    selection: { anchor: prev.to },
+    selection: extend
+      ? EditorSelection.range(range.anchor, prev.to)
+      : EditorSelection.cursor(prev.to),
     userEvent: "select",
   });
   return true;
-};
+}
 
 // ---- helpers --------------------------------------------------------------
 

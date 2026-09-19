@@ -104,23 +104,67 @@ test("filter leaves intentional extra blank lines and code blanks editable", () 
   expect(clampAt("```\none\n\ntwo\n```", 8)).toBe(8);
 });
 
-test("filter leaves non-empty selections alone", () => {
+// ---- selection edges (same rule as the caret) ---------------------------
+
+/** The selection a range collapses to once the filter has run. */
+function clampRange(doc: string, anchor: number, head: number): { from: number; to: number } {
   const s = EditorState.create({
-    doc: "- foo",
+    doc,
     extensions: [typodownMarkdown(), clampCursorPastMarker],
   });
-  const tr = s.update({ selection: EditorSelection.range(0, 3) });
-  expect(tr.selection!.main.from).toBe(0);
-  expect(tr.selection!.main.to).toBe(3);
+  const main = s.update({ selection: EditorSelection.range(anchor, head) }).selection!.main;
+  return { from: main.from, to: main.to };
+}
+
+test("filter clamps a selection edge inside a bullet prefix", () => {
+  // Shift+Home from mid-line: the selection starts at the first character.
+  expect(clampRange("- foo", 5, 0)).toEqual({ from: 2, to: 5 });
+  expect(clampRange("- foo", 4, 1)).toEqual({ from: 2, to: 4 });
+  expect(clampRange("- foo", 0, 3)).toEqual({ from: 2, to: 3 });
+});
+
+test("filter clamps a selection edge inside a checkbox prefix", () => {
+  // "- [ ] foo": content starts at 6.
+  expect(clampRange("- [ ] foo", 9, 0)).toEqual({ from: 6, to: 9 });
+  expect(clampRange("- [ ] foo", 9, 3)).toEqual({ from: 6, to: 9 });
+});
+
+test("filter clamps a selection edge inside a quote prefix", () => {
+  expect(clampRange("> foo", 5, 0)).toEqual({ from: 2, to: 5 });
+});
+
+test("filter clamps a selection ending at the start of a marker line", () => {
+  // Dragging down from the line above onto the bullet line: the end lands at
+  // the first character rather than inside the hidden marker.
+  expect(clampRange("a\n- foo", 0, 2)).toEqual({ from: 0, to: 4 });
+});
+
+test("filter keeps the markup in a selection that spans past the line", () => {
+  // Select-all and any multi-line drag carry whole lines, markup included.
+  expect(clampRange("- foo\n- bar", 0, 11)).toEqual({ from: 0, to: 11 });
+  expect(clampRange("- foo\n- bar", 11, 0)).toEqual({ from: 0, to: 11 });
+  // Only the start of such a range is exempt: its end still lands on the next
+  // line's first character (8), never inside that line's marker.
+  expect(clampRange("- foo\n- bar", 0, 6)).toEqual({ from: 0, to: 8 });
+  expect(clampRange("- foo\n- bar", 0, 7)).toEqual({ from: 0, to: 8 });
+});
+
+test("filter leaves selections on a plain paragraph alone", () => {
+  expect(clampRange("foo", 0, 3)).toEqual({ from: 0, to: 3 });
 });
 
 // ---- arrowLeftPastMarker (Left exits a marker line) ----------------------
 
-function runLeft(doc: string, caret: number): { handled: boolean; pos: number } {
+function runLeft(
+  doc: string,
+  caret: number,
+  extend = false,
+  anchor = caret,
+): { handled: boolean; pos: number; anchor: number } {
   let state = EditorState.create({
     doc,
     extensions: [typodownMarkdown(), clampCursorPastMarker],
-    selection: { anchor: caret },
+    selection: EditorSelection.range(anchor, caret),
   });
   const view = {
     get state() {
@@ -130,8 +174,12 @@ function runLeft(doc: string, caret: number): { handled: boolean; pos: number } 
       state = state.update(...specs).state;
     },
   } as EditorView;
-  const handled = arrowLeftPastMarker(view);
-  return { handled, pos: state.selection!.main.head };
+  const handled = arrowLeftPastMarker(view, extend);
+  return {
+    handled,
+    pos: state.selection!.main.head,
+    anchor: state.selection!.main.anchor,
+  };
 }
 
 test("Left from a bullet's content start exits to the previous line end", () => {
@@ -170,4 +218,19 @@ test("Left from a marker line that is the first line is not handled", () => {
 test("Left from a non-marker line is not handled", () => {
   const { handled } = runLeft("foo", 1);
   expect(handled).toBe(false);
+});
+
+test("Shift+Left from a content start extends to the previous line end", () => {
+  const { handled, pos, anchor } = runLeft("text\n- foo", 7, true, 9);
+  expect(handled).toBe(true);
+  expect(pos).toBe(4); // end of "text"
+  expect(anchor).toBe(9); // anchor kept
+});
+
+test("Shift+Left elsewhere on the line is not handled", () => {
+  expect(runLeft("text\n- foo", 9, true, 10).handled).toBe(false);
+});
+
+test("Left with a non-empty selection is not handled", () => {
+  expect(runLeft("text\n- foo", 7, false, 9).handled).toBe(false);
 });
